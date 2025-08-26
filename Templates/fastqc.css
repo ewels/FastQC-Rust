@@ -448,3 +448,56 @@ tr:nth-child(even) td {
     flex-direction: column !important;
   }
 }
+
+/* Responsive chart containers */
+.fastqc-chart-container {
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  height: 600px; /* Default height for largest screens */
+}
+
+/* Media queries for responsive chart heights */
+/* Maintain 4:3 aspect ratio (800:600) at each breakpoint */
+
+/* Large screens: 800px width -> 600px height */
+@media (min-width: 1024px) {
+  .fastqc-chart-container {
+    height: 600px;
+  }
+}
+
+/* Medium-large screens: ~700px width -> 525px height */
+@media (max-width: 1023px) and (min-width: 768px) {
+  .fastqc-chart-container {
+    height: 525px;
+  }
+}
+
+/* Medium screens: ~600px width -> 450px height */
+@media (max-width: 767px) and (min-width: 640px) {
+  .fastqc-chart-container {
+    height: 450px;
+  }
+}
+
+/* Small-medium screens: ~500px width -> 375px height */
+@media (max-width: 639px) and (min-width: 480px) {
+  .fastqc-chart-container {
+    height: 375px;
+  }
+}
+
+/* Small screens: ~400px width -> 300px height */
+@media (max-width: 479px) and (min-width: 360px) {
+  .fastqc-chart-container {
+    height: 300px;
+  }
+}
+
+/* Extra small screens: ~320px width -> 240px height */
+@media (max-width: 359px) {
+  .fastqc-chart-container {
+    height: 240px;
+  }
+}

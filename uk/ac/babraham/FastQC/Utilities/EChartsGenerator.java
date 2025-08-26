@@ -127,6 +127,7 @@ public class EChartsGenerator {
         sb.append("  ]\n");
         sb.append("};\n");
         sb.append("chart_").append(containerId).append(".setOption(option_").append(containerId).append(");\n");
+        sb.append(addResponsiveBehavior(containerId));
 
         return sb.toString();
     }
@@ -147,8 +148,8 @@ public class EChartsGenerator {
             if (i > 0) sb.append(", ");
             sb.append("'").append(escapeString(xTitles[i])).append("'");
         }
-        sb.append("], top: 35 },\n");
-        sb.append("  grid: { left: 60, right: 30, top: 80, bottom: 80 },\n");
+        sb.append("], bottom: 10 },\n");
+        sb.append("  grid: { left: 60, right: 30, top: 60, bottom: 90 },\n");
         sb.append("  xAxis: {\n");
         sb.append("    type: 'category',\n");
         sb.append("    data: [");
@@ -188,6 +189,7 @@ public class EChartsGenerator {
         sb.append("\n  ]\n");
         sb.append("};\n");
         sb.append("chart_").append(containerId).append(".setOption(option_").append(containerId).append(");\n");
+        sb.append(addResponsiveBehavior(containerId));
 
         return sb.toString();
     }
@@ -213,6 +215,17 @@ public class EChartsGenerator {
                    .replace("'", "\\'")
                    .replace("\n", "\\n")
                    .replace("\r", "\\r");
+    }
+
+    /**
+     * Add responsive behavior to charts
+     */
+    private static String addResponsiveBehavior(String containerId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("window.addEventListener('resize', function() {\n");
+        sb.append("  chart_").append(containerId).append(".resize();\n");
+        sb.append("});\n");
+        return sb.toString();
     }
 
     public static String generateHeatmapConfig(String containerId, double[][] data, String[] xLabels, int[] yLabels, String title) {
@@ -265,6 +278,7 @@ public class EChartsGenerator {
         sb.append("], emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0, 0, 0, 0.5)' } } }]");
         sb.append("};");
         sb.append("chart_").append(containerId).append(".setOption(option_").append(containerId).append(");");
+        sb.append(addResponsiveBehavior(containerId));
 
         return sb.toString();
     }
@@ -343,6 +357,7 @@ public class EChartsGenerator {
                 sb.append("] }");
         sb.append("] };");
         sb.append("chart_").append(containerId).append(".setOption(option_").append(containerId).append(");");
+        sb.append(addResponsiveBehavior(containerId));
 
         return sb.toString();
     }
@@ -420,6 +435,7 @@ public class EChartsGenerator {
 
         sb.append("] };");
         sb.append("chart_").append(containerId).append(".setOption(option_").append(containerId).append(");");
+        sb.append(addResponsiveBehavior(containerId));
 
         return sb.toString();
     }
@@ -436,8 +452,8 @@ public class EChartsGenerator {
             if (i > 0) sb.append(", ");
             sb.append("'").append(escapeString(seriesNames[i])).append("'");
         }
-        sb.append("], top: 35 },\n");
-        sb.append("  grid: { left: 60, right: 30, top: 80, bottom: 80 },\n");
+        sb.append("], bottom: 10 },\n");
+        sb.append("  grid: { left: 60, right: 30, top: 60, bottom: 90 },\n");
         sb.append("  xAxis: {\n");
         sb.append("    type: 'value',\n");  // Use 'value' instead of 'category' for continuous data
         sb.append("    name: '").append(escapeString(xLabel)).append("',\n");
@@ -474,6 +490,7 @@ public class EChartsGenerator {
         sb.append("\n  ]\n");
         sb.append("};\n");
         sb.append("chart_").append(containerId).append(".setOption(option_").append(containerId).append(");\n");
+        sb.append(addResponsiveBehavior(containerId));
 
         return sb.toString();
     }

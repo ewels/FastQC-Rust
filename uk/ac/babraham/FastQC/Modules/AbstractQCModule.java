@@ -67,7 +67,8 @@ public abstract class AbstractQCModule implements QCModule {
 		xhtml.writeStartElement("div");
 		String chartId = "chart_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 10000);
 		xhtml.writeAttribute("id", chartId);
-		xhtml.writeAttribute("style", "width: " + width + "px; height: " + height + "px; margin: 0 auto;");
+		xhtml.writeAttribute("class", "fastqc-chart-container");
+		xhtml.writeAttribute("style", "max-width: " + width + "px;");
 		xhtml.writeEndElement(); // div
 
 		// Store the script for post-processing - use a placeholder that will be replaced
