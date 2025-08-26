@@ -30,6 +30,8 @@ import uk.ac.babraham.FastQC.Graphs.LineGraph;
 import uk.ac.babraham.FastQC.Report.HTMLReportArchive;
 import uk.ac.babraham.FastQC.Sequence.Sequence;
 import uk.ac.babraham.FastQC.Sequence.QualityEncoding.PhredEncoding;
+import uk.ac.babraham.FastQC.Utilities.EChartsGenerator;
+import uk.ac.babraham.FastQC.FastQCConfig;
 
 public class PerSequenceQualityScores extends AbstractQCModule {
 
@@ -40,14 +42,14 @@ public class PerSequenceQualityScores extends AbstractQCModule {
 	private int maxCount = 0;
 	private int mostFrequentScore;
 	private boolean calculated = false;
-	
+
 	public JPanel getResultsPanel() {
-	
+
 		if (!calculated) calculateDistribution();
-				
+
 		return new LineGraph(new double [][] {qualityDistribution}, 0d, maxCount, "Mean Sequence Quality (Phred Score)",new String [] {"Average Quality per read"}, xCategories, "Quality score distribution over all sequences");
 	}
-	
+
 	public boolean ignoreInReport () {
 		// We don't show this if they didn't have any quality data.
 		if (ModuleConfig.getParam("quality_sequence", "ignore") > 0  || averageScoreCounts.size() == 0) {
@@ -55,19 +57,19 @@ public class PerSequenceQualityScores extends AbstractQCModule {
 		}
 		return false;
 	}
-	
+
 	private synchronized void calculateDistribution () {
-		
+
 		PhredEncoding encoding = PhredEncoding.getFastQEncodingOffset(lowestChar);
-		
+
 		Integer [] rawScores = averageScoreCounts.keySet().toArray(new Integer [0]);
 		Arrays.sort(rawScores);
-		
+
 		// We'll run from the lowest to the highest
 		qualityDistribution = new double [1+(rawScores[rawScores.length-1]-rawScores[0])] ;
-		
+
 		xCategories = new int[qualityDistribution.length];
-		
+
 		for (int i=0;i<qualityDistribution.length;i++) {
 			xCategories[i] = (rawScores[0]+i)-encoding.offset();
 			if (averageScoreCounts.containsKey(rawScores[0]+i)) {
@@ -75,22 +77,22 @@ public class PerSequenceQualityScores extends AbstractQCModule {
 			}
 		}
 
-		
+
 		for (int i=0;i<qualityDistribution.length;i++) {
 			if (qualityDistribution[i]>maxCount) {
 				maxCount = (int)qualityDistribution[i];
 				mostFrequentScore = xCategories[i];
 			}
 		}
-				
+
 		calculated = true;
 	}
 
 	public void processSequence(Sequence sequence) {
-				
+
 		char [] seq = sequence.getQualityString().toCharArray();
 		int averageQuality = 0;
-		
+
 		for (int i=0;i<seq.length;i++) {
 			if (seq[i] < lowestChar) {
 				lowestChar = seq[i];
@@ -100,7 +102,7 @@ public class PerSequenceQualityScores extends AbstractQCModule {
 
 		if (seq.length > 0) {
 			averageQuality /= seq.length;
-					
+
 			if (averageScoreCounts.containsKey(averageQuality)) {
 				long currentCount = averageScoreCounts.get(averageQuality);
 				currentCount++;
@@ -111,7 +113,7 @@ public class PerSequenceQualityScores extends AbstractQCModule {
 			}
 		}
 	}
-	
+
 	public void reset () {
 		averageScoreCounts.clear();
 		lowestChar = 126;
@@ -131,7 +133,7 @@ public class PerSequenceQualityScores extends AbstractQCModule {
 		if (!calculated) calculateDistribution();
 
 		if (mostFrequentScore <= ModuleConfig.getParam("quality_sequence", "error")) return true;
-		
+
 		return false;
 	}
 
@@ -139,13 +141,13 @@ public class PerSequenceQualityScores extends AbstractQCModule {
 		if (!calculated) calculateDistribution();
 
 		if (mostFrequentScore <= ModuleConfig.getParam("quality_sequence", "warn")) return true;
-		
+
 		return false;
 	}
 
 	public void makeReport(HTMLReportArchive report) throws IOException,XMLStreamException {
 		if (!calculated) calculateDistribution();
-		
+
 		writeDefaultImage(report, "per_sequence_quality.png", "Per Sequence quality graph", 800, 600);
 
 		StringBuffer sb = report.dataDocument();
@@ -155,6 +157,21 @@ public class PerSequenceQualityScores extends AbstractQCModule {
 			sb.append("\t");
 			sb.append(qualityDistribution[i]);
 			sb.append("\n");
+		}
+	}
+
+	@Override
+	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
+		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
+			// Generate interactive ECharts plot
+			if (!calculated) calculateDistribution();
+			double[][] data = {qualityDistribution};
+			String[] seriesNames = {"Average Quality per read"};
+			String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", data, 0d, maxCount, "Mean Sequence Quality (Phred Score)", seriesNames, xCategories, "Quality score distribution over all sequences");
+			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
+		} else {
+			// Use static image
+			writeStaticImage(report, fileName, imageTitle, width, height);
 		}
 	}
 

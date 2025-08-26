@@ -30,6 +30,8 @@ import javax.xml.stream.XMLStreamException;
 import uk.ac.babraham.FastQC.Graphs.LineGraph;
 import uk.ac.babraham.FastQC.Report.HTMLReportArchive;
 import uk.ac.babraham.FastQC.Sequence.Sequence;
+import uk.ac.babraham.FastQC.Utilities.EChartsGenerator;
+import uk.ac.babraham.FastQC.FastQCConfig;
 
 public class DuplicationLevel extends AbstractQCModule {
 
@@ -231,6 +233,26 @@ public class DuplicationLevel extends AbstractQCModule {
 			sb.append("\n");
 		}
 
+	}
+
+	@Override
+	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
+		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
+			// Generate interactive ECharts plot
+			if (totalPercentages == null) calculateLevels();
+			double[][] data = {totalPercentages};
+			String[] seriesNames = {"% of total"};
+			// Create x-axis labels with "+" for the last category
+			String[] xLabels = new String[labels.length];
+			for (int i = 0; i < labels.length; i++) {
+				xLabels[i] = labels[i] + (i == labels.length-1 ? "+" : "");
+			}
+			String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", data, 0d, maxCount, "Sequence Duplication Level", seriesNames, xLabels, "Levels of duplication for sequences");
+			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
+		} else {
+			// Use static image
+			writeStaticImage(report, fileName, imageTitle, width, height);
+		}
 	}
 
 	public String name() {

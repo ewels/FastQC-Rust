@@ -22,7 +22,7 @@ package uk.ac.babraham.FastQC;
 import java.io.File;
 
 public class FastQCConfig {
-	
+
 	private static FastQCConfig instance = new FastQCConfig();
 	public boolean nogroup = false;
 	public boolean expgroup = false;
@@ -45,9 +45,11 @@ public class FastQCConfig {
 	public int minLength = 0;
 	public int dupLength = 0;
 	public boolean svg_output = false;
+	public boolean interactive_plots = true;
+	public boolean static_plots = false;
 
 	private FastQCConfig () {
-		
+
 		// Output dir
 		if (System.getProperty("fastqc.output_dir") != null) {
 			output_dir = new File(System.getProperty("fastqc.output_dir"));
@@ -55,7 +57,7 @@ public class FastQCConfig {
 				throw new IllegalArgumentException("Output dir "+output_dir+" doesn't exist or isn't writeable");
 			}
 		}
-		
+
 		// Contaminant file
 		if (System.getProperty("fastqc.contaminant_file") != null) {
 			contaminant_file = new File(System.getProperty("fastqc.contaminant_file"));
@@ -79,7 +81,7 @@ public class FastQCConfig {
 				throw new IllegalArgumentException("Limits file "+limits_file+" doesn't exist or can't be read");
 			}
 		}
-		
+
 		// Threads
 		if (System.getProperty("fastqc.threads") != null) {
 			threads = Integer.parseInt(System.getProperty("fastqc.threads"));
@@ -87,13 +89,13 @@ public class FastQCConfig {
 				throw new IllegalArgumentException("Number of threads must be >= 1");
 			}
 		}
-		
+
 		// Kmer size
 		if (System.getProperty("fastqc.kmer_size") != null) {
 			kmer_size = Integer.parseInt(System.getProperty("fastqc.kmer_size"));
 		}
 
-		
+
 		// Min length
 		if (System.getProperty("fastqc.min_length") != null) {
 			minLength = Integer.parseInt(System.getProperty("fastqc.min_length"));
@@ -104,12 +106,12 @@ public class FastQCConfig {
 			dupLength = Integer.parseInt(System.getProperty("fastqc.dup_length"));
 		}
 
-		
+
 		// Quiet
 		if (System.getProperty("fastqc.quiet") != null && System.getProperty("fastqc.quiet").equals("true")) {
 			quiet = true;
 		}
-		
+
 		// Casava
 		if (System.getProperty("fastqc.casava") != null && System.getProperty("fastqc.casava").equals("true")) {
 			casava = true;
@@ -125,13 +127,19 @@ public class FastQCConfig {
 			svg_output = true;
 		}
 
-		
+		// Static plots (overrides default interactive)
+		if (System.getProperty("fastqc.static") != null && System.getProperty("fastqc.static").equals("true")) {
+			static_plots = true;
+			interactive_plots = false;
+		}
+
+
 		// Nofilter
 		if (System.getProperty("fastqc.nofilter") != null && System.getProperty("fastqc.nofilter").equals("true")) {
 			nofilter = true;
 		}
 
-		
+
 		// No group
 		if (System.getProperty("fastqc.nogroup") != null && System.getProperty("fastqc.nogroup").equals("true")) {
 			nogroup = true;
@@ -145,20 +153,20 @@ public class FastQCConfig {
 		// Unzip
 		if (System.getProperty("fastqc.unzip") != null && System.getProperty("fastqc.unzip").equals("true")) {
 			do_unzip = true;
-			
+
 			if (System.getProperty("fastqc.delete") != null && System.getProperty("fastqc.delete").equals("true")) {
 				delete_after_unzip = true;
 			}
 		}
-			
-		
+
+
 		// Sequence Format
 		if (System.getProperty("fastqc.sequence_format") != null) {
 			setSequenceFormat(System.getProperty("fastqc.sequence_format"));
 		}
-		
+
 	};
-	
+
 	public void setSequenceFormat (String sequenceFormat) {
 		if (sequenceFormat.equals("fastq") || sequenceFormat.equals("sam") || sequenceFormat.equals("bam") || sequenceFormat.equals("sam_mapped") || sequenceFormat.equals("bam_mapped")) {
 			sequence_format = sequenceFormat;
@@ -167,7 +175,7 @@ public class FastQCConfig {
 			throw new IllegalArgumentException("Sequence format '"+sequenceFormat+"' wasn't recognised");
 		}
 	}
-	
+
 	public void setCasavaMode (boolean casava) {
 		this.casava = casava;
 	}

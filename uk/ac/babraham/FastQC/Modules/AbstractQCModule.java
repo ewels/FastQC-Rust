@@ -36,6 +36,7 @@ import uk.ac.babraham.FastQC.FastQCConfig;
 import uk.ac.babraham.FastQC.Report.HTMLReportArchive;
 import uk.ac.babraham.FastQC.Utilities.ImageToBase64;
 import uk.ac.babraham.FastQC.Utilities.ImageSaver.SVGImageSaver;
+import uk.ac.babraham.FastQC.Utilities.EChartsGenerator;
 
 public abstract class AbstractQCModule implements QCModule {
 
@@ -59,7 +60,39 @@ public abstract class AbstractQCModule implements QCModule {
 		xhtml.writeEndElement();//p
 	}
 
+		protected void simpleInteractiveReport(HTMLReportArchive report, String chartScript, String alt, int width, int height) throws XMLStreamException {
+		XMLStreamWriter xhtml = report.xhtmlStream();
+
+		// Write the div container
+		xhtml.writeStartElement("div");
+		String chartId = "chart_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 10000);
+		xhtml.writeAttribute("id", chartId);
+		xhtml.writeAttribute("style", "width: " + width + "px; height: " + height + "px; margin: 0 auto;");
+		xhtml.writeEndElement(); // div
+
+		// Store the script for post-processing - use a placeholder that will be replaced
+		String modifiedScript = chartScript.replace("CHART_CONTAINER_ID", chartId);
+		String placeholder = "<!--INTERACTIVE_SCRIPT_" + chartId + "-->";
+
+		// Write a comment placeholder that will be replaced with the actual script
+		xhtml.writeComment("INTERACTIVE_SCRIPT_" + chartId);
+
+		// Store the script content in the report for later replacement
+		report.addInteractiveScript(placeholder, modifiedScript);
+	}
+
 	protected void writeDefaultImage (HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
+		// If static plots are explicitly requested, or interactive plots are disabled, use static images
+		// Otherwise, subclasses should override this method to provide interactive chart generation
+		if (FastQCConfig.getInstance().static_plots || !FastQCConfig.getInstance().interactive_plots) {
+			writeStaticImage(report, fileName, imageTitle, width, height);
+		} else {
+			// This is a fallback - specific modules should override to provide interactive charts
+			writeStaticImage(report, fileName, imageTitle, width, height);
+		}
+	}
+
+	protected void writeStaticImage (HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
 		ZipOutputStream zip = report.zipFile();
 
 		// Write out the svg version of the image

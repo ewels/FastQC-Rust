@@ -33,6 +33,8 @@ import uk.ac.babraham.FastQC.Report.HTMLReportArchive;
 import uk.ac.babraham.FastQC.Sequence.Sequence;
 import uk.ac.babraham.FastQC.Sequence.QualityEncoding.PhredEncoding;
 import uk.ac.babraham.FastQC.Utilities.QualityCount;
+import uk.ac.babraham.FastQC.Utilities.EChartsGenerator;
+import uk.ac.babraham.FastQC.FastQCConfig;
 
 public class PerTileQualityScores extends AbstractQCModule {
 
@@ -45,11 +47,11 @@ public class PerTileQualityScores extends AbstractQCModule {
 	private int high = 0;
 	PhredEncoding encodingScheme;
 	private boolean calculated = false;
-	
+
 	private long totalCount = 0;
-	
+
 	private int splitPosition = -1;
-	
+
 	private double maxDeviation = 0;
 
 	private boolean ignoreInReport = false;
@@ -85,14 +87,14 @@ public class PerTileQualityScores extends AbstractQCModule {
 		BaseGroup [] groups = BaseGroup.makeBaseGroups(currentLength);
 
 		Integer [] tileNumbers = perTileQualityCounts.keySet().toArray(new Integer[0]);
-		
+
 		Arrays.sort(tileNumbers);
-		
+
 		tiles = new int[tileNumbers.length];
 		for (int i=0;i<tiles.length;i++) {
 			tiles[i] = tileNumbers[i];
 		}
-		
+
 		means = new double[tileNumbers.length][groups.length];
 		xLabels = new String[groups.length];
 
@@ -106,20 +108,20 @@ public class PerTileQualityScores extends AbstractQCModule {
 				means[t][i] = getMean(tileNumbers[t],minBase,maxBase,encodingScheme.offset());
 			}
 		}
-		
+
 		// Now we normalise across each column to see if there are any tiles with unusually
 		// high or low quality.
-		
+
 		double maxDeviation = 0;
-		
+
 		double [] averageQualitiesPerGroup = new double[groups.length];
-		
-		for (int t=0;t<tileNumbers.length;t++) {		
+
+		for (int t=0;t<tileNumbers.length;t++) {
 			for (int i=0;i<groups.length;i++) {
 				averageQualitiesPerGroup[i] += means[t][i];
 			}
 		}
-		
+
 		for (int i=0;i<averageQualitiesPerGroup.length;i++) {
 			averageQualitiesPerGroup[i] /= tileNumbers.length;
 		}
@@ -132,7 +134,7 @@ public class PerTileQualityScores extends AbstractQCModule {
 				}
 			}
 		}
-		
+
 		this.maxDeviation = maxDeviation;
 
 		calculated = true;
@@ -149,11 +151,11 @@ public class PerTileQualityScores extends AbstractQCModule {
 		// Iterate through the tiles to check them all in case
 		// we're dealing with unrepresentative data in the first one.
 		Iterator<QualityCount[]> qit = perTileQualityCounts.values().iterator();
-		
-		while (qit.hasNext()) { 
-			
+
+		while (qit.hasNext()) {
+
 			QualityCount [] qualityCounts = qit.next();
-	
+
 			for (int q=0;q<qualityCounts.length;q++) {
 				if (minChar == 0) {
 					minChar = qualityCounts[q].getMinChar();
@@ -182,16 +184,16 @@ public class PerTileQualityScores extends AbstractQCModule {
 			}
 		}
 
-		
+
 		// Don't waste time calculating this if we're not going to use it anyway
 		if (ignoreInReport) return;
-		
-		// Don't bother with sequences with zero length as they don't have any 
+
+		// Don't bother with sequences with zero length as they don't have any
 		// quality information anyway.
 		if (sequence.getQualityString().length() == 0) {
 			return;
 		}
-				
+
 		calculated = false;
 
 		// Try to find the tile id.  This can come in one of two forms:
@@ -203,28 +205,28 @@ public class PerTileQualityScores extends AbstractQCModule {
 		// These would appear at sections 2 or 3 of an array split on :
 
 		// This module does quite a lot of work and ends up being the limiting
-		// step when calculating.  We'll therefore take only a sample of the 
-		// sequences to try to get a representative selection.  We'll use the 
+		// step when calculating.  We'll therefore take only a sample of the
+		// sequences to try to get a representative selection.  We'll use the
 		// first 10k sequences in case we're dealing with a very small file
 		// and then take 10% of the rest.
-		
+
 		++totalCount;
 		if (totalCount > 10000 && totalCount % 10 != 0) return;
-		
+
 		// First try to split the id by :
 		int tile = 0;
-		
+
 		String [] splitID = sequence.getID().split(":");
 
 
 		// If there are 7 or more fields then it's a 1.8+ file
 		try {
 
-						
+
 			if (splitPosition >=0) {
 				// We've found a split position before so let's try to use it again
-				
-				
+
+
 				if (splitID.length <= splitPosition) {
 					// There isn't enough data in this header to split the way we did before
 					throw new NumberFormatException("Can't extract a number - not enough data");
@@ -232,7 +234,7 @@ public class PerTileQualityScores extends AbstractQCModule {
 
 				tile = Integer.parseInt(splitID[splitPosition]);
 			}
-			
+
 			else if (splitID.length>=7) {
 				splitPosition = 4;
 				tile = Integer.parseInt(splitID[4]);
@@ -247,8 +249,8 @@ public class PerTileQualityScores extends AbstractQCModule {
 				ignoreInReport = true;
 				return;
 			}
-			
-			
+
+
 		}
 		catch (NumberFormatException nfe) {
 			// This doesn't conform
@@ -270,7 +272,7 @@ public class PerTileQualityScores extends AbstractQCModule {
 					qualityCountsNew[i] = qualityCounts[i];
 				}
 				for (int i=qualityCounts.length;i<qualityCountsNew.length;i++) {
-					qualityCountsNew[i] = new QualityCount();				
+					qualityCountsNew[i] = new QualityCount();
 				}
 				perTileQualityCounts.put(thisTile, qualityCountsNew);
 			}
@@ -280,7 +282,7 @@ public class PerTileQualityScores extends AbstractQCModule {
 		}
 
 		if (! perTileQualityCounts.containsKey(tile)) {
-			
+
 			if (perTileQualityCounts.size() > 2500) {
 				// There are too many tiles, so we're probably parsing this wrong.
 				// Let's give up
@@ -289,7 +291,7 @@ public class PerTileQualityScores extends AbstractQCModule {
 				perTileQualityCounts.clear();
 				return;
 			}
-			
+
 			QualityCount [] qualityCounts = new QualityCount[currentLength];
 			for (int i=0;i<currentLength;i++) {
 				qualityCounts[i] = new QualityCount();
@@ -328,14 +330,14 @@ public class PerTileQualityScores extends AbstractQCModule {
 
 	public boolean raisesWarning() {
 		if (!calculated) getPercentages();
-		
+
 		if (maxDeviation > ModuleConfig.getParam("tile", "warn")) return true;
 		return false;
 	}
 
 	public void makeReport(HTMLReportArchive report) throws IOException,XMLStreamException {
 		if (!calculated) getPercentages();
-		
+
 		writeDefaultImage(report, "per_tile_quality.png", "Per tile quality graph", Math.max(800, xLabels.length*15), 600);
 
 		StringBuffer sb = report.dataDocument();
@@ -354,6 +356,19 @@ public class PerTileQualityScores extends AbstractQCModule {
 
 				sb.append("\n");
 			}
+		}
+	}
+
+	@Override
+	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
+		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
+			// Generate interactive ECharts heatmap
+			if (!calculated) getPercentages();
+			String chartScript = EChartsGenerator.generateHeatmapConfig("CHART_CONTAINER_ID", means, xLabels, tiles, "Per tile sequence quality");
+			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
+		} else {
+			// Use static image
+			writeStaticImage(report, fileName, imageTitle, width, height);
 		}
 	}
 

@@ -28,6 +28,7 @@ import uk.ac.babraham.FastQC.FastQCConfig;
 import uk.ac.babraham.FastQC.Graphs.LineGraph;
 import uk.ac.babraham.FastQC.Report.HTMLReportArchive;
 import uk.ac.babraham.FastQC.Sequence.Sequence;
+import uk.ac.babraham.FastQC.Utilities.EChartsGenerator;
 
 public class SequenceLengthDistribution extends AbstractQCModule {
 
@@ -249,6 +250,29 @@ public class SequenceLengthDistribution extends AbstractQCModule {
 			sb.append(graphCounts[i]);
 			sb.append("\n");
 		}
+	}
+
+	@Override
+	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
+		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
+			// Generate interactive ECharts plot
+			if (!calculated) calculateDistribution();
+			double[][] data = {graphCounts};
+			String[] seriesNames = {"Count"};
+			String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", data, 0d, findMaxCount(), "Sequence Length (bp)", seriesNames, xCategories, "Distribution of sequence lengths over all sequences");
+			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
+		} else {
+			// Use static image
+			writeStaticImage(report, fileName, imageTitle, width, height);
+		}
+	}
+
+	private double findMaxCount() {
+		double max = 0;
+		for (double count : graphCounts) {
+			if (count > max) max = count;
+		}
+		return max;
 	}
 
 }

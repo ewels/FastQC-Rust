@@ -21,11 +21,13 @@ package uk.ac.babraham.FastQC.Report;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -70,6 +72,7 @@ public class HTMLReportArchive {
 	private StringWriter moduleContentWriter;
 	private String htmlTemplate;
 	private Map<String, String> helpFileMapping;
+	private Map<String, String> interactiveScripts = new HashMap<String, String>();
 
 	public HTMLReportArchive (SequenceFile sequenceFile, QCModule [] modules, File htmlFile) throws IOException, XMLStreamException {
 		this.sequenceFile = sequenceFile;
@@ -109,6 +112,11 @@ public class HTMLReportArchive {
 		// Generate final HTML from template
 		String finalHtml = generateHtmlFromTemplate(moduleContent);
 
+		// Post-process to replace interactive script placeholders
+		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
+			finalHtml = replaceInteractiveScripts(finalHtml);
+		}
+
 		zip.putNextEntry(new ZipEntry(folderName()+"/fastqc_report.html"));
 		zip.write(finalHtml.getBytes());
 		zip.closeEntry();
@@ -122,29 +130,31 @@ public class HTMLReportArchive {
 		zip.write(summaryText.getBytes());
 		zip.closeEntry();
 
-		//XSL-FO
-		try {
-			DocumentBuilderFactory domFactory=DocumentBuilderFactory.newInstance();
-			domFactory.setNamespaceAware(false);
-			DocumentBuilder builder=domFactory.newDocumentBuilder();
-			Document src=builder.parse(new InputSource( new StringReader(finalHtml)));
-			InputStream rsrc=getClass().getResourceAsStream("/Templates/fastqc2fo.xsl");
-			if(rsrc!=null)
-				{
-				domFactory.setNamespaceAware(true);
-				builder=domFactory.newDocumentBuilder();
-				Document html2fo=builder.parse(rsrc);
-				rsrc.close();
+				//XSL-FO (skip when interactive plots are enabled as PDFs should use static plots anyway)
+		if (FastQCConfig.getInstance().static_plots || !FastQCConfig.getInstance().interactive_plots) {
+			try {
+				DocumentBuilderFactory domFactory=DocumentBuilderFactory.newInstance();
+				domFactory.setNamespaceAware(false);
+				DocumentBuilder builder=domFactory.newDocumentBuilder();
+				Document src=builder.parse(new InputSource( new StringReader(finalHtml)));
+				InputStream rsrc=getClass().getResourceAsStream("/Templates/fastqc2fo.xsl");
+				if(rsrc!=null)
+					{
+					domFactory.setNamespaceAware(true);
+					builder=domFactory.newDocumentBuilder();
+					Document html2fo=builder.parse(rsrc);
+					rsrc.close();
 
-				TransformerFactory tf=TransformerFactory.newInstance();
-				Templates templates=tf.newTemplates(new DOMSource(html2fo));
-				zip.putNextEntry(new ZipEntry(folderName()+"/fastqc.fo"));
-				templates.newTransformer().transform(new DOMSource(src), new StreamResult(zip));
-				zip.closeEntry();
+					TransformerFactory tf=TransformerFactory.newInstance();
+					Templates templates=tf.newTemplates(new DOMSource(html2fo));
+					zip.putNextEntry(new ZipEntry(folderName()+"/fastqc.fo"));
+					templates.newTransformer().transform(new DOMSource(src), new StreamResult(zip));
+					zip.closeEntry();
+					}
 				}
+			catch (Exception e) {
+				e.printStackTrace();
 			}
-		catch (Exception e) {
-			e.printStackTrace();
 		}
 
 
@@ -200,6 +210,10 @@ public class HTMLReportArchive {
 
 	public XMLStreamWriter xhtmlStream (){
 		return this.xhtml;
+	}
+
+	public void addInteractiveScript(String placeholder, String scriptContent) {
+		interactiveScripts.put(placeholder, scriptContent);
 	}
 
 	public StringBuffer dataDocument() {
@@ -361,6 +375,14 @@ public class HTMLReportArchive {
 		String html = htmlTemplate;
 		html = html.replace("{{TITLE}}", sequenceFile.name() + " FastQC Report");
 		html = html.replace("{{CSS_CONTENT}}", loadTemplate("/Templates/fastqc.css"));
+
+		// Include ECharts script placeholder if interactive plots are enabled
+		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
+			html = html.replace("{{ECHARTS_SCRIPT}}", "<!--ECHARTS_LIBRARY_PLACEHOLDER-->");
+		} else {
+			html = html.replace("{{ECHARTS_SCRIPT}}", "");
+		}
+
 		html = html.replace("{{DATE}}", df.format(new Date()));
 		html = html.replace("{{FILENAME}}", sequenceFile.name());
 		html = html.replace("{{FASTQC_ICON_SVG_MOBILE}}", getFastQCIconWithUniqueIds("mobile"));
@@ -369,6 +391,44 @@ public class HTMLReportArchive {
 		html = html.replace("{{MODULE_CONTENT}}", moduleContent);
 		html = html.replace("{{VERSION}}", FastQCApplication.VERSION);
 
+		return html;
+	}
+
+		private String loadEChartsLibrary() throws IOException {
+		// Load the echarts.min.js file from the root directory
+		InputStream is = HTMLReportArchive.class.getResourceAsStream("/echarts.min.js");
+		if (is == null) {
+			throw new IOException("Could not find echarts.min.js in classpath");
+		}
+
+		StringBuilder sb = new StringBuilder();
+		BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+		String line;
+		while ((line = reader.readLine()) != null) {
+			sb.append(line).append("\n");
+		}
+		reader.close();
+
+		// Don't escape the JavaScript - we'll use CDATA in the template
+		return sb.toString();
+	}
+
+	private String replaceInteractiveScripts(String html) {
+		// Replace ECharts library placeholder
+		try {
+			String echartsScript = "<script type=\"text/javascript\">\n" + loadEChartsLibrary() + "\n</script>";
+			html = html.replace("<!--ECHARTS_LIBRARY_PLACEHOLDER-->", echartsScript);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		// Replace comment placeholders with actual script tags
+		for (Map.Entry<String, String> entry : interactiveScripts.entrySet()) {
+			String placeholder = entry.getKey();
+			String scriptContent = entry.getValue();
+			String scriptTag = "<script type=\"text/javascript\">\n" + scriptContent + "\n</script>";
+			html = html.replace(placeholder, scriptTag);
+		}
 		return html;
 	}
 

@@ -28,6 +28,8 @@ import uk.ac.babraham.FastQC.Graphs.BaseGroup;
 import uk.ac.babraham.FastQC.Graphs.LineGraph;
 import uk.ac.babraham.FastQC.Report.HTMLReportArchive;
 import uk.ac.babraham.FastQC.Sequence.Sequence;
+import uk.ac.babraham.FastQC.Utilities.EChartsGenerator;
+import uk.ac.babraham.FastQC.FastQCConfig;
 
 public class NContent extends AbstractQCModule {
 
@@ -36,9 +38,9 @@ public class NContent extends AbstractQCModule {
 	public boolean calculated = false;
 	public double [] percentages = null;
 	public String [] xCategories = new String[0];
-	
+
 	public JPanel getResultsPanel() {
-		
+
 		if (!calculated) getPercentages();
 		return new LineGraph(new double [][] {percentages}, 0d, 100d, "Position in read (bp)",new String [] {"%N"}, xCategories, "N content across all bases");
 	}
@@ -46,18 +48,18 @@ public class NContent extends AbstractQCModule {
 	public boolean ignoreFilteredSequences() {
 		return true;
 	}
-	
+
 	public boolean ignoreInReport () {
 		if (ModuleConfig.getParam("n_content", "ignore") > 0) {
 			return true;
 		}
 		return false;
 	}
-	
+
 	private synchronized void getPercentages () {
-		
+
 		BaseGroup [] groups = BaseGroup.makeBaseGroups(nCounts.length);
-		
+
 		xCategories = new String[groups.length];
 
 		percentages = new double [groups.length];
@@ -66,31 +68,31 @@ public class NContent extends AbstractQCModule {
 		long nCount;
 
 		for (int i=0;i<groups.length;i++) {
-						
+
 			xCategories[i] = groups[i].toString();
 
 			nCount = 0;
 			total = 0;
-			
-			for (int bp=groups[i].lowerCount()-1;bp<groups[i].upperCount();bp++) {		
+
+			for (int bp=groups[i].lowerCount()-1;bp<groups[i].upperCount();bp++) {
 				nCount += nCounts[bp];
 				total += nCounts[bp];
 				total += notNCounts[bp];
 			}
-			
+
 			percentages[i] = 100*(nCount/(double)total);
 		}
-				
+
 		calculated = true;
-		
+
 	}
-		
+
 	public void processSequence(Sequence sequence) {
 		calculated = false;
 		char [] seq = sequence.getSequence().toCharArray();
 		if (nCounts.length < seq.length) {
 			// We need to expand the size of the data structures
-			
+
 			long [] nCountsNew = new long [seq.length];
 			long [] notNCountsNew = new long [seq.length];
 
@@ -98,11 +100,11 @@ public class NContent extends AbstractQCModule {
 				nCountsNew[i] = nCounts[i];
 				notNCountsNew[i] = notNCounts[i];
 			}
-			
+
 			nCounts = nCountsNew;
 			notNCounts = notNCountsNew;
 		}
-		
+
 		for (int i=0;i<seq.length;i++) {
 			if (seq[i] == 'N') {
 				++nCounts[i];
@@ -111,9 +113,9 @@ public class NContent extends AbstractQCModule {
 				++notNCounts[i];
 			}
 		}
-		
+
 	}
-	
+
 	public void reset () {
 		nCounts = new long[0];
 		notNCounts = new long[0];
@@ -149,9 +151,9 @@ public class NContent extends AbstractQCModule {
 
 	public void makeReport(HTMLReportArchive report) throws XMLStreamException,IOException {
 		if (!calculated) getPercentages();
-		
+
 		writeDefaultImage(report, "per_base_n_content.png", "N content graph", Math.max(800, percentages.length*15), 600);
-		
+
 		StringBuffer sb = report.dataDocument();
 		sb.append("#Base\tN-Count\n");
 		for (int i=0;i<xCategories.length;i++) {
@@ -159,6 +161,21 @@ public class NContent extends AbstractQCModule {
 			sb.append("\t");
 			sb.append(percentages[i]);
 			sb.append("\n");
+		}
+	}
+
+	@Override
+	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
+		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
+			// Generate interactive ECharts plot
+			if (!calculated) getPercentages();
+			double[][] data = {percentages};
+			String[] seriesNames = {"%N"};
+			String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", data, 0d, 100d, "Position in read (bp)", seriesNames, xCategories, "N content across all bases");
+			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
+		} else {
+			// Use static image
+			writeStaticImage(report, fileName, imageTitle, width, height);
 		}
 	}
 

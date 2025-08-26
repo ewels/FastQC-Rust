@@ -28,6 +28,8 @@ import uk.ac.babraham.FastQC.Graphs.BaseGroup;
 import uk.ac.babraham.FastQC.Graphs.LineGraph;
 import uk.ac.babraham.FastQC.Report.HTMLReportArchive;
 import uk.ac.babraham.FastQC.Sequence.Sequence;
+import uk.ac.babraham.FastQC.Utilities.EChartsGenerator;
+import uk.ac.babraham.FastQC.FastQCConfig;
 
 public class PerBaseSequenceContent extends AbstractQCModule {
 
@@ -38,19 +40,19 @@ public class PerBaseSequenceContent extends AbstractQCModule {
 	private double [][] percentages = null;
 	private String [] xCategories = new String[0];
 	private boolean calculated = false;
-		
-	
+
+
 	public JPanel getResultsPanel() {
-		
+
 		if (!calculated) getPercentages();
 
 		return new LineGraph(percentages, 0d, 100d, "Position in read (bp)", new String [] {"%T","%C","%A","%G"}, xCategories, "Sequence content across all bases");
 	}
-	
+
 	public boolean ignoreFilteredSequences() {
 		return true;
 	}
-	
+
 	public boolean ignoreInReport () {
 		if (ModuleConfig.getParam("sequence", "ignore") > 0) {
 			return true;
@@ -61,10 +63,10 @@ public class PerBaseSequenceContent extends AbstractQCModule {
 	private synchronized void getPercentages () {
 
 		BaseGroup [] groups = BaseGroup.makeBaseGroups(gCounts.length);
-		
+
 		xCategories = new String[groups.length];
 
-		
+
 		double [] gPercent = new double[groups.length];
 		double [] aPercent = new double[groups.length];
 		double [] tPercent = new double[groups.length];
@@ -77,7 +79,7 @@ public class PerBaseSequenceContent extends AbstractQCModule {
 		long cCount;
 
 		for (int i=0;i<groups.length;i++) {
-						
+
 			xCategories[i] = groups[i].toString();
 
 			gCount = 0;
@@ -85,7 +87,7 @@ public class PerBaseSequenceContent extends AbstractQCModule {
 			tCount = 0;
 			cCount = 0;
 			total = 0;
-			
+
 			for (int bp=groups[i].lowerCount()-1;bp<groups[i].upperCount();bp++) {
 
 				total += gCounts[bp];
@@ -96,26 +98,26 @@ public class PerBaseSequenceContent extends AbstractQCModule {
 				aCount += aCounts[bp];
 				tCount += tCounts[bp];
 				cCount += cCounts[bp];
-				gCount += gCounts[bp];				
+				gCount += gCounts[bp];
 			}
-			
+
 			gPercent[i] = (gCount/(double)total)*100;
 			aPercent[i] = (aCount/(double)total)*100;
 			tPercent[i] = (tCount/(double)total)*100;
-			cPercent[i] = (cCount/(double)total)*100;			
-						
+			cPercent[i] = (cCount/(double)total)*100;
+
 		}
-		
+
 		percentages = new double [][] {tPercent,cPercent,aPercent,gPercent};
-		
+
 		calculated = true;
 	}
-	
+
 	public void processSequence(Sequence sequence) {
 		calculated = false;
 		char [] seq = sequence.getSequence().toCharArray();
 		if (gCounts.length < seq.length) {
-			
+
 			long [] gCountsNew = new long [seq.length];
 			long [] aCountsNew = new long [seq.length];
 			long [] cCountsNew = new long [seq.length];
@@ -126,14 +128,14 @@ public class PerBaseSequenceContent extends AbstractQCModule {
 				aCountsNew[i] = aCounts[i];
 				tCountsNew[i] = tCounts[i];
 				cCountsNew[i] = cCounts[i];
-			}		
+			}
 
 			gCounts = gCountsNew;
 			aCounts = aCountsNew;
 			tCounts = tCountsNew;
 			cCounts = cCountsNew;
 		}
-		
+
 		for (int i=0;i<seq.length;i++) {
 			if (seq[i] == 'G') {
 				++gCounts[i];
@@ -148,9 +150,9 @@ public class PerBaseSequenceContent extends AbstractQCModule {
 				++cCounts[i];
 			}
 		}
-		
+
 	}
-	
+
 	public void reset () {
 		gCounts = new long[0];
 		aCounts = new long[0];
@@ -174,9 +176,9 @@ public class PerBaseSequenceContent extends AbstractQCModule {
 
 			double gcDiff = Math.abs(percentages[1][i]-percentages[3][i]);
 			double atDiff = Math.abs(percentages[0][i]-percentages[2][i]);
-			
+
 			if (gcDiff > ModuleConfig.getParam("sequence", "error") || atDiff > ModuleConfig.getParam("sequence", "error")) return true;
-			
+
 		}
 		return false;
 	}
@@ -190,19 +192,19 @@ public class PerBaseSequenceContent extends AbstractQCModule {
 
 			double gcDiff = Math.abs(percentages[1][i]-percentages[3][i]);
 			double atDiff = Math.abs(percentages[0][i]-percentages[2][i]);
-			
+
 			if (gcDiff > ModuleConfig.getParam("sequence", "warn") || atDiff > ModuleConfig.getParam("sequence", "warn")) return true;
-			
+
 		}
 		return false;
 	}
 
 	public void makeReport(HTMLReportArchive report) throws IOException,XMLStreamException {
-		
+
 		if (!calculated) getPercentages();
-		
+
 		writeDefaultImage(report, "per_base_sequence_content.png", "Per base sequence content", Math.max(800, xCategories.length*15), 600);
-		
+
 		StringBuffer sb = report.dataDocument();
 		sb.append("#Base\tG\tA\tT\tC\n");
 		for (int i=0;i<xCategories.length;i++) {
@@ -217,7 +219,21 @@ public class PerBaseSequenceContent extends AbstractQCModule {
 			sb.append(percentages[1][i]);
 			sb.append("\n");
 		}
-		
-	} 
+
+	}
+
+	@Override
+	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
+		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
+			// Generate interactive ECharts plot
+			if (!calculated) getPercentages();
+			String[] seriesNames = {"%T", "%C", "%A", "%G"};
+			String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", percentages, 0d, 100d, "Position in read (bp)", seriesNames, xCategories, "Sequence content across all bases");
+			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
+		} else {
+			// Use static image
+			writeStaticImage(report, fileName, imageTitle, width, height);
+		}
+	}
 
 }

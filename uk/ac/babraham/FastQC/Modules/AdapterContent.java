@@ -41,6 +41,7 @@ import uk.ac.babraham.FastQC.Graphs.LineGraph;
 import uk.ac.babraham.FastQC.Report.HTMLReportArchive;
 import uk.ac.babraham.FastQC.Sequence.Sequence;
 import uk.ac.babraham.FastQC.Sequence.Contaminant.ContaminentFinder;
+import uk.ac.babraham.FastQC.Utilities.EChartsGenerator;
 
 public class AdapterContent extends AbstractQCModule {
 
@@ -296,6 +297,26 @@ public class AdapterContent extends AbstractQCModule {
 				sb.append("\n");
 			}
 
+		}
+	}
+
+	@Override
+	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
+		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
+			// Generate interactive ECharts plot for adapter content
+			if (!calculated) calculateEnrichment();
+
+			// Create series names from adapter names
+			String[] seriesNames = new String[adapters.length];
+			for (int i = 0; i < adapters.length; i++) {
+				seriesNames[i] = adapters[i].name();
+			}
+
+			String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", enrichments, 0d, 100d, "Position in read (bp)", seriesNames, xLabels, "% Adapter");
+			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
+		} else {
+			// Use static image
+			writeStaticImage(report, fileName, imageTitle, width, height);
 		}
 	}
 

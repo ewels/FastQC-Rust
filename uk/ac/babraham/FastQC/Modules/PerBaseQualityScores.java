@@ -30,6 +30,8 @@ import uk.ac.babraham.FastQC.Report.HTMLReportArchive;
 import uk.ac.babraham.FastQC.Sequence.Sequence;
 import uk.ac.babraham.FastQC.Sequence.QualityEncoding.PhredEncoding;
 import uk.ac.babraham.FastQC.Utilities.QualityCount;
+import uk.ac.babraham.FastQC.Utilities.EChartsGenerator;
+import uk.ac.babraham.FastQC.FastQCConfig;
 
 public class PerBaseQualityScores extends AbstractQCModule {
 
@@ -45,18 +47,18 @@ public class PerBaseQualityScores extends AbstractQCModule {
 	int high = 0;
 	PhredEncoding encodingScheme;
 	private boolean calculated = false;
-		
+
 	public JPanel getResultsPanel() {
-		
+
 		if (!calculated) getPercentages();
 
 		return new QualityBoxPlot(means,medians,lowest,highest,lowerQuartile,upperQuartile, low, high, 2d, xLabels, "Quality scores across all bases ("+encodingScheme+" encoding)");
 	}
-	
+
 	public boolean ignoreFilteredSequences() {
 		return true;
 	}
-	
+
 	public boolean ignoreInReport () {
 		// We don't show this if there is no quality data.
 		if (ModuleConfig.getParam("quality_base", "ignore") > 0 || qualityCounts.length == 0) {
@@ -66,7 +68,7 @@ public class PerBaseQualityScores extends AbstractQCModule {
 	}
 
 	private synchronized void getPercentages () {
-		
+
 		char [] range = calculateOffsets();
 		encodingScheme = PhredEncoding.getFastQEncodingOffset(range[0]);
 		low = 0;
@@ -74,9 +76,9 @@ public class PerBaseQualityScores extends AbstractQCModule {
 		if (high < 35) {
 			high = 35;
 		}
-		
+
 		BaseGroup [] groups = BaseGroup.makeBaseGroups(qualityCounts.length);
-		
+
 		means = new double[groups.length];
 		medians = new double[groups.length];
 		lowest = new double[groups.length];
@@ -84,7 +86,7 @@ public class PerBaseQualityScores extends AbstractQCModule {
 		lowerQuartile = new double[groups.length];
 		upperQuartile = new double[groups.length];
 		xLabels = new String[groups.length];
-		
+
 		for (int i=0;i<groups.length;i++) {
 			xLabels[i] = groups[i].toString();
 			int minBase = groups[i].lowerCount();
@@ -100,14 +102,14 @@ public class PerBaseQualityScores extends AbstractQCModule {
 		calculated = true;
 
 	}
-	
+
 	private char [] calculateOffsets () {
 		// Works out from the set of chars what is the most
 		// likely encoding scale for this file.
-		
+
 		char minChar = 0;
 		char maxChar = 0;
-		
+
 		for (int q=0;q<qualityCounts.length;q++) {
 			if (q == 0) {
 				minChar = qualityCounts[q].getMinChar();
@@ -122,34 +124,34 @@ public class PerBaseQualityScores extends AbstractQCModule {
 				}
 			}
 		}
-		
+
 		return new char[] {minChar,maxChar};
 	}
-	
+
 	public void processSequence(Sequence sequence) {
-		
+
 		calculated = false;
 		char [] qual = sequence.getQualityString().toCharArray();
 		if (qualityCounts.length < qual.length) {
-			
+
 			QualityCount [] qualityCountsNew = new QualityCount[qual.length];
-			
+
 			for (int i=0;i<qualityCounts.length;i++) {
 				qualityCountsNew[i] = qualityCounts[i];
 			}
 			for (int i=qualityCounts.length;i<qualityCountsNew.length;i++) {
-				qualityCountsNew[i] = new QualityCount();				
+				qualityCountsNew[i] = new QualityCount();
 			}
 			qualityCounts = qualityCountsNew;
-			
+
 		}
-		
+
 		for (int i=0;i<qual.length;i++) {
 			qualityCounts[i].addValue(qual[i]);
 		}
-		
+
 	}
-	
+
 	public void reset () {
 		qualityCounts = new QualityCount[0];
 	}
@@ -191,13 +193,13 @@ public class PerBaseQualityScores extends AbstractQCModule {
 		}
 		return false;
 	}
-	
+
 	public void makeReport(HTMLReportArchive report) throws IOException,XMLStreamException
 		{
 		if (!calculated) getPercentages();
 
-		writeDefaultImage(report, "per_base_quality.png", "Per base quality graph", Math.max(800, means.length*15), 600);		
-		
+		writeDefaultImage(report, "per_base_quality.png", "Per base quality graph", Math.max(800, means.length*15), 600);
+
 		StringBuffer sb = report.dataDocument();
 		sb.append("#Base\tMean\tMedian\tLower Quartile\tUpper Quartile\t10th Percentile\t90th Percentile\n");
 		for (int i=0;i<means.length;i++) {
@@ -224,41 +226,54 @@ public class PerBaseQualityScores extends AbstractQCModule {
 			sb.append("\n");
 		}
 	}
-	
+
+	@Override
+	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
+		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
+			// Generate interactive ECharts plot
+			if (!calculated) getPercentages();
+			String chartScript = EChartsGenerator.generateBoxPlotConfig("CHART_CONTAINER_ID", means, medians, lowest, highest, lowerQuartile, upperQuartile, low, high, xLabels, "Quality scores across all bases (" + encodingScheme + " encoding)");
+			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
+		} else {
+			// Use static image
+			writeStaticImage(report, fileName, imageTitle, width, height);
+		}
+	}
+
 	private double getPercentile (int minbp, int maxbp, int offset, int percentile) {
 		int count = 0;
 		double total = 0;
-	
+
 		for (int i=minbp-1;i<maxbp;i++) {
 			if (qualityCounts[i].getTotalCount() > 100) {
 				count++;
 				total += qualityCounts[i].getPercentile(offset, percentile);
 			}
 		}
-		
+
 		if (count > 0) {
 			return total/count;
 		}
 		return Double.NaN;
-		
+
 	}
 
 	private double getMean (int minbp, int maxbp, int offset) {
 		int count = 0;
 		double total = 0;
-	
+
 		for (int i=minbp-1;i<maxbp;i++) {
 			if (qualityCounts[i].getTotalCount() > 0) {
 				count++;
 				total += qualityCounts[i].getMean(offset);
 			}
 		}
-		
+
 		if (count > 0) {
 			return total/count;
 		}
 		return 0;
-		
+
 	}
 
 }
