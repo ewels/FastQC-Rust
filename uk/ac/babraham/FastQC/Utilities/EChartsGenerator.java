@@ -234,14 +234,30 @@ public class EChartsGenerator {
             sb.append("'").append(yLabels[i]).append("'");
         }
         sb.append("], splitArea: { show: true } },");
-        sb.append("  visualMap: { min: 0, max: 40, calculable: true, orient: 'horizontal', left: 'center', bottom: 20 },");
+
+        // Use FastQC's quality color scheme: blue (good) -> green -> yellow -> red (bad)
+        // Range: 0 (good) to 10 (bad quality deviation)
+        sb.append("  visualMap: { ");
+        sb.append("min: 0, max: 10, ");
+        sb.append("calculable: true, ");
+        sb.append("orient: 'horizontal', ");
+        sb.append("left: 'center', ");
+        sb.append("bottom: 20, ");
+        sb.append("inRange: { ");
+        sb.append("color: ['#0000C8', '#0080C8', '#00C8C8', '#00C800', '#C8C800', '#C88000', '#C80000'] ");
+        sb.append("} },");
+
         sb.append("  series: [{ name: 'Quality', type: 'heatmap', data: [");
 
         boolean first = true;
         for (int y = 0; y < data.length; y++) {
             for (int x = 0; x < data[y].length; x++) {
                 if (!first) sb.append(",");
-                sb.append("[").append(x).append(",").append(y).append(",").append(data[y][x]).append("]");
+                // Transform data like the original: 0 - tileBaseMeans[tile][base]
+                // This makes higher quality scores (good) become lower values (blue)
+                // and lower quality scores (bad) become higher values (red)
+                double transformedValue = 0 - data[y][x];
+                sb.append("[").append(x).append(",").append(y).append(",").append(df.format(transformedValue)).append("]");
                 first = false;
             }
         }
@@ -276,26 +292,55 @@ public class EChartsGenerator {
         // Add quality zone backgrounds using markArea
         sb.append("  series: [");
 
-        // Background zones - using invisible line series with markArea
-        sb.append("{ name: 'Quality Zones', type: 'line', data: [], ");
-        sb.append("markArea: { silent: true, itemStyle: { opacity: 0.3 }, data: [");
-        sb.append("[{ name: 'Poor Quality', yAxis: 0, itemStyle: { color: '#FF0000' } }, { yAxis: 20 }],");
-        sb.append("[{ name: 'Moderate Quality', yAxis: 20, itemStyle: { color: '#FFFF00' } }, { yAxis: 28 }],");
-        sb.append("[{ name: 'Good Quality', yAxis: 28, itemStyle: { color: '#00FF00' } }, { yAxis: 40 }]");
+                // Background zones - using invisible line series with markArea (no labels)
+        sb.append("{ name: 'Quality Zones', type: 'line', data: [], showInLegend: false, ");
+        sb.append("markArea: { silent: true, itemStyle: { opacity: 0.8 }, label: { show: false }, data: [");
+        sb.append("[{ yAxis: 0, itemStyle: { color: '#f0c6bc' } }, { yAxis: 20 }],");  // Bottom zone (poor quality)
+        sb.append("[{ yAxis: 20, itemStyle: { color: '#e8d28f' } }, { yAxis: 28 }],"); // Middle zone (moderate quality)
+        sb.append("[{ yAxis: 28, itemStyle: { color: '#afe0b7' } }, { yAxis: 40 }]");  // Top zone (good quality)
         sb.append("] } },");
 
-        // Box plot data
+        // Mean quality line (blue)
+        sb.append("{ name: 'Mean', type: 'line', ");
+        sb.append("lineStyle: { color: '#0066CC', width: 2 }, ");
+        sb.append("itemStyle: { color: '#0066CC' }, ");
+        sb.append("symbol: 'none', ");
+        sb.append("data: [");
+        for (int i = 0; i < means.length; i++) {
+            if (i > 0) sb.append(",");
+            sb.append(df.format(means[i]));
+        }
+        sb.append("] },");
+
+        // Box plot data with custom styling
         sb.append("{ name: 'Quality Scores', type: 'boxplot', ");
         sb.append("boxWidth: ['7', '99%'], ");
+        sb.append("itemStyle: { ");
+        sb.append("color: '#FFFF00', ");           // Yellow box fill
+        sb.append("borderColor: '#000000', ");     // Black box outline
+        sb.append("borderWidth: 1 ");
+        sb.append("}, ");
+        sb.append("emphasis: { ");
+        sb.append("itemStyle: { ");
+        sb.append("color: '#FFFF00', ");
+        sb.append("borderColor: '#000000', ");
+        sb.append("borderWidth: 2 ");
+        sb.append("} }, ");
+        // Configure median line color
+        sb.append("medianStyle: { ");
+        sb.append("color: '#FF0000', ");           // Red median line
+        sb.append("width: 2 ");
+        sb.append("}, ");
         sb.append("data: [");
 
         for (int i = 0; i < means.length; i++) {
             if (i > 0) sb.append(",");
-            sb.append("[").append(lowest[i]).append(",").append(lowerQuartile[i]).append(",")
-              .append(medians[i]).append(",").append(upperQuartile[i]).append(",").append(highest[i]).append("]");
+            // Box plot data: [min, Q1, median, Q3, max]
+            sb.append("[").append(df.format(lowest[i])).append(",").append(df.format(lowerQuartile[i])).append(",")
+              .append(df.format(medians[i])).append(",").append(df.format(upperQuartile[i])).append(",").append(df.format(highest[i])).append("]");
         }
 
-        sb.append("] }");
+                sb.append("] }");
         sb.append("] };");
         sb.append("chart_").append(containerId).append(".setOption(option_").append(containerId).append(");");
 
