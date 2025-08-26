@@ -227,7 +227,7 @@ public class PerBaseSequenceContent extends AbstractQCModule {
 		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
 			// Generate interactive ECharts plot
 			if (!calculated) getPercentages();
-			String[] seriesNames = {"%T", "%C", "%A", "%G"};
+			String[] seriesNames = {"%T","%C","%A","%G"};
 			String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", percentages, 0d, 100d, "Position in read (bp)", seriesNames, xCategories, "Sequence content across all bases");
 			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
 		} else {

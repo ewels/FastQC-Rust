@@ -20,6 +20,7 @@
 package uk.ac.babraham.FastQC.Utilities;
 
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 
 public class EChartsGenerator {
 
@@ -28,7 +29,15 @@ public class EChartsGenerator {
         "#44AA99", "#AA4499", "#CC6677", "#88CCEE"
     };
 
-    private static final DecimalFormat df = new DecimalFormat("#.##");
+    private static final DecimalFormat df;
+
+    static {
+        df = new DecimalFormat("#.##");
+        // Force dot as decimal separator for JavaScript compatibility
+        DecimalFormatSymbols symbols = df.getDecimalFormatSymbols();
+        symbols.setDecimalSeparator('.');
+        df.setDecimalFormatSymbols(symbols);
+    }
 
     /**
      * Generate ECharts configuration for a box plot (quality scores)
@@ -171,6 +180,7 @@ public class EChartsGenerator {
             }
             sb.append("],\n");
             sb.append("      lineStyle: { color: '").append(COLORS[d % COLORS.length]).append("', width: 2 },\n");
+            sb.append("      itemStyle: { color: '").append(COLORS[d % COLORS.length]).append("' },\n");
             sb.append("      symbol: 'none'\n");
             sb.append("    }");
         }
@@ -239,6 +249,186 @@ public class EChartsGenerator {
         sb.append("], emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0, 0, 0, 0.5)' } } }]");
         sb.append("};");
         sb.append("chart_").append(containerId).append(".setOption(option_").append(containerId).append(");");
+
+        return sb.toString();
+    }
+
+    public static String generateBoxPlotWithQualityZonesConfig(String containerId, double[] means, double[] medians,
+                                                             double[] lowest, double[] highest, double[] lowerQuartile,
+                                                             double[] upperQuartile, double minY, double maxY,
+                                                             String[] xLabels, String title) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("var chart_").append(containerId).append(" = echarts.init(document.getElementById('").append(containerId).append("'));");
+        sb.append("var option_").append(containerId).append(" = {");
+        sb.append("  title: { text: '").append(escapeString(title)).append("', left: 'center', top: 10 },");
+        sb.append("  tooltip: { trigger: 'axis' },");
+        sb.append("  grid: { left: 80, right: 80, top: 80, bottom: 80 },");
+
+        sb.append("  xAxis: { type: 'category', name: 'Position in read (bp)', nameLocation: 'middle', nameGap: 30, data: [");
+        for (int i = 0; i < xLabels.length; i++) {
+            if (i > 0) sb.append(",");
+            sb.append("'").append(escapeString(xLabels[i])).append("'");
+        }
+        sb.append("] },");
+
+        sb.append("  yAxis: { type: 'value', name: 'Quality Score', nameLocation: 'middle', nameGap: 50, min: 0, max: 40 },");
+
+        // Add quality zone backgrounds using markArea
+        sb.append("  series: [");
+
+        // Background zones - using invisible line series with markArea
+        sb.append("{ name: 'Quality Zones', type: 'line', data: [], ");
+        sb.append("markArea: { silent: true, itemStyle: { opacity: 0.3 }, data: [");
+        sb.append("[{ name: 'Poor Quality', yAxis: 0, itemStyle: { color: '#FF0000' } }, { yAxis: 20 }],");
+        sb.append("[{ name: 'Moderate Quality', yAxis: 20, itemStyle: { color: '#FFFF00' } }, { yAxis: 28 }],");
+        sb.append("[{ name: 'Good Quality', yAxis: 28, itemStyle: { color: '#00FF00' } }, { yAxis: 40 }]");
+        sb.append("] } },");
+
+        // Box plot data
+        sb.append("{ name: 'Quality Scores', type: 'boxplot', ");
+        sb.append("boxWidth: ['7', '99%'], ");
+        sb.append("data: [");
+
+        for (int i = 0; i < means.length; i++) {
+            if (i > 0) sb.append(",");
+            sb.append("[").append(lowest[i]).append(",").append(lowerQuartile[i]).append(",")
+              .append(medians[i]).append(",").append(upperQuartile[i]).append(",").append(highest[i]).append("]");
+        }
+
+        sb.append("] }");
+        sb.append("] };");
+        sb.append("chart_").append(containerId).append(".setOption(option_").append(containerId).append(");");
+
+        return sb.toString();
+    }
+
+    public static String generateQualityDistributionConfig(String containerId, double[] data, int[] xCategories, double maxY, String title) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("var chart_").append(containerId).append(" = echarts.init(document.getElementById('").append(containerId).append("'));");
+        sb.append("var option_").append(containerId).append(" = {");
+        sb.append("  title: { text: '").append(escapeString(title)).append("', left: 'center', top: 10 },");
+        sb.append("  tooltip: { trigger: 'axis', formatter: function(params) { return params[0].name + '<br/>Count: ' + params[0].value; } },");
+        sb.append("  grid: { left: 80, right: 80, top: 80, bottom: 80 },");
+
+        // Add background quality zones
+        sb.append("  xAxis: { type: 'category', name: 'Mean Sequence Quality (Phred Score)', nameLocation: 'middle', nameGap: 30, data: [");
+        for (int i = 0; i < xCategories.length; i++) {
+            if (i > 0) sb.append(",");
+            sb.append("'").append(xCategories[i]).append("'");
+        }
+        sb.append("] },");
+
+        sb.append("  yAxis: { type: 'value', name: 'Count', nameLocation: 'middle', nameGap: 50, max: ").append((int)Math.ceil(maxY)).append(" },");
+
+        // Add quality zone backgrounds
+        sb.append("  series: [");
+
+        // Red zone (0-20)
+        sb.append("{ name: 'Poor Quality', type: 'line', stack: 'zones', areaStyle: { color: 'rgba(255, 0, 0, 0.2)' }, ");
+        sb.append("lineStyle: { width: 0 }, symbol: 'none', data: [");
+        for (int i = 0; i < xCategories.length; i++) {
+            if (i > 0) sb.append(",");
+            if (xCategories[i] <= 20) {
+                sb.append(maxY);
+            } else {
+                sb.append("0");
+            }
+        }
+        sb.append("] },");
+
+        // Yellow zone (20-28)
+        sb.append("{ name: 'Moderate Quality', type: 'line', stack: 'zones', areaStyle: { color: 'rgba(255, 255, 0, 0.2)' }, ");
+        sb.append("lineStyle: { width: 0 }, symbol: 'none', data: [");
+        for (int i = 0; i < xCategories.length; i++) {
+            if (i > 0) sb.append(",");
+            if (xCategories[i] > 20 && xCategories[i] <= 28) {
+                sb.append(maxY);
+            } else {
+                sb.append("0");
+            }
+        }
+        sb.append("] },");
+
+        // Green zone (28+)
+        sb.append("{ name: 'Good Quality', type: 'line', stack: 'zones', areaStyle: { color: 'rgba(0, 255, 0, 0.2)' }, ");
+        sb.append("lineStyle: { width: 0 }, symbol: 'none', data: [");
+        for (int i = 0; i < xCategories.length; i++) {
+            if (i > 0) sb.append(",");
+            if (xCategories[i] > 28) {
+                sb.append(maxY);
+            } else {
+                sb.append("0");
+            }
+        }
+        sb.append("] },");
+
+        // Actual data line
+        sb.append("{ name: 'Average Quality per read', type: 'line', ");
+        sb.append("lineStyle: { color: '#0000FF', width: 2 }, ");
+        sb.append("itemStyle: { color: '#0000FF' }, ");
+        sb.append("data: [");
+        for (int i = 0; i < data.length; i++) {
+            if (i > 0) sb.append(",");
+            sb.append(data[i]);
+        }
+        sb.append("] }");
+
+        sb.append("] };");
+        sb.append("chart_").append(containerId).append(".setOption(option_").append(containerId).append(");");
+
+        return sb.toString();
+    }
+
+    public static String generateContinuousLineGraphConfig(String containerId, double[][] data, double minY, double maxY,
+                                                         String xLabel, String[] seriesNames, int[] xValues, String title) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("var chart_").append(containerId).append(" = echarts.init(document.getElementById('").append(containerId).append("'));\n");
+        sb.append("var option_").append(containerId).append(" = {\n");
+        sb.append("  title: { text: '").append(escapeString(title)).append("', left: 'center', top: 10 },\n");
+        sb.append("  tooltip: { trigger: 'axis' },\n");
+        sb.append("  legend: { data: [");
+        for (int i = 0; i < seriesNames.length; i++) {
+            if (i > 0) sb.append(", ");
+            sb.append("'").append(escapeString(seriesNames[i])).append("'");
+        }
+        sb.append("], top: 35 },\n");
+        sb.append("  grid: { left: 60, right: 30, top: 80, bottom: 80 },\n");
+        sb.append("  xAxis: {\n");
+        sb.append("    type: 'value',\n");  // Use 'value' instead of 'category' for continuous data
+        sb.append("    name: '").append(escapeString(xLabel)).append("',\n");
+        sb.append("    nameLocation: 'middle',\n");
+        sb.append("    nameGap: 30,\n");
+        sb.append("    min: 0,\n");
+        sb.append("    max: 100\n");
+        sb.append("  },\n");
+        sb.append("  yAxis: {\n");
+        sb.append("    type: 'value',\n");
+        sb.append("    min: ").append(minY).append(",\n");
+        sb.append("    max: ").append(maxY).append("\n");
+        sb.append("  },\n");
+        sb.append("  series: [\n");
+
+        for (int d = 0; d < data.length; d++) {
+            if (d > 0) sb.append(",\n");
+            sb.append("    {\n");
+            sb.append("      name: '").append(escapeString(seriesNames[d])).append("',\n");
+            sb.append("      type: 'line',\n");
+            sb.append("      data: [");
+            for (int i = 0; i < data[d].length; i++) {
+                if (i > 0) sb.append(", ");
+                // For continuous axis, data should be [x, y] pairs
+                sb.append("[").append(xValues[i]).append(", ").append(df.format(data[d][i])).append("]");
+            }
+            sb.append("],\n");
+            sb.append("      lineStyle: { color: '").append(COLORS[d % COLORS.length]).append("', width: 2 },\n");
+            sb.append("      itemStyle: { color: '").append(COLORS[d % COLORS.length]).append("' },\n");
+            sb.append("      symbol: 'none'\n");
+            sb.append("    }");
+        }
+
+        sb.append("\n  ]\n");
+        sb.append("};\n");
+        sb.append("chart_").append(containerId).append(".setOption(option_").append(containerId).append(");\n");
 
         return sb.toString();
     }

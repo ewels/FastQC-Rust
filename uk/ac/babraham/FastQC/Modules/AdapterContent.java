@@ -306,13 +306,7 @@ public class AdapterContent extends AbstractQCModule {
 			// Generate interactive ECharts plot for adapter content
 			if (!calculated) calculateEnrichment();
 
-			// Create series names from adapter names
-			String[] seriesNames = new String[adapters.length];
-			for (int i = 0; i < adapters.length; i++) {
-				seriesNames[i] = adapters[i].name();
-			}
-
-			String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", enrichments, 0d, 100d, "Position in read (bp)", seriesNames, xLabels, "% Adapter");
+						String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", enrichments, 0d, 100d, "Position in read (bp)", labels, xLabels, "% Adapter");
 			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
 		} else {
 			// Use static image

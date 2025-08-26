@@ -230,9 +230,9 @@ public class PerBaseQualityScores extends AbstractQCModule {
 	@Override
 	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
 		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
-			// Generate interactive ECharts plot
+			// Generate interactive ECharts plot with quality zones
 			if (!calculated) getPercentages();
-			String chartScript = EChartsGenerator.generateBoxPlotConfig("CHART_CONTAINER_ID", means, medians, lowest, highest, lowerQuartile, upperQuartile, low, high, xLabels, "Quality scores across all bases (" + encodingScheme + " encoding)");
+			String chartScript = EChartsGenerator.generateBoxPlotWithQualityZonesConfig("CHART_CONTAINER_ID", means, medians, lowest, highest, lowerQuartile, upperQuartile, low, high, xLabels, "Quality scores across all bases (" + encodingScheme + " encoding)");
 			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
 		} else {
 			// Use static image

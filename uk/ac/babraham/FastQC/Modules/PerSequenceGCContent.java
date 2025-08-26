@@ -273,7 +273,7 @@ public class PerSequenceGCContent extends AbstractQCModule {
 			if (!calculated) calculateDistribution();
 			double[][] data = {gcDistribution, theoreticalDistribution};
 			String[] seriesNames = {"GC count per read", "Theoretical Distribution"};
-			String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", data, 0d, max, "Mean GC content (%)", seriesNames, xCategories, "GC distribution over all sequences");
+			String chartScript = EChartsGenerator.generateContinuousLineGraphConfig("CHART_CONTAINER_ID", data, 0d, max, "Mean GC content (%)", seriesNames, xCategories, "GC distribution over all sequences");
 			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
 		} else {
 			// Use static image

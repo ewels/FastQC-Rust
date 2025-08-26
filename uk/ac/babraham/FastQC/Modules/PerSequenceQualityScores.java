@@ -163,7 +163,7 @@ public class PerSequenceQualityScores extends AbstractQCModule {
 	@Override
 	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
 		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
-			// Generate interactive ECharts plot
+			// Generate simple line chart for per-sequence quality distribution
 			if (!calculated) calculateDistribution();
 			double[][] data = {qualityDistribution};
 			String[] seriesNames = {"Average Quality per read"};
