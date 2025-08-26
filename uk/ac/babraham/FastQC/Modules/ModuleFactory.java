@@ -24,7 +24,7 @@ public class ModuleFactory {
 	public static QCModule [] getStandardModuleList () {
 
 		OverRepresentedSeqs os = new OverRepresentedSeqs();
-		
+
 		QCModule [] module_list = new QCModule [] {
 				new BasicStats(),
 				new PerBaseQualityScores(),
@@ -35,12 +35,12 @@ public class ModuleFactory {
 				new NContent(),
 				new SequenceLengthDistribution(),
 				os.duplicationLevelModule(),
-				os,
 				new AdapterContent(),
 				new KmerContent(),
+				os,
 			};
-	
+
 		return (module_list);
 	}
-	
+
 }

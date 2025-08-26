@@ -89,9 +89,75 @@ a:hover {
   width: 100%;
 }
 
+/* Module container with flexbox grid layout */
+.modules-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+/* Add padding above grid layout on large screens */
+@media (min-width: 1440px) {
+  .modules-container {
+    padding-top: 1rem;
+  }
+}
+
 .module {
   padding: 1rem 0 2rem;
   overflow-x: auto;
+  /* Default: full width for single column layout */
+  flex: 1 1 100%;
+  min-width: 0; /* Allow flex items to shrink below content size */
+}
+
+/* Large screens: 2-column grid layout with visual separation */
+@media (min-width: 1440px) and (max-width: 1799px) {
+  .module {
+    flex: 0 0 calc(50% - 1rem);
+    max-width: calc(50% - 1rem);
+    background-color: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 1.5rem;
+    margin-bottom: 0; /* Remove default margin since we're using gap */
+  }
+
+  /* Remove top margin from headings in grid boxes */
+  .module h2 {
+    margin-top: 0;
+  }
+
+  /* Last module (Overrepresented Sequences) always takes full width due to wide table */
+  .module:last-child {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+}
+
+/* Extra wide screens: 3-column grid layout for ridiculously huge monitors */
+@media (min-width: 1800px) {
+  .module {
+    flex: 0 0 calc(33.333% - 1.5rem);
+    max-width: calc(33.333% - 1.5rem);
+    background-color: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 1.5rem;
+    margin-bottom: 0; /* Remove default margin since we're using gap */
+  }
+
+  /* Remove top margin from headings in grid boxes */
+  .module h2 {
+    margin-top: 0;
+  }
+
+  /* Last module (Overrepresented Sequences) spans 2 columns in 3-column layout */
+  .module:last-child {
+    flex: 0 0 calc(66.666% - 1rem);
+    max-width: calc(66.666% - 1rem);
+  }
 }
 
 .footer {
@@ -190,7 +256,33 @@ table {
   margin: 1rem 0;
   border-collapse: collapse;
   width: 100%;
-  min-width: 600px;
+  min-width: 300px; /* Reduced min-width for better grid layout */
+}
+
+/* In grid layout, allow tables to be more compact */
+@media (min-width: 1440px) and (max-width: 1799px) {
+  .module:not(:last-child) table {
+    min-width: 250px;
+    font-size: 0.9rem;
+  }
+
+  .module:not(:last-child) th,
+  .module:not(:last-child) td {
+    padding: 0.5rem 0.4rem;
+  }
+}
+
+/* Extra wide screens: even more compact tables for 3-column layout */
+@media (min-width: 1800px) {
+  .module:not(:last-child) table {
+    min-width: 200px;
+    font-size: 0.85rem;
+  }
+
+  .module:not(:last-child) th,
+  .module:not(:last-child) td {
+    padding: 0.4rem 0.3rem;
+  }
 }
 
 th {
@@ -248,6 +340,7 @@ tr:nth-child(even) td {
   font-weight: normal;
   cursor: pointer;
   transition: background-color 0.3s ease;
+  white-space: nowrap;
 }
 
 .help-toggle:hover {
@@ -454,50 +547,79 @@ tr:nth-child(even) td {
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
-  height: 600px; /* Default height for largest screens */
+  height: 400px; /* Default height - more compact for grid layout */
 }
 
 /* Media queries for responsive chart heights */
-/* Maintain 4:3 aspect ratio (800:600) at each breakpoint */
+/* Optimized for grid layout - smaller heights to fit better */
 
-/* Large screens: 800px width -> 600px height */
-@media (min-width: 1024px) {
-  .fastqc-chart-container {
-    height: 600px;
-  }
-}
-
-/* Medium-large screens: ~700px width -> 525px height */
-@media (max-width: 1023px) and (min-width: 768px) {
-  .fastqc-chart-container {
-    height: 525px;
-  }
-}
-
-/* Medium screens: ~600px width -> 450px height */
-@media (max-width: 767px) and (min-width: 640px) {
+/* Extra large screens: 2-column layout */
+@media (min-width: 1400px) and (max-width: 1799px) {
   .fastqc-chart-container {
     height: 450px;
   }
-}
 
-/* Small-medium screens: ~500px width -> 375px height */
-@media (max-width: 639px) and (min-width: 480px) {
-  .fastqc-chart-container {
-    height: 375px;
+  /* In 2-column layout, make charts more compact */
+  .module:not(:last-child) .fastqc-chart-container {
+    height: 350px;
   }
 }
 
-/* Small screens: ~400px width -> 300px height */
-@media (max-width: 479px) and (min-width: 360px) {
+/* Ultra wide screens: 3-column layout - smaller charts to fit */
+@media (min-width: 1800px) {
+  .fastqc-chart-container {
+    height: 320px;
+  }
+
+  /* In 3-column layout, make charts even more compact */
+  .module:not(:last-child) .fastqc-chart-container {
+    height: 280px;
+  }
+}
+
+/* Large screens: 2-column grid layout */
+@media (min-width: 1440px) and (max-width: 1799px) {
+  .fastqc-chart-container {
+    height: 400px;
+  }
+
+  /* In 2-column layout, make charts more compact */
+  .module:not(:last-child) .fastqc-chart-container {
+    height: 320px;
+  }
+}
+
+/* Medium-large screens: single column but smaller charts */
+@media (max-width: 1439px) and (min-width: 768px) {
+  .fastqc-chart-container {
+    height: 400px;
+  }
+}
+
+/* Medium screens */
+@media (max-width: 767px) and (min-width: 640px) {
+  .fastqc-chart-container {
+    height: 350px;
+  }
+}
+
+/* Small-medium screens */
+@media (max-width: 639px) and (min-width: 480px) {
   .fastqc-chart-container {
     height: 300px;
   }
 }
 
-/* Extra small screens: ~320px width -> 240px height */
+/* Small screens */
+@media (max-width: 479px) and (min-width: 360px) {
+  .fastqc-chart-container {
+    height: 250px;
+  }
+}
+
+/* Extra small screens */
 @media (max-width: 359px) {
   .fastqc-chart-container {
-    height: 240px;
+    height: 200px;
   }
 }
