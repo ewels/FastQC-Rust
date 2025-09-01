@@ -112,6 +112,31 @@ public class HTMLReportArchive {
 		// Generate final HTML from template
 		String finalHtml = generateHtmlFromTemplate(moduleContent);
 
+		// Generate .fo file from static HTML (before interactive scripts are added)
+		try {
+			DocumentBuilderFactory domFactory=DocumentBuilderFactory.newInstance();
+			domFactory.setNamespaceAware(false);
+			DocumentBuilder builder=domFactory.newDocumentBuilder();
+			Document src=builder.parse(new InputSource( new StringReader(finalHtml)));
+			InputStream rsrc=getClass().getResourceAsStream("/Templates/fastqc2fo.xsl");
+			if(rsrc!=null)
+				{
+				domFactory.setNamespaceAware(true);
+				builder=domFactory.newDocumentBuilder();
+				Document html2fo=builder.parse(rsrc);
+				rsrc.close();
+
+				TransformerFactory tf=TransformerFactory.newInstance();
+				Templates templates=tf.newTemplates(new DOMSource(html2fo));
+				zip.putNextEntry(new ZipEntry(folderName()+"/fastqc.fo"));
+				templates.newTransformer().transform(new DOMSource(src), new StreamResult(zip));
+				zip.closeEntry();
+				}
+			}
+		catch (Exception e) {
+			e.printStackTrace();
+		}
+
 		// Post-process to replace interactive script placeholders
 		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
 			finalHtml = replaceInteractiveScripts(finalHtml);
@@ -130,32 +155,6 @@ public class HTMLReportArchive {
 		zip.write(summaryText.getBytes());
 		zip.closeEntry();
 
-				//XSL-FO (skip when interactive plots are enabled as PDFs should use static plots anyway)
-		if (FastQCConfig.getInstance().static_plots || !FastQCConfig.getInstance().interactive_plots) {
-			try {
-				DocumentBuilderFactory domFactory=DocumentBuilderFactory.newInstance();
-				domFactory.setNamespaceAware(false);
-				DocumentBuilder builder=domFactory.newDocumentBuilder();
-				Document src=builder.parse(new InputSource( new StringReader(finalHtml)));
-				InputStream rsrc=getClass().getResourceAsStream("/Templates/fastqc2fo.xsl");
-				if(rsrc!=null)
-					{
-					domFactory.setNamespaceAware(true);
-					builder=domFactory.newDocumentBuilder();
-					Document html2fo=builder.parse(rsrc);
-					rsrc.close();
-
-					TransformerFactory tf=TransformerFactory.newInstance();
-					Templates templates=tf.newTemplates(new DOMSource(html2fo));
-					zip.putNextEntry(new ZipEntry(folderName()+"/fastqc.fo"));
-					templates.newTransformer().transform(new DOMSource(src), new StreamResult(zip));
-					zip.closeEntry();
-					}
-				}
-			catch (Exception e) {
-				e.printStackTrace();
-			}
-		}
 
 
 		zip.close();
