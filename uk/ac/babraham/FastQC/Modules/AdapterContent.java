@@ -303,13 +303,16 @@ public class AdapterContent extends AbstractQCModule {
 	@Override
 	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
 		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
-			// Generate interactive ECharts plot for adapter content
+			// Generate interactive ECharts plot for adapter content for HTML
 			if (!calculated) calculateEnrichment();
 
 						String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", enrichments, 0d, 100d, "Position in read (bp)", labels, xLabels, "% Adapter");
 			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
+			
+			// Also generate static images for zip file
+			generateZipImages(report, fileName, width, height);
 		} else {
-			// Use static image
+			// Use static image for both HTML and zip
 			writeStaticImage(report, fileName, imageTitle, width, height);
 		}
 	}

@@ -362,12 +362,15 @@ public class PerTileQualityScores extends AbstractQCModule {
 	@Override
 	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
 		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
-			// Generate interactive ECharts heatmap
+			// Generate interactive ECharts heatmap for HTML
 			if (!calculated) getPercentages();
 			String chartScript = EChartsGenerator.generateHeatmapConfig("CHART_CONTAINER_ID", means, xLabels, tiles, "Per tile sequence quality");
 			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
+			
+			// Also generate static images for zip file
+			generateZipImages(report, fileName, width, height);
 		} else {
-			// Use static image
+			// Use static image for both HTML and zip
 			writeStaticImage(report, fileName, imageTitle, width, height);
 		}
 	}

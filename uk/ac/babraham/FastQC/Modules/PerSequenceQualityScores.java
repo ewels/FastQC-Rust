@@ -163,14 +163,17 @@ public class PerSequenceQualityScores extends AbstractQCModule {
 	@Override
 	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
 		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
-			// Generate simple line chart for per-sequence quality distribution
+			// Generate simple line chart for per-sequence quality distribution for HTML
 			if (!calculated) calculateDistribution();
 			double[][] data = {qualityDistribution};
 			String[] seriesNames = {"Average Quality per read"};
 			String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", data, 0d, maxCount, "Mean Sequence Quality (Phred Score)", seriesNames, xCategories, "Quality score distribution over all sequences");
 			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
+			
+			// Also generate static images for zip file
+			generateZipImages(report, fileName, width, height);
 		} else {
-			// Use static image
+			// Use static image for both HTML and zip
 			writeStaticImage(report, fileName, imageTitle, width, height);
 		}
 	}

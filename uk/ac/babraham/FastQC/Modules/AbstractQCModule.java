@@ -82,6 +82,41 @@ public abstract class AbstractQCModule implements QCModule {
 		report.addInteractiveScript(placeholder, modifiedScript);
 	}
 
+	/**
+	 * Generate only the ZIP file images (PNG and SVG) without any HTML content.
+	 * This is used when we want interactive HTML but still need static images in the zip.
+	 */
+	protected void generateZipImages(HTMLReportArchive report, String fileName, int width, int height) throws IOException {
+		ZipOutputStream zip = report.zipFile();
+
+		// Write out the svg version of the image
+		JPanel resultsPanel = getResultsPanel();
+		resultsPanel.setSize(width,height);
+		resultsPanel.validate();
+
+		String svgFilename = fileName.replaceAll("\\.png$", ".svg");
+		zip.putNextEntry(new ZipEntry(report.folderName()+"/Images/"+svgFilename));
+
+		SVGImageSaver.saveImage(resultsPanel, zip);
+		zip.closeEntry();
+
+		// Write out the png version of the image
+		zip.putNextEntry(new ZipEntry(report.folderName()+"/Images/"+fileName));
+		BufferedImage b = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+		Graphics g = b.createGraphics();
+
+		resultsPanel.setDoubleBuffered(false);
+		resultsPanel.addNotify();
+		resultsPanel.validate();
+
+		resultsPanel.print(g);
+
+		g.dispose();
+
+		ImageIO.write(b, "PNG", zip);
+		zip.closeEntry();
+	}
+
 	protected void writeDefaultImage (HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
 		// If static plots are explicitly requested, or interactive plots are disabled, use static images
 		// Otherwise, subclasses should override this method to provide interactive chart generation

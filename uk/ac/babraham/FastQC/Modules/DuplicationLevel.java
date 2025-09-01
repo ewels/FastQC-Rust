@@ -238,7 +238,7 @@ public class DuplicationLevel extends AbstractQCModule {
 	@Override
 	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
 		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
-			// Generate interactive ECharts plot
+			// Generate interactive ECharts plot for HTML
 						if (totalPercentages == null) calculateLevels();
 
 			double[][] data = {totalPercentages};
@@ -246,8 +246,11 @@ public class DuplicationLevel extends AbstractQCModule {
 
 			String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", data, 0d, maxCount, "Sequence Duplication Level", seriesNames, labels, "Percent of seqs remaining if deduplicated " + df.format(percentDifferentSeqs) + "%");
 			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
+			
+			// Also generate static images for zip file
+			generateZipImages(report, fileName, width, height);
 		} else {
-			// Use static image
+			// Use static image for both HTML and zip
 			writeStaticImage(report, fileName, imageTitle, width, height);
 		}
 	}
