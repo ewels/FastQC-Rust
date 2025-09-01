@@ -452,9 +452,9 @@ DESCRIPTION
                     each file.  Defaults to 512MB.  You may need to increase this if
                     you have a file with very long sequences in it.
 
-        --svg           Save the graphs in the report in SVG format.
+    --svg           Save the graphs in the report in SVG format.
 
-        --static        Generate static PNG plots instead of the default interactive
+    --static        Generate static PNG plots instead of the default interactive
                     web-based plots. Use this for compatibility with older
                     systems or when JavaScript is not available.
 

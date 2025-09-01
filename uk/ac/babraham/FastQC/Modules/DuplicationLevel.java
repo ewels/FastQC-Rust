@@ -239,7 +239,7 @@ public class DuplicationLevel extends AbstractQCModule {
 	protected void writeDefaultImage(HTMLReportArchive report, String fileName, String imageTitle, int width, int height) throws IOException, XMLStreamException {
 		if (FastQCConfig.getInstance().interactive_plots && !FastQCConfig.getInstance().static_plots) {
 			// Generate interactive ECharts plot for HTML
-						if (totalPercentages == null) calculateLevels();
+			if (totalPercentages == null) calculateLevels();
 
 			double[][] data = {totalPercentages};
 			String[] seriesNames = {"% Total sequences"};

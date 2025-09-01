@@ -306,7 +306,7 @@ public class AdapterContent extends AbstractQCModule {
 			// Generate interactive ECharts plot for adapter content for HTML
 			if (!calculated) calculateEnrichment();
 
-						String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", enrichments, 0d, 100d, "Position in read (bp)", labels, xLabels, "% Adapter");
+			String chartScript = EChartsGenerator.generateLineGraphConfig("CHART_CONTAINER_ID", enrichments, 0d, 100d, "Position in read (bp)", labels, xLabels, "% Adapter");
 			simpleInteractiveReport(report, chartScript, imageTitle, width, height);
 			
 			// Also generate static images for zip file
