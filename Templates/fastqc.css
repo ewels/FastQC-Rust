@@ -394,7 +394,7 @@ table {
 }
 
 th {
-  text-align: center;
+  text-align: left;
   background-color: var(--table-header-bg);
   color: var(--table-header-text);
   padding: 0.75rem 0.5rem;
