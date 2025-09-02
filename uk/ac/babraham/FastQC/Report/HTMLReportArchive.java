@@ -306,11 +306,18 @@ public class HTMLReportArchive {
 	}
 
 	private String getFastQCIconWithUniqueIds(String suffix) throws IOException {
-		String svgContent = loadTemplate("/Templates/Icons/fastqc_icon.svg");
+		String lightSvgContent = loadTemplate("/Templates/Icons/fastqc_icon.svg");
+		String darkSvgContent = loadTemplate("/Templates/fastqc_icon_darkbg.svg");
 
 		// Replace all IDs and their references with unique versions
-		return svgContent.replaceAll("id=\"([^\"]+)\"", "id=\"$1_" + suffix + "\"")
-				         .replaceAll("url\\(#([^)]+)\\)", "url(#$1_" + suffix + ")");
+		String lightIcon = lightSvgContent.replaceAll("id=\"([^\"]+)\"", "id=\"$1_light_" + suffix + "\"")
+				                          .replaceAll("url\\(#([^)]+)\\)", "url(#$1_light_" + suffix + ")");
+		String darkIcon = darkSvgContent.replaceAll("id=\"([^\"]+)\"", "id=\"$1_dark_" + suffix + "\"")
+				                        .replaceAll("url\\(#([^)]+)\\)", "url(#$1_dark_" + suffix + ")");
+
+		// Wrap both icons in spans with appropriate classes for theme switching
+		return "<span class=\"fastqc-logo-light\">" + lightIcon + "</span>" +
+		       "<span class=\"fastqc-logo-dark\">" + darkIcon + "</span>";
 	}
 
 	private String generateModuleContent() throws IOException, XMLStreamException {

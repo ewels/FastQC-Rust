@@ -108,6 +108,21 @@
   position: absolute;
 }
 
+/* FastQC logo theme switching */
+.fastqc-logo-light,
+.fastqc-logo-dark {
+  display: inline-block;
+  transition: opacity 0.3s ease;
+}
+
+[data-theme="light"] .fastqc-logo-dark {
+  display: none;
+}
+
+[data-theme="dark"] .fastqc-logo-light {
+  display: none;
+}
+
 /* RESET AND BASE STYLES */
 
 * {
