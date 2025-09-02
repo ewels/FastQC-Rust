@@ -4,14 +4,14 @@ var chart_{{CONTAINER_ID}} = echarts.init(document.getElementById('{{CONTAINER_I
 
 // Base chart configuration (theme-neutral)
 var baseOption_{{CONTAINER_ID}} = {
-  title: { text: '{{TITLE}}', left: 'center', top: 10 },
+  title: { text: '{{TITLE}}', left: 'center', top: 5 },
   tooltip: { trigger: 'axis', formatter: function(params) { return params[0].name + '<br/>Count: ' + params[0].value; } },
-  grid: { left: 80, right: 80, top: 80, bottom: 80 },
+  grid: { left: 50, right: 20, top: 35, bottom: 55 },
   xAxis: {
     type: 'category',
     name: 'Mean Sequence Quality (Phred Score)',
     nameLocation: 'middle',
-    nameGap: 30,
+    nameGap: 20,
     data: [{{X_CATEGORIES}}]
   },
   yAxis: {

@@ -4,9 +4,9 @@ var chart_{{CONTAINER_ID}} = echarts.init(document.getElementById('{{CONTAINER_I
 
 // Base chart configuration (theme-neutral)
 var baseOption_{{CONTAINER_ID}} = {
-  title: { text: '{{TITLE}}', left: 'center', top: 10 },
+  title: { text: '{{TITLE}}', left: 'center', top: 0 },
   tooltip: { position: 'top' },
-  grid: { left: 80, right: 80, top: 80, bottom: 80 },
+  grid: { left: 50, right: 20, top: 35, bottom: 100 },
   xAxis: {
     type: 'category',
     data: [{{X_LABELS}}],
@@ -22,7 +22,7 @@ var baseOption_{{CONTAINER_ID}} = {
     calculable: true,
     orient: 'horizontal',
     left: 'center',
-    bottom: 20,
+    bottom: 0,
     inRange: {
       color: ['#0000C8', '#0080C8', '#00C8C8', '#00C800', '#C8C800', '#C88000', '#C80000']
     }

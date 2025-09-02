@@ -4,14 +4,14 @@ var chart_{{CONTAINER_ID}} = echarts.init(document.getElementById('{{CONTAINER_I
 
 // Base chart configuration (theme-neutral)
 var baseOption_{{CONTAINER_ID}} = {
-  title: { text: '{{TITLE}}', left: 'center', top: 10 },
+  title: { text: '{{TITLE}}', left: 'center', top: 5 },
   tooltip: { trigger: 'axis' },
-  grid: { left: 80, right: 80, top: 80, bottom: 80 },
+  grid: { left: 50, right: 20, top: 35, bottom: 50 },
   xAxis: {
     type: 'category',
     name: 'Position in read (bp)',
     nameLocation: 'middle',
-    nameGap: 30,
+    nameGap: 20,
     data: [{{X_LABELS}}]
   },
   yAxis: {

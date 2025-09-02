@@ -4,15 +4,15 @@ var chart_{{CONTAINER_ID}} = echarts.init(document.getElementById('{{CONTAINER_I
 
 // Base chart configuration (theme-neutral)
 var baseOption_{{CONTAINER_ID}} = {
-  title: { text: '{{TITLE}}', left: 'center', top: 10 },
+  title: { text: '{{TITLE}}', left: 'center', top: 5 },
   tooltip: { trigger: 'axis' },
-  legend: { data: [{{LEGEND_DATA}}], bottom: 10 },
-  grid: { left: 60, right: 30, top: 60, bottom: 90 },
+  legend: { data: [{{LEGEND_DATA}}], bottom: 5 },
+  grid: { left: 45, right: 15, top: 35, bottom: 75 },
   xAxis: {
     type: 'value',
     name: '{{X_LABEL}}',
     nameLocation: 'middle',
-    nameGap: 30,
+    nameGap: 20,
     min: 0,
     max: 100
   },
