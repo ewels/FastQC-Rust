@@ -1,5 +1,113 @@
 /* FastQC CSS Stylesheet */
 
+/* THEME SYSTEM */
+
+:root {
+  /* Light theme colors */
+  --bg-color: #FFF;
+  --text-color: #000;
+  --sidebar-bg: #F8F8F8;
+  --sidebar-header-bg: #EEE;
+  --sidebar-border: #CCC;
+  --sidebar-hover: #F0F0F0;
+  --link-color: #000080;
+  --link-hover: #800000;
+  --heading-color: #800000;
+  --heading-border: #800000;
+  --table-header-bg: #000080;
+  --table-header-text: #FFF;
+  --table-cell-bg: #F5F5F5;
+  --table-cell-alt: #EEE;
+  --table-border: #DDD;
+  --module-bg: #fafafa;
+  --module-border: #e0e0e0;
+  --footer-border: #EEE;
+  --footer-text: #666;
+  --help-bg: #f8f9fa;
+  --help-border: #dee2e6;
+}
+
+[data-theme="dark"] {
+  /* Dark theme colors */
+  --bg-color: #1a1a1a;
+  --text-color: #e0e0e0;
+  --sidebar-bg: #2d2d2d;
+  --sidebar-header-bg: #3d3d3d;
+  --sidebar-border: #555;
+  --sidebar-hover: #404040;
+  --link-color: #6bb6ff;
+  --link-hover: #ff6b6b;
+  --heading-color: #ff6b6b;
+  --heading-border: #ff6b6b;
+  --table-header-bg: #4a5568;
+  --table-header-text: #e0e0e0;
+  --table-cell-bg: #2d3748;
+  --table-cell-alt: #374151;
+  --table-border: #4a5568;
+  --module-bg: #2d3748;
+  --module-border: #4a5568;
+  --footer-border: #555;
+  --footer-text: #a0a0a0;
+  --help-bg: #2d3748;
+  --help-border: #4a5568;
+}
+
+/* Theme toggle button styles */
+.theme-toggle-container {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+  border-top: 1px solid var(--sidebar-border);
+  margin-top: 0.5rem;
+}
+
+.theme-toggle-btn {
+  background: transparent;
+  border: 1px solid var(--sidebar-border);
+  border-radius: 20px;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--text-color);
+}
+
+.theme-toggle-btn:hover {
+  background: var(--sidebar-hover);
+  transform: translateY(-1px);
+}
+
+.theme-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease;
+}
+
+.theme-icon svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s ease;
+}
+
+.theme-toggle-btn:hover .theme-icon svg {
+  transform: scale(1.1);
+}
+
+/* Show/hide icons based on theme */
+[data-theme="light"] .dark-icon {
+  opacity: 0;
+  position: absolute;
+}
+
+[data-theme="dark"] .light-icon {
+  opacity: 0;
+  position: absolute;
+}
+
 /* RESET AND BASE STYLES */
 
 * {
@@ -10,8 +118,8 @@ html {
 }
 body {
   font-family: sans-serif;
-  color: #000;
-  background-color: #FFF;
+  color: var(--text-color);
+  background-color: var(--bg-color);
   border: 0;
   margin: 0;
   padding: 0;
@@ -26,11 +134,11 @@ p {
 }
 
 a {
-  color: #000080;
+  color: var(--link-color);
   transition: color 0.2s ease;
 }
 a:hover {
-  color: #800000;
+  color: var(--link-hover);
 }
 
 
@@ -42,8 +150,8 @@ a:hover {
 
 .sidebar {
   flex: 0 0 300px;
-  background-color: #F8F8F8;
-  border-right: 1px solid #CCC;
+  background-color: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
   position: sticky;
   top: 0;
   height: 100vh;
@@ -51,14 +159,14 @@ a:hover {
 }
 
 .sidebar-header {
-  background-color: #EEE;
+  background-color: var(--sidebar-header-bg);
   padding: 1rem;
-  border-bottom: 1px solid #CCC;
+  border-bottom: 1px solid var(--sidebar-border);
 }
 
 .sidebar-header a {
   text-decoration: none;
-  color: #000;
+  color: var(--text-color);
 }
 
 .header-title {
@@ -117,8 +225,8 @@ a:hover {
   .module {
     flex: 0 0 calc(50% - 1rem);
     max-width: calc(50% - 1rem);
-    background-color: #fafafa;
-    border: 1px solid #e0e0e0;
+    background-color: var(--module-bg);
+    border: 1px solid var(--module-border);
     border-radius: 4px;
     padding: 1.5rem;
     margin-bottom: 0; /* Remove default margin since we're using gap */
@@ -141,8 +249,8 @@ a:hover {
   .module {
     flex: 0 0 calc(33.333% - 1.5rem);
     max-width: calc(33.333% - 1.5rem);
-    background-color: #fafafa;
-    border: 1px solid #e0e0e0;
+    background-color: var(--module-bg);
+    border: 1px solid var(--module-border);
     border-radius: 4px;
     padding: 1.5rem;
     margin-bottom: 0; /* Remove default margin since we're using gap */
@@ -163,9 +271,9 @@ a:hover {
 .footer {
   margin-top: 3rem;
   padding: 1.5rem 0;
-  border-top: 1px solid #EEE;
+  border-top: 1px solid var(--footer-border);
   font-size: 0.9rem;
-  color: #666;
+  color: var(--footer-text);
 }
 
 /* NAVIGATION STYLES */
@@ -186,7 +294,7 @@ a:hover {
 }
 .navigation li {
   padding: 0;
-  border-bottom: 1px solid #DDD;
+  border-bottom: 1px solid var(--table-border);
 }
 .navigation li:last-child {
   border-bottom: none;
@@ -196,14 +304,14 @@ a:hover {
   padding: 0.5rem 1rem;
   transition: background-color 0.2s ease;
   text-decoration: none;
-  color: #000;
+  color: var(--text-color);
   font-size: 0.9rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 .navigation li a:hover {
-  background-color: #F0F0F0;
+  background-color: var(--sidebar-hover);
 }
 .navigation li span {
   display: inline-block;
@@ -240,8 +348,8 @@ a:hover {
 h2 {
   padding-bottom: 0.5rem;
   margin-bottom: 1rem;
-  color: #800000;
-  border-bottom: 2px solid #800000;
+  color: var(--heading-color);
+  border-bottom: 2px solid var(--heading-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -287,21 +395,21 @@ table {
 
 th {
   text-align: center;
-  background-color: #000080;
-  color: #FFF;
+  background-color: var(--table-header-bg);
+  color: var(--table-header-text);
   padding: 0.75rem 0.5rem;
   font-weight: bold;
 }
 
 td {
   font-family: monospace;
-  background-color: #F5F5F5;
-  color: #000;
+  background-color: var(--table-cell-bg);
+  color: var(--text-color);
   padding: 0.5rem;
-  border-bottom: 1px solid #DDD;
+  border-bottom: 1px solid var(--table-border);
 }
 tr:nth-child(even) td {
-  background-color: #EEE;
+  background-color: var(--table-cell-alt);
 }
 
 /* Basic statistics table styling (first module) */
@@ -314,7 +422,7 @@ tr:nth-child(even) td {
 }
 .module:first-of-type table tbody td:first-child {
   font-weight: bold;
-  color: #333;
+  color: var(--text-color);
   text-align: right;
   width: 12rem;
 }
@@ -357,8 +465,8 @@ tr:nth-child(even) td {
 }
 
 .help-box {
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background-color: var(--help-bg);
+  border: 1px solid var(--help-border);
   border-radius: 4px;
   padding: 0 15px;
   margin-bottom: 0;
@@ -399,9 +507,9 @@ tr:nth-child(even) td {
 
 .mobile-nav {
   display: none;
-  background-color: #EEE;
+  background-color: var(--sidebar-header-bg);
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #CCC;
+  border-bottom: 1px solid var(--sidebar-border);
   align-items: center;
   justify-content: space-between;
   position: fixed;
@@ -426,7 +534,7 @@ tr:nth-child(even) td {
 .hamburger {
   width: 20px;
   height: 2px;
-  background-color: #333;
+  background-color: var(--text-color);
   transition: all 0.3s ease;
 }
 
@@ -449,7 +557,7 @@ tr:nth-child(even) td {
 
 .mobile-title-filename {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--footer-text);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -524,7 +632,7 @@ tr:nth-child(even) td {
   }
 
   .sidebar-header {
-    background-color: #FFF;
+    background-color: var(--bg-color);
   }
 
   .mobile-nav {

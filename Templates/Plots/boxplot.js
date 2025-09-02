@@ -1,5 +1,9 @@
+//<![CDATA[
+// Initialize chart
 var chart_{{CONTAINER_ID}} = echarts.init(document.getElementById('{{CONTAINER_ID}}'));
-var option_{{CONTAINER_ID}} = {
+
+// Base chart configuration (theme-neutral)
+var baseOption_{{CONTAINER_ID}} = {
   title: { text: '{{TITLE}}', left: 'center', top: 10 },
   tooltip: { trigger: 'item' },
   grid: { left: 60, right: 30, top: 60, bottom: 80 },
@@ -20,16 +24,15 @@ var option_{{CONTAINER_ID}} = {
   visualMap: {
     show: false,
     pieces: [
-      { gte: 28, color: 'rgba(195,230,195,0.3)' },
-      { gte: 20, lt: 28, color: 'rgba(230,220,195,0.3)' },
-      { lt: 20, color: 'rgba(230,195,195,0.3)' }
+      { gte: 28 },
+      { gte: 20, lt: 28 },
+      { lt: 20 }
     ]
   },
   series: [
     {
       type: 'boxplot',
       data: [{{BOXPLOT_DATA}}],
-      itemStyle: { color: 'rgba(240,240,0,0.8)', borderColor: '#000' },
       tooltip: {
         formatter: function(params) {
           return params.name + '<br/>' +
@@ -45,12 +48,57 @@ var option_{{CONTAINER_ID}} = {
       type: 'line',
       name: 'Mean',
       data: [{{MEAN_DATA}}],
-      lineStyle: { color: '#0000C8', width: 2 },
+      lineStyle: { width: 2 },
       symbol: 'none'
     }
   ]
 };
-chart_{{CONTAINER_ID}}.setOption(option_{{CONTAINER_ID}});
+
+// Theme application function
+window.applyThemeToChart_{{CONTAINER_ID}} = function(baseOption, colors) {
+  var option = JSON.parse(JSON.stringify(baseOption));
+
+  // Apply theme colors
+  option.title.textStyle = { color: colors.text };
+  option.backgroundColor = colors.background;
+
+  // Axis styling
+  option.xAxis.axisLabel = { color: colors.text };
+  option.xAxis.axisLine = { lineStyle: { color: colors.axis } };
+  option.xAxis.axisTick = { lineStyle: { color: colors.axis } };
+  option.xAxis.nameTextStyle = { color: colors.text };
+
+  option.yAxis.axisLabel = { color: colors.text };
+  option.yAxis.axisLine = { lineStyle: { color: colors.axis } };
+  option.yAxis.axisTick = { lineStyle: { color: colors.axis } };
+  option.yAxis.splitLine = { lineStyle: { color: colors.grid } };
+
+  // Visual map colors
+  option.visualMap.pieces[0].color = colors.qualityGood;
+  option.visualMap.pieces[1].color = colors.qualityWarning;
+  option.visualMap.pieces[2].color = colors.qualityBad;
+
+  // Series styling
+  option.series[0].itemStyle = { color: colors.boxplot, borderColor: colors.boxplotBorder };
+  option.series[1].lineStyle.color = colors.primary;
+
+  return option;
+};
+
+// Store chart references
+window.fastqc_charts = window.fastqc_charts || {};
+window.fastqc_chart_options = window.fastqc_chart_options || {};
+window.fastqc_charts['{{CONTAINER_ID}}'] = chart_{{CONTAINER_ID}};
+window.fastqc_chart_options['{{CONTAINER_ID}}'] = baseOption_{{CONTAINER_ID}};
+
+// Apply initial theme and set options
+var currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+var colors = window.getThemeColors ? window.getThemeColors(currentTheme) : {};
+var themedOption = window.applyThemeToChart_{{CONTAINER_ID}}(baseOption_{{CONTAINER_ID}}, colors);
+chart_{{CONTAINER_ID}}.setOption(themedOption);
+
+// Resize handler
 window.addEventListener('resize', function() {
   chart_{{CONTAINER_ID}}.resize();
 });
+//]]>
