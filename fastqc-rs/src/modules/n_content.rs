@@ -7,6 +7,7 @@ use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
 use crate::report::charts::line_graph::{LineGraphData, render_line_graph};
 use crate::sequence::Sequence;
+use crate::utils::base_counts::{BASE_INDEX, IDX_N};
 use crate::utils::base_group::BaseGroup;
 use crate::utils::format::java_format_double;
 
@@ -91,8 +92,9 @@ impl QCModule for NContent {
             self.not_n_counts.resize(seq.len(), 0);
         }
 
+        // Use lookup table to classify each byte without a multi-way match
         for (i, &b) in seq.iter().enumerate() {
-            if b == b'N' {
+            if BASE_INDEX[b as usize] as usize == IDX_N {
                 self.n_counts[i] += 1;
             } else {
                 self.not_n_counts[i] += 1;

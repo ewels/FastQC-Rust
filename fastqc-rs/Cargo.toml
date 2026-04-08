@@ -15,7 +15,7 @@ path = "src/lib.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-flate2 = { version = "1", features = ["rust_backend"], default-features = false }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 bzip2-rs = "0.1"
 noodles = { version = "0.88", features = ["bam", "sam", "bgzf"] }
 zip = "2"
@@ -28,3 +28,13 @@ memchr = "2"
 resvg = "0.47"
 tiny-skia = "0.12"
 png = "0.18"
+
+[features]
+default = ["native-zlib"]
+native-zlib = ["flate2/zlib"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true

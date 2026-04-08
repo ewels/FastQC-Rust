@@ -6,6 +6,7 @@ use std::io;
 use crate::config::Limits;
 use crate::modules::QCModule;
 use crate::sequence::Sequence;
+use crate::utils::base_counts::{BASE_INDEX, IDX_A, IDX_C, IDX_G, IDX_N, IDX_T};
 use crate::utils::phred;
 
 pub struct BasicStats {
@@ -133,16 +134,16 @@ impl QCModule for BasicStats {
             self.max_length = self.max_length.max(len);
         }
 
+        // Use lookup table to avoid branch misprediction on random DNA data
+        let mut counts = [0u64; 6];
         for &b in &sequence.sequence {
-            match b {
-                b'G' => self.g_count += 1,
-                b'A' => self.a_count += 1,
-                b'T' => self.t_count += 1,
-                b'C' => self.c_count += 1,
-                b'N' => self.n_count += 1,
-                _ => {}
-            }
+            counts[BASE_INDEX[b as usize] as usize] += 1;
         }
+        self.a_count += counts[IDX_A];
+        self.c_count += counts[IDX_C];
+        self.g_count += counts[IDX_G];
+        self.t_count += counts[IDX_T];
+        self.n_count += counts[IDX_N];
 
         for &q in &sequence.quality {
             if q < self.lowest_char {

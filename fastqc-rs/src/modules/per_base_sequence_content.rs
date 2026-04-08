@@ -7,14 +7,15 @@ use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
 use crate::report::charts::line_graph::{LineGraphData, render_line_graph};
 use crate::sequence::Sequence;
+use crate::utils::base_counts::{BASE_INDEX, IDX_A, IDX_C, IDX_G, IDX_T};
 use crate::utils::base_group::BaseGroup;
 use crate::utils::format::java_format_double;
 
 pub struct PerBaseSequenceContent {
-    g_counts: Vec<u64>,
-    a_counts: Vec<u64>,
-    c_counts: Vec<u64>,
-    t_counts: Vec<u64>,
+    /// Per-position base counts stored as [A, C, G, T] per position.
+    /// Using a single Vec of arrays gives better cache locality than
+    /// four separate Vecs, since all counts for a position are adjacent.
+    counts: Vec<[u64; 4]>,
     nogroup: bool,
     expgroup: bool,
     limits: Limits,
@@ -23,10 +24,7 @@ pub struct PerBaseSequenceContent {
 impl PerBaseSequenceContent {
     pub fn new(limits: &Limits, nogroup: bool, expgroup: bool) -> Self {
         PerBaseSequenceContent {
-            g_counts: Vec::new(),
-            a_counts: Vec::new(),
-            c_counts: Vec::new(),
-            t_counts: Vec::new(),
+            counts: Vec::new(),
             nogroup,
             expgroup,
             limits: limits.clone(),
@@ -35,7 +33,7 @@ impl PerBaseSequenceContent {
 
     fn calculate(&self) -> ContentData {
         let groups = BaseGroup::make_base_groups(
-            self.g_counts.len(),
+            self.counts.len(),
             self.nogroup,
             self.expgroup,
         );
@@ -49,25 +47,22 @@ impl PerBaseSequenceContent {
         for (i, group) in groups.iter().enumerate() {
             x_categories.push(group.label());
 
-            let mut g_count: u64 = 0;
             let mut a_count: u64 = 0;
-            let mut t_count: u64 = 0;
             let mut c_count: u64 = 0;
+            let mut g_count: u64 = 0;
+            let mut t_count: u64 = 0;
             let mut total: u64 = 0;
 
             // Java iterates `for (int bp=groups[i].lowerCount()-1;bp<groups[i].upperCount();bp++)`
             // which is 0-based lowerCount-1 to upperCount-1 inclusive. Our lower_count/upper_count
             // are already 0-based.
             for bp in group.lower_count..=group.upper_count {
-                total += self.g_counts[bp];
-                total += self.c_counts[bp];
-                total += self.a_counts[bp];
-                total += self.t_counts[bp];
-
-                a_count += self.a_counts[bp];
-                t_count += self.t_counts[bp];
-                c_count += self.c_counts[bp];
-                g_count += self.g_counts[bp];
+                let c = &self.counts[bp];
+                a_count += c[IDX_A];
+                c_count += c[IDX_C];
+                g_count += c[IDX_G];
+                t_count += c[IDX_T];
+                total += c[IDX_A] + c[IDX_C] + c[IDX_G] + c[IDX_T];
             }
 
             g_percent[i] = (g_count as f64 / total as f64) * 100.0;
@@ -119,22 +114,18 @@ impl QCModule for PerBaseSequenceContent {
     fn process_sequence(&mut self, sequence: &Sequence) {
         let seq = &sequence.sequence;
 
-        // Grow arrays if needed
-        if self.g_counts.len() < seq.len() {
-            self.g_counts.resize(seq.len(), 0);
-            self.a_counts.resize(seq.len(), 0);
-            self.t_counts.resize(seq.len(), 0);
-            self.c_counts.resize(seq.len(), 0);
+        // Grow array if needed
+        if self.counts.len() < seq.len() {
+            self.counts.resize(seq.len(), [0; 4]);
         }
 
+        // Use lookup table for branchless base classification.
+        // Only A/C/G/T (indices 0-3) are counted; N and others (indices 4-5)
+        // are filtered by the single comparison `idx < 4`.
         for (i, &b) in seq.iter().enumerate() {
-            // Only count G, A, T, C (ignoring N and other bases)
-            match b {
-                b'G' => self.g_counts[i] += 1,
-                b'A' => self.a_counts[i] += 1,
-                b'T' => self.t_counts[i] += 1,
-                b'C' => self.c_counts[i] += 1,
-                _ => {}
+            let idx = BASE_INDEX[b as usize] as usize;
+            if idx < 4 {
+                self.counts[i][idx] += 1;
             }
         }
     }
@@ -148,10 +139,7 @@ impl QCModule for PerBaseSequenceContent {
     }
 
     fn reset(&mut self) {
-        self.g_counts.clear();
-        self.a_counts.clear();
-        self.t_counts.clear();
-        self.c_counts.clear();
+        self.counts.clear();
     }
 
     fn raises_error(&self) -> bool {

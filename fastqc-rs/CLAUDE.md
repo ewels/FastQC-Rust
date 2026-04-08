@@ -6,12 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 fastqc-rs is a pure Rust rewrite of FastQC, a bioinformatics QC tool for high-throughput sequencing data. It produces byte-identical text output (`fastqc_data.txt`, `summary.txt`) to the Java version. CLI only — no GUI.
 
-All dependencies are pure Rust. No C/glibc required. Compiles to a single static binary.
+By default, links system zlib for faster gzip decompression (available on all Linux/macOS). Build with `--no-default-features` for a fully static pure-Rust binary (WASM, Windows, or environments without libz).
 
 ## Build Commands
 
 ```bash
-cargo build --release              # Build optimized binary
+cargo build --release              # Build optimized binary (uses system zlib by default)
+cargo build --release --no-default-features  # Pure Rust, no C deps, fully static
 cargo test                         # Run all tests (94 total)
 cargo clippy --all-targets         # Lint — must produce zero warnings
 cargo audit                        # Security audit of dependencies
