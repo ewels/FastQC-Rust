@@ -1,0 +1,44 @@
+[package]
+name = "fastqc-rust"
+version = "0.12.1"
+edition = "2021"
+description = "A Rust rewrite of FastQC - a quality control tool for high throughput sequence data"
+license = "GPL-3.0"
+repository = "https://github.com/ewels/FastQC"
+homepage = "https://www.bioinformatics.babraham.ac.uk/projects/fastqc/"
+keywords = ["bioinformatics", "fastq", "quality-control", "sequencing"]
+categories = ["science", "command-line-utilities"]
+
+[[bin]]
+name = "fastqc"
+path = "src/main.rs"
+
+[lib]
+name = "fastqc_rust"
+path = "src/lib.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+bzip2-rs = "0.1"
+noodles = { version = "0.88", features = ["bam", "sam", "bgzf"] }
+zip = "2"
+rayon = "1"
+base64 = "0.22"
+chrono = "0.4"
+statrs = "0.17"
+hdf5-pure = "0.1"
+memchr = "2"
+resvg = "0.47"
+tiny-skia = "0.12"
+png = "0.18"
+
+[features]
+default = ["native-zlib"]
+native-zlib = ["flate2/zlib"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true

@@ -1,0 +1,5 @@
+--- java/fastqc_data.txt
++++ rust/fastqc_data.txt
+@@ -1 +1 @@
+-##FastQC	0.12.2.devel
++##FastQC	0.12.1

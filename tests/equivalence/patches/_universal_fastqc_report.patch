@@ -1,0 +1,5 @@
+--- java/fastqc_report.html
++++ rust/fastqc_report.html
+@@ -369 +369 @@
+-<div class="footer">Produced by <a href="http://www.bioinformatics.babraham.ac.uk/projects/fastqc/">FastQC</a>  (version 0.12.2.devel)</div>
++<div class="footer">Produced by <a href="http://www.bioinformatics.babraham.ac.uk/projects/fastqc/">FastQC</a>  (version 0.12.1)</div>

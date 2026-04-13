@@ -1,0 +1,7 @@
+# Java FastQC version this Rust rewrite tracks.
+# CI checks nightly for new upstream releases.
+[upstream]
+version = "0.12.1"
+repository = "s-andrews/FastQC"
+commit = "e7ef390bf10382f60786bdd0cf28abd4f8683ffd"
+release_url = "https://github.com/s-andrews/FastQC/releases/tag/v0.12.1"

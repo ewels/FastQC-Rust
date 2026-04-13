@@ -4,67 +4,97 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FastQC is a Java quality control application for high-throughput sequencing data (FastQ/BAM files). It runs a set of analysis modules on sequence files and produces HTML reports. Supports both interactive GUI (Swing) and CLI/pipeline modes.
+FastQC (Rust) is a pure Rust rewrite of [FastQC](https://github.com/s-andrews/FastQC), a bioinformatics quality control tool for high-throughput sequencing data. It produces byte-identical text output (`fastqc_data.txt`, `summary.txt`) to the Java version. CLI only — no GUI.
+
+Crate name: `fastqc-rust`. Binary name: `fastqc`.
+
+By default, links system zlib for faster gzip decompression (available on all Linux/macOS). Build with `--no-default-features` for a fully static pure-Rust binary.
 
 ## Build Commands
 
-Uses Apache Ant with Java 11. Dependencies are bundled JARs (root directory + `lib/`).
-
 ```bash
-ant build                          # Compile the project
-ant clean build                    # Clean and rebuild
-ant clean build unit-test          # Run unit tests
-ant clean build integration-test   # Run integration tests
-ant FastQCApplication              # Run the GUI application
+cargo build --release              # Build optimized binary (uses system zlib by default)
+cargo build --release --no-default-features  # Pure Rust, no C deps, fully static
+cargo test                         # Run all Rust tests
+cargo clippy --all-targets         # Lint — must produce zero warnings
+cargo audit                        # Security audit of dependencies
 ```
 
-UI tests require an X11 display: `xvfb-run -a ant clean build ui-test`
+Run a single test:
+```bash
+cargo test test_name               # By test function name
+cargo test --test integration      # By test file (integration.rs)
+cargo test --test create_test_fast5 test_fast5_single_read  # Specific test in specific file
+```
 
-CI runs: `ant clean build unit-test integration-test`
+Cross-compile (requires `cargo-zigbuild` and `zig`):
+```bash
+cargo zigbuild --release --target x86_64-unknown-linux-musl
+cargo zigbuild --release --target aarch64-unknown-linux-musl
+cargo zigbuild --release --target x86_64-apple-darwin
+cargo zigbuild --release --target x86_64-pc-windows-gnu
+```
+
+## Equivalence Testing
+
+Compares Rust output against stored Java FastQC reference data:
+
+```bash
+# Run all equivalence tests (requires uv)
+cargo build --release
+uv run tests/equivalence/compare.py --binary ./target/release/fastqc
+
+# Run a specific test case
+uv run tests/equivalence/compare.py --binary ./target/release/fastqc --test minimal_default
+
+# Compare two arbitrary report directories
+uv run tests/equivalence/compare.py --reference /path/to/java --actual /path/to/rust --output report.html
+```
+
+Generates an HTML report with text diffs and interactive image comparison (side-by-side, slider, fade, highlight). Test cases are defined in `tests/equivalence/test_cases.yaml`. Reference data in `tests/equivalence/reference/`. Patch files for known differences in `tests/equivalence/patches/`.
+
+To regenerate reference data after an upstream version update:
+```bash
+bash tests/equivalence/generate_reference.sh /path/to/java/fastqc/build
+```
+
+## Upstream Version Tracking
+
+`UPSTREAM.toml` pins the Java FastQC version this rewrite tracks. CI checks nightly for new upstream releases and creates an issue if one is found.
 
 ## Architecture
 
-**Entry point:** `uk.ac.babraham.FastQC.FastQCApplication` - parses CLI args via `FastQCConfig`, launches either GUI mode or `OfflineRunner` for CLI mode.
-
-**Core pipeline flow:**
-1. `Sequence.SequenceFactory` creates a `SequenceFile` reader (FastQ, BAM, etc.)
-2. `Analysis.AnalysisRunner` (GUI) or `Analysis.OfflineRunner` (CLI) iterates sequences
-3. Each `Sequence` is passed to all active `QCModule` implementations via `processSequence()`
-4. Modules accumulate statistics, then `Report.HTMLReportArchive` generates the output
+**Pipeline flow:** CLI args → `runner::run()` → open `SequenceFile` → feed each `Sequence` through all `QCModule`s → `finalize()` modules → generate reports (text, HTML, zip).
 
 **Key abstractions:**
-- `Modules.QCModule` - interface all analysis modules implement (`processSequence()`, `raisesError()`, `raisesWarning()`, `makeReport()`)
-- `Modules.ModuleFactory` - instantiates the set of active modules
-- `Modules.ModuleConfig` - reads pass/warn/fail thresholds from `Configuration/limits.txt`
-- `Sequence.SequenceFile` - abstraction over input formats
-- `Sequence.QualityEncoding.PhredEncoding` - auto-detects Phred offset (33 vs 64)
+- `sequence::SequenceFile` trait — implemented by `FastQFile`, `BAMFile`, `Fast5File`
+- `modules::QCModule` trait — implemented by all 12 analysis modules
+- `config::FastQCConfig` — all CLI options; `config::Limits` — warn/error thresholds from `limits.txt`
+- `config::LimitsExt` trait — convenience methods (`threshold()`, `is_ignored()`, `is_module_enabled()`) on the `Limits` HashMap
 
-**QC Modules** (in `Modules/`): BasicStats, PerBaseQualityScores, PerTileQualityScores, PerSequenceQualityScores, PerBaseSequenceContent, PerSequenceGCContent, NContent, SequenceLengthDistribution, DuplicationLevel, OverRepresentedSeqs, AdapterContent, KmerContent.
+**Module ordering matters.** `create_modules()` in `modules/mod.rs` instantiates modules in the exact order they appear in the report. DuplicationLevel and OverRepresentedSeqs share data via `Arc<Mutex<OverRepresentedData>>` — DuplicationLevel appears before OverRepresentedSeqs in the report but reads from its data.
 
-**Configuration files** in `Configuration/`: `adapter_list.txt`, `contaminant_list.txt`, `limits.txt` (module thresholds).
+**Chart rendering:** Modules generate SVG strings via `report::charts::*`, which are converted to PNG via `resvg`+`tiny-skia` with a bundled Liberation Sans font (no system font dependency). Rects and lines use `shape-rendering="crispEdges"` for pixel-sharp rendering; data polylines use default antialiasing.
 
-## Source Layout
+**Report generation:** `report::text` writes `fastqc_data.txt` and `summary.txt`. `report::html` generates the HTML report with base64-embedded PNG charts. `report::archive` creates the zip file. HTML generation happens once and is passed to the archive to avoid redundant SVG→PNG rendering.
 
-All Java source lives directly in the repo (no `src/` directory) under the package path:
-- `uk/ac/babraham/FastQC/` - main application code
-- `org/apache/commons/math3/` - vendored math utilities
-- `net/sourceforge/iharder/base64/` - vendored Base64 utility
+## `// JAVA COMPAT` comments
 
-Compiled output goes to `bin/`. No Maven/Gradle - pure Ant.
+These mark places where code does something non-idiomatic specifically to match Java's exact numeric output — integer division instead of float, Java's `Double.toString()` formatting quirks, integer arithmetic for percentile thresholds, etc. These could be simplified once byte-identical output is no longer required. There are ~24 of these, mostly in `utils/format.rs` and `utils/quality_count.rs`.
 
-## Testing
+## Testing approach
 
-JUnit 5 (Jupiter). Tests live under `test/` with separate `unit/`, `integration/`, and `ui/` directories. Compiled test output goes to `test/bin/`, reports to `test/reports/`.
+- **Unit tests:** Inline in each module file. Cover utilities, format functions, base grouping, config parsing.
+- **Integration tests** (`tests/integration.rs`): Run the full pipeline on `minimal.fastq` and `complex.fastq`, diff against approved output files in `tests/approved/`.
+- **Fast5 tests** (`tests/create_test_fast5.rs`): Test HDF5 reading with synthetic Fast5 files in `tests/data/`.
+- **Equivalence tests** (`tests/equivalence/`): Python-based (via uv) comparison of Rust output against Java reference data. Covers all CLI flag variations. Generates HTML reports with image diffs.
+- **Approved files:** `tests/approved/FileContentsTest_{minimal,complex}_fastqc_data.approved.txt` — ground truth from Java FastQC.
 
-Integration tests use **approval testing** (ApprovalTests library) - expected outputs are stored as `.approved.*` files alongside tests. When a test fails, a `.received.*` file is generated for comparison. To update approved output, replace the `.approved` file with the `.received` file.
+## Configuration files
 
-Test data files are in `test/data/` with test case definitions in `test/data/TestCases.java`.
-
-## Launcher Scripts
-
-- `fastqc` - Perl wrapper script for Linux/macOS (sets up classpath, JVM args)
-- `run_fastqc.bat` - Windows batch launcher
-
-## Rust Rewrite
-
-`fastqc-rs/` contains a pure Rust CLI rewrite that produces byte-identical text output to the Java version. See `fastqc-rs/CLAUDE.md` for details. Build with `cd fastqc-rs && cargo build --release`.
+Embedded at compile time from `assets/` via `include_str!`/`include_bytes!`:
+- `limits.txt` — module warn/error/ignore thresholds
+- `adapter_list.txt`, `contaminant_list.txt` — sequence lists
+- `icons/` — PNG icons for reports
+- `fonts/LiberationSans-{Regular,Bold}.ttf` — bundled font for chart rendering
+- `header_template.html` — CSS for HTML reports

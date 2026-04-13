@@ -1,0 +1,58 @@
+name: Check upstream FastQC
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Check for new upstream release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get pinned version
+        id: pinned
+        run: |
+          version=$(grep '^version' UPSTREAM.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Get latest upstream release
+        id: upstream
+        run: |
+          latest=$(gh api repos/s-andrews/FastQC/releases/latest --jq '.tag_name' | sed 's/^v//')
+          echo "version=$latest" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create issue if new version available
+        if: steps.pinned.outputs.version != steps.upstream.outputs.version
+        run: |
+          existing=$(gh issue list --label "upstream-update" --state open --json number --jq 'length')
+          if [ "$existing" = "0" ]; then
+            gh issue create \
+              --title "Upstream FastQC ${{ steps.upstream.outputs.version }} released" \
+              --label "upstream-update" \
+              --body "$(cat <<'EOF'
+          Java FastQC **${{ steps.upstream.outputs.version }}** has been released.
+
+          Current pinned version: **${{ steps.pinned.outputs.version }}**
+
+          ## Action needed
+
+          1. Review [upstream changes](https://github.com/s-andrews/FastQC/releases/tag/v${{ steps.upstream.outputs.version }})
+          2. Update `UPSTREAM.toml` with new version and commit hash
+          3. Update `Cargo.toml` version and `src/lib.rs` VERSION constant
+          4. Regenerate reference data: `bash tests/equivalence/generate_reference.sh /path/to/java/fastqc`
+          5. Update patch files in `tests/equivalence/patches/` if needed
+          6. Run equivalence tests: `uv run tests/equivalence/compare.py --binary ./target/release/fastqc`
+          EOF
+          )"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

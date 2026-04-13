@@ -1,38 +1,88 @@
-# FastQC
+# FastQC (Rust)
 
-**A Quality Control application for FastQ files**
+A Rust rewrite of [FastQC](https://github.com/s-andrews/FastQC), a quality control tool for high-throughput sequencing data.
 
-FastQC is a program designed to spot potential problems in high througput sequencing datasets.  It runs a set of analyses on one or more raw sequence files in fastq or bam format and produces a report which summarises the results.
+![FastQC Screenshot](docs/fastqc.png)
 
-![FastQC Screenshot](Help/fastqc.png)
+This is a complete rewrite of the original Java FastQC application in Rust. It produces **byte-identical text output** (`fastqc_data.txt`, `summary.txt`) to the Java version, while being significantly faster and distributed as a single static binary.
 
-FastQC will highlight any areas where this library looks unusual and where you should take a closer look. The program is not tied to any specific type of sequencing technique and can be used to look at libraries coming from a large number of different experiment types (Genomic Sequencing, ChIP-Seq, RNA-Seq, BS-Seq etc etc).
-
-> [!NOTE]
-> This GitHub  project page contains the source code for the application and is only really useful only to people wanting to develop new functionality or trace bugs in FastQC.
-> If you just want to run the program then you want to go to the [**project web page**](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/) where you can download the compiled pacakges for Windows, OSX and Linux.
-
-## Introduction
-
-Most high throughput sequencers generate output in FastQ format.  This format combines the base calls for the sequence which was generated with an encoded quality value for each base which says how confident the sequencer was that the base call generated was correct.
-
-Before proceeding with the analysis of a sequence data set it is a good idea to do some basic quality control checks on the raw data to ensure that there are no hidden problems which might be more difficult to detect at a later stage.
-
-FastQC is an application which takes a FastQ file and runs a series of tests on it to generate a comprehensive QC report.  This will tell you if there is anything unusual about your sequence.  Each test is flagged as a pass, warning or fail depending on how far it departs from what you'd expect from a normal large dataset with no significant biases.  It's important to stress that warnings or even failures do not necessarily mean that there is a problem with your data, only that it is unusual.  It is possible that the biological nature of your sample means that you would expect this particular bias in your results.
-
-FastQC can be run either as an interactive graphical application which allows you to view results for multiple files in a single application.  Alternatively you can run the program in a non interactive way (say as part of a pipeline) which will generate an HTML report for each file you process.
-
-FastQC is a cross-platform application, written in java. In theory it should run on any platform which has a suitable java runtime environment.
-Having said that we've only tested in on Windows, MacOSX and Linux running the Oracle v1.6 to 1.8 JREs.  Please let us know what happened if you try running it on other platforms / JREs.  Please see the detailed instructions in the INSTALL.txt document to tell you how to get a suitable java version to run FastQC on your system.
+Currently tracking upstream Java FastQC version — see [`UPSTREAM.toml`](UPSTREAM.toml) for details.
 
 ## Installation
 
-Please see the [**project web page**](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/) and the [installation instructions](INSTALL.md) in this repository.
+### From source
 
-## Contributions
+```bash
+cargo install fastqc-rust
+```
 
-If you have any comments about FastQC we would like to hear them.  You can either enter them into the github bug tracker at:
+### From a release binary
 
-https://github.com/s-andrews/FastQC/issues/
+Download prebuilt binaries from the [Releases](https://github.com/ewels/FastQC/releases) page.
 
-..or send them directly to simon.andrews@babraham.ac.uk.
+### Building from source
+
+```bash
+git clone https://github.com/ewels/FastQC.git
+cd FastQC
+cargo build --release
+# Binary at ./target/release/fastqc
+```
+
+## Usage
+
+```bash
+# Analyze a FASTQ file
+fastqc sample.fastq.gz
+
+# Specify output directory
+fastqc -o results/ sample.fastq.gz
+
+# Analyze multiple files in parallel
+fastqc -t 4 *.fastq.gz
+
+# BAM input
+fastqc --format bam aligned.bam
+
+# See all options
+fastqc --help
+```
+
+### Key options
+
+| Flag | Description |
+|------|-------------|
+| `-o, --outdir DIR` | Output directory (must exist) |
+| `-f, --format FORMAT` | Force format: `bam`, `sam`, `bam_mapped`, `sam_mapped`, `fastq` |
+| `-t, --threads N` | Number of parallel file processing threads |
+| `--casava` | CASAVA 1.8+ mode (exclude filtered reads) |
+| `--nano` | Nanopore Fast5 mode |
+| `--nogroup` | Disable base grouping for reads > 50bp |
+| `--expgroup` | Use exponential base groups |
+| `-k, --kmers N` | Kmer size 2-10 (default: 7) |
+| `--min_length N` | Minimum sequence length to report |
+| `--extract` | Unzip output after creation |
+
+## Equivalence testing
+
+This project maintains strict equivalence with the upstream Java FastQC. CI runs automated comparison of text output and chart images against stored Java reference data.
+
+```bash
+# Run equivalence tests locally (requires uv)
+cargo build --release
+uv run tests/equivalence/compare.py --binary ./target/release/fastqc
+```
+
+This generates an interactive HTML report with text diffs and side-by-side image comparison. See `tests/equivalence/` for details.
+
+## Upstream tracking
+
+`UPSTREAM.toml` pins the Java FastQC version this rewrite tracks. A nightly CI job checks for new upstream releases and automatically creates a GitHub issue when one is found.
+
+## License
+
+GPL-3.0 — see [LICENSE](LICENSE).
+
+## Acknowledgments
+
+FastQC was originally written by Simon Andrews at the [Babraham Institute](https://www.bioinformatics.babraham.ac.uk/). This Rust rewrite aims to be a faithful, high-performance reimplementation.

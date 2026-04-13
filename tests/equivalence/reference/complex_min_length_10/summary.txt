@@ -1,0 +1,10 @@
+PASS	Basic Statistics	complex.fastq
+PASS	Per base sequence quality	complex.fastq
+FAIL	Per sequence quality scores	complex.fastq
+FAIL	Per base sequence content	complex.fastq
+WARN	Per sequence GC content	complex.fastq
+PASS	Per base N content	complex.fastq
+PASS	Sequence Length Distribution	complex.fastq
+FAIL	Sequence Duplication Levels	complex.fastq
+FAIL	Overrepresented sequences	complex.fastq
+PASS	Adapter Content	complex.fastq

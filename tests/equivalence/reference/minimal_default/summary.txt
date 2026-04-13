@@ -1,0 +1,10 @@
+PASS	Basic Statistics	minimal.fastq
+PASS	Per base sequence quality	minimal.fastq
+FAIL	Per sequence quality scores	minimal.fastq
+FAIL	Per base sequence content	minimal.fastq
+FAIL	Per sequence GC content	minimal.fastq
+PASS	Per base N content	minimal.fastq
+PASS	Sequence Length Distribution	minimal.fastq
+PASS	Sequence Duplication Levels	minimal.fastq
+FAIL	Overrepresented sequences	minimal.fastq
+FAIL	Adapter Content	minimal.fastq

@@ -1,0 +1,78 @@
+# Equivalence test cases: each entry runs fastqc with the specified args
+# and compares output against Java reference data.
+#
+# name: directory name under reference/ and output identifier
+# file: input file relative to tests/data/
+# args: CLI flags passed to fastqc (beyond -o and the input file)
+
+- name: minimal_default
+  file: minimal.fastq
+  args: []
+
+- name: minimal_nogroup
+  file: minimal.fastq
+  args: [--nogroup]
+
+- name: minimal_expgroup
+  file: minimal.fastq
+  args: [--expgroup]
+
+- name: minimal_casava
+  file: minimal.fastq
+  args: [--casava]
+
+- name: minimal_casava_nofilter
+  file: minimal.fastq
+  args: [--casava, --nofilter]
+
+- name: minimal_kmers5
+  file: minimal.fastq
+  args: [--kmers, "5"]
+
+- name: minimal_kmers10
+  file: minimal.fastq
+  args: [--kmers, "10"]
+
+- name: minimal_min_length_10
+  file: minimal.fastq
+  args: [--min_length, "10"]
+
+- name: minimal_dup_length_10
+  file: minimal.fastq
+  args: [--dup_length, "10"]
+
+- name: complex_default
+  file: complex.fastq
+  args: []
+
+- name: complex_nogroup
+  file: complex.fastq
+  args: [--nogroup]
+
+- name: complex_expgroup
+  file: complex.fastq
+  args: [--expgroup]
+
+- name: complex_casava
+  file: complex.fastq
+  args: [--casava]
+
+- name: complex_casava_nofilter
+  file: complex.fastq
+  args: [--casava, --nofilter]
+
+- name: complex_kmers5
+  file: complex.fastq
+  args: [--kmers, "5"]
+
+- name: complex_kmers10
+  file: complex.fastq
+  args: [--kmers, "10"]
+
+- name: complex_min_length_10
+  file: complex.fastq
+  args: [--min_length, "10"]
+
+- name: complex_dup_length_10
+  file: complex.fastq
+  args: [--dup_length, "10"]

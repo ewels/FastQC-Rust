@@ -1,0 +1,109 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="800" height="600" version="1.1" xmlns="http://www.w3.org/2000/svg">
+<rect width="800" height="600" x="0" y="0" style="fill:rgb(238,238,238);stroke:none"/>
+<rect width="800" height="600" x="0" y="0" style="fill:rgb(255,255,255);stroke:none"/>
+<text x="2" y="566" fill="rgb(0,0,0)" font-family="Arial" font-size="12">0</text>
+<text x="2" y="514" fill="rgb(0,0,0)" font-family="Arial" font-size="12">10</text>
+<text x="2" y="462" fill="rgb(0,0,0)" font-family="Arial" font-size="12">20</text>
+<text x="2" y="410" fill="rgb(0,0,0)" font-family="Arial" font-size="12">30</text>
+<text x="2" y="358" fill="rgb(0,0,0)" font-family="Arial" font-size="12">40</text>
+<text x="2" y="306" fill="rgb(0,0,0)" font-family="Arial" font-size="12">50</text>
+<text x="2" y="254" fill="rgb(0,0,0)" font-family="Arial" font-size="12">60</text>
+<text x="2" y="202" fill="rgb(0,0,0)" font-family="Arial" font-size="12">70</text>
+<text x="2" y="150" fill="rgb(0,0,0)" font-family="Arial" font-size="12">80</text>
+<text x="2" y="98" fill="rgb(0,0,0)" font-family="Arial" font-size="12">90</text>
+<text x="2" y="46" fill="rgb(0,0,0)" font-family="Arial" font-size="12">100</text>
+<text x="380" y="30" fill="rgb(0,0,0)" font-family="Arial" font-size="12">% Adapter</text>
+<line x1="29" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="1"/>
+<line x1="29" y1="560" x2="29" y2="40" stroke="rgb(0,0,0)" stroke-width="1"/>
+<text x="342" y="595" fill="rgb(0,0,0)" font-family="Arial" font-size="12">Position in read (bp)</text>
+<text x="63" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">1</text>
+<rect width="76" height="520" x="105" y="40" style="fill:rgb(230,230,230);stroke:none"/>
+<text x="139" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">2</text>
+<text x="215" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">3</text>
+<rect width="76" height="520" x="257" y="40" style="fill:rgb(230,230,230);stroke:none"/>
+<text x="291" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">4</text>
+<text x="367" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">5</text>
+<rect width="76" height="520" x="409" y="40" style="fill:rgb(230,230,230);stroke:none"/>
+<text x="443" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">6</text>
+<text x="519" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">7</text>
+<rect width="76" height="520" x="561" y="40" style="fill:rgb(230,230,230);stroke:none"/>
+<text x="595" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">8</text>
+<text x="671" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">9</text>
+<rect width="76" height="520" x="713" y="40" style="fill:rgb(230,230,230);stroke:none"/>
+<text x="743" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">10</text>
+<line x1="29" y1="560" x2="790" y2="560" stroke="rgb(180,180,180)" stroke-width="1"/>
+<line x1="29" y1="508" x2="790" y2="508" stroke="rgb(180,180,180)" stroke-width="1"/>
+<line x1="29" y1="456" x2="790" y2="456" stroke="rgb(180,180,180)" stroke-width="1"/>
+<line x1="29" y1="404" x2="790" y2="404" stroke="rgb(180,180,180)" stroke-width="1"/>
+<line x1="29" y1="352" x2="790" y2="352" stroke="rgb(180,180,180)" stroke-width="1"/>
+<line x1="29" y1="300" x2="790" y2="300" stroke="rgb(180,180,180)" stroke-width="1"/>
+<line x1="29" y1="248" x2="790" y2="248" stroke="rgb(180,180,180)" stroke-width="1"/>
+<line x1="29" y1="196" x2="790" y2="196" stroke="rgb(180,180,180)" stroke-width="1"/>
+<line x1="29" y1="144" x2="790" y2="144" stroke="rgb(180,180,180)" stroke-width="1"/>
+<line x1="29" y1="92" x2="790" y2="92" stroke="rgb(180,180,180)" stroke-width="1"/>
+<line x1="29" y1="40" x2="790" y2="40" stroke="rgb(180,180,180)" stroke-width="1"/>
+<line x1="67" y1="560" x2="143" y2="560" stroke="rgb(136,34,85)" stroke-width="1"/>
+<line x1="143" y1="560" x2="219" y2="560" stroke="rgb(136,34,85)" stroke-width="1"/>
+<line x1="219" y1="560" x2="295" y2="560" stroke="rgb(136,34,85)" stroke-width="1"/>
+<line x1="295" y1="560" x2="371" y2="560" stroke="rgb(136,34,85)" stroke-width="1"/>
+<line x1="371" y1="560" x2="447" y2="560" stroke="rgb(136,34,85)" stroke-width="1"/>
+<line x1="447" y1="560" x2="523" y2="560" stroke="rgb(136,34,85)" stroke-width="1"/>
+<line x1="523" y1="560" x2="599" y2="560" stroke="rgb(136,34,85)" stroke-width="1"/>
+<line x1="599" y1="560" x2="675" y2="560" stroke="rgb(136,34,85)" stroke-width="1"/>
+<line x1="675" y1="560" x2="751" y2="560" stroke="rgb(136,34,85)" stroke-width="1"/>
+<line x1="67" y1="560" x2="143" y2="560" stroke="rgb(51,34,136)" stroke-width="1"/>
+<line x1="143" y1="560" x2="219" y2="560" stroke="rgb(51,34,136)" stroke-width="1"/>
+<line x1="219" y1="560" x2="295" y2="560" stroke="rgb(51,34,136)" stroke-width="1"/>
+<line x1="295" y1="560" x2="371" y2="560" stroke="rgb(51,34,136)" stroke-width="1"/>
+<line x1="371" y1="560" x2="447" y2="560" stroke="rgb(51,34,136)" stroke-width="1"/>
+<line x1="447" y1="560" x2="523" y2="560" stroke="rgb(51,34,136)" stroke-width="1"/>
+<line x1="523" y1="560" x2="599" y2="560" stroke="rgb(51,34,136)" stroke-width="1"/>
+<line x1="599" y1="560" x2="675" y2="560" stroke="rgb(51,34,136)" stroke-width="1"/>
+<line x1="675" y1="560" x2="751" y2="560" stroke="rgb(51,34,136)" stroke-width="1"/>
+<line x1="67" y1="560" x2="143" y2="560" stroke="rgb(17,119,51)" stroke-width="1"/>
+<line x1="143" y1="560" x2="219" y2="560" stroke="rgb(17,119,51)" stroke-width="1"/>
+<line x1="219" y1="560" x2="295" y2="560" stroke="rgb(17,119,51)" stroke-width="1"/>
+<line x1="295" y1="560" x2="371" y2="560" stroke="rgb(17,119,51)" stroke-width="1"/>
+<line x1="371" y1="560" x2="447" y2="560" stroke="rgb(17,119,51)" stroke-width="1"/>
+<line x1="447" y1="560" x2="523" y2="560" stroke="rgb(17,119,51)" stroke-width="1"/>
+<line x1="523" y1="560" x2="599" y2="560" stroke="rgb(17,119,51)" stroke-width="1"/>
+<line x1="599" y1="560" x2="675" y2="560" stroke="rgb(17,119,51)" stroke-width="1"/>
+<line x1="675" y1="560" x2="751" y2="560" stroke="rgb(17,119,51)" stroke-width="1"/>
+<line x1="67" y1="560" x2="143" y2="560" stroke="rgb(221,204,119)" stroke-width="1"/>
+<line x1="143" y1="560" x2="219" y2="560" stroke="rgb(221,204,119)" stroke-width="1"/>
+<line x1="219" y1="560" x2="295" y2="560" stroke="rgb(221,204,119)" stroke-width="1"/>
+<line x1="295" y1="560" x2="371" y2="560" stroke="rgb(221,204,119)" stroke-width="1"/>
+<line x1="371" y1="560" x2="447" y2="560" stroke="rgb(221,204,119)" stroke-width="1"/>
+<line x1="447" y1="560" x2="523" y2="560" stroke="rgb(221,204,119)" stroke-width="1"/>
+<line x1="523" y1="560" x2="599" y2="560" stroke="rgb(221,204,119)" stroke-width="1"/>
+<line x1="599" y1="560" x2="675" y2="560" stroke="rgb(221,204,119)" stroke-width="1"/>
+<line x1="675" y1="560" x2="751" y2="560" stroke="rgb(221,204,119)" stroke-width="1"/>
+<line x1="67" y1="40" x2="143" y2="40" stroke="rgb(68,170,153)" stroke-width="1"/>
+<line x1="143" y1="40" x2="219" y2="40" stroke="rgb(68,170,153)" stroke-width="1"/>
+<line x1="219" y1="40" x2="295" y2="40" stroke="rgb(68,170,153)" stroke-width="1"/>
+<line x1="295" y1="40" x2="371" y2="40" stroke="rgb(68,170,153)" stroke-width="1"/>
+<line x1="371" y1="40" x2="447" y2="560" stroke="rgb(68,170,153)" stroke-width="1"/>
+<line x1="447" y1="560" x2="523" y2="560" stroke="rgb(68,170,153)" stroke-width="1"/>
+<line x1="523" y1="560" x2="599" y2="560" stroke="rgb(68,170,153)" stroke-width="1"/>
+<line x1="599" y1="560" x2="675" y2="560" stroke="rgb(68,170,153)" stroke-width="1"/>
+<line x1="675" y1="560" x2="751" y2="560" stroke="rgb(68,170,153)" stroke-width="1"/>
+<line x1="67" y1="560" x2="143" y2="560" stroke="rgb(170,68,153)" stroke-width="1"/>
+<line x1="143" y1="560" x2="219" y2="560" stroke="rgb(170,68,153)" stroke-width="1"/>
+<line x1="219" y1="560" x2="295" y2="560" stroke="rgb(170,68,153)" stroke-width="1"/>
+<line x1="295" y1="560" x2="371" y2="560" stroke="rgb(170,68,153)" stroke-width="1"/>
+<line x1="371" y1="560" x2="447" y2="560" stroke="rgb(170,68,153)" stroke-width="1"/>
+<line x1="447" y1="560" x2="523" y2="560" stroke="rgb(170,68,153)" stroke-width="1"/>
+<line x1="523" y1="560" x2="599" y2="560" stroke="rgb(170,68,153)" stroke-width="1"/>
+<line x1="599" y1="560" x2="675" y2="560" stroke="rgb(170,68,153)" stroke-width="1"/>
+<line x1="675" y1="560" x2="751" y2="560" stroke="rgb(170,68,153)" stroke-width="1"/>
+<rect width="198" height="123" x="592" y="40" style="fill:rgb(255,255,255);stroke:none"/>
+<rect width="198" height="123" x="592" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
+<text x="595" y="55" fill="rgb(136,34,85)" font-family="Arial" font-size="12" font-weight="bold">Illumina Universal Adapter</text>
+<text x="595" y="75" fill="rgb(51,34,136)" font-family="Arial" font-size="12" font-weight="bold">Illumina Small RNA 3' Adapter</text>
+<text x="595" y="95" fill="rgb(17,119,51)" font-family="Arial" font-size="12" font-weight="bold">Illumina Small RNA 5' Adapter</text>
+<text x="595" y="115" fill="rgb(221,204,119)" font-family="Arial" font-size="12" font-weight="bold">Nextera Transposase Sequence</text>
+<text x="595" y="135" fill="rgb(68,170,153)" font-family="Arial" font-size="12" font-weight="bold">PolyA</text>
+<text x="595" y="155" fill="rgb(170,68,153)" font-family="Arial" font-size="12" font-weight="bold">PolyG</text>
+</svg>
