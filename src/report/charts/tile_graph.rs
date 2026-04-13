@@ -230,8 +230,8 @@ pub fn render_tile_graph(params: &TileGraphData) -> String {
         let mut last_x_label_end: f64 = 0.0;
         for (base, label) in params.x_labels.iter().enumerate() {
             let label_w = approx_text_width(label);
-            let label_x =
-                (base_width / 2.0) + x_offset + (base_width * base as f64) - (label_w / 2.0);
+            let label_x = // JAVA COMPAT: baseWidth/2 is int division in Java
+                (base_width / 2.0).trunc() + x_offset + (base_width * base as f64) - (label_w / 2.0);
             if label_x > last_x_label_end {
                 svg.push_str(&svg_text(label_x, height - 25.0, label, &black, false));
                 last_x_label_end = label_x + label_w + 5.0;

@@ -61,6 +61,7 @@ pub struct AdapterContent {
     limits: Limits,
     nogroup: bool,
     expgroup: bool,
+    min_length: usize,
     // Lazily computed
     computed: Option<ComputedEnrichment>,
 }
@@ -76,6 +77,7 @@ impl AdapterContent {
         adapter_entries: &[(String, String)],
         nogroup: bool,
         expgroup: bool,
+        min_length: usize,
     ) -> Self {
         let mut longest_adapter = 0;
         let mut adapters = Vec::with_capacity(adapter_entries.len());
@@ -95,6 +97,7 @@ impl AdapterContent {
             limits: limits.clone(),
             nogroup,
             expgroup,
+            min_length,
             computed: None,
         }
     }
@@ -113,7 +116,8 @@ impl AdapterContent {
         }
 
         // Group positions using BaseGroup
-        let groups = BaseGroup::make_base_groups(max_length, self.nogroup, self.expgroup);
+        let groups =
+            BaseGroup::make_base_groups(max_length, self.min_length, self.nogroup, self.expgroup);
 
         let x_labels: Vec<String> = groups.iter().map(|g| g.label()).collect();
 

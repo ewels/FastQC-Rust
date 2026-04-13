@@ -29,13 +29,21 @@ impl BaseGroup {
     ///
     /// Replicates `BaseGroup.makeBaseGroups(int)`. The Java code
     /// works in 1-based coordinates internally and we convert to 0-based here.
-    pub fn make_base_groups(max_length: usize, nogroup: bool, expgroup: bool) -> Vec<BaseGroup> {
+    /// If `min_length` (from config) exceeds `max_length`, groups are extended
+    /// to cover `min_length` positions, matching Java's BaseGroup.java behavior.
+    pub fn make_base_groups(
+        max_length: usize,
+        min_length: usize,
+        nogroup: bool,
+        expgroup: bool,
+    ) -> Vec<BaseGroup> {
+        let effective_length = max_length.max(min_length);
         if nogroup {
-            make_ungrouped_groups(max_length)
+            make_ungrouped_groups(effective_length)
         } else if expgroup {
-            make_exponential_base_groups(max_length)
+            make_exponential_base_groups(effective_length)
         } else {
-            make_linear_base_groups(max_length)
+            make_linear_base_groups(effective_length)
         }
     }
 }
@@ -201,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_ungrouped_10() {
-        let groups = BaseGroup::make_base_groups(10, true, false);
+        let groups = BaseGroup::make_base_groups(10, 0, true, false);
         assert_eq!(groups.len(), 10);
         assert_eq!(groups[0].label(), "1");
         assert_eq!(groups[9].label(), "10");
@@ -210,13 +218,13 @@ mod tests {
     #[test]
     fn test_linear_short_ungrouped() {
         // <= 75 should be ungrouped even without nogroup flag
-        let groups = BaseGroup::make_base_groups(50, false, false);
+        let groups = BaseGroup::make_base_groups(50, 0, false, false);
         assert_eq!(groups.len(), 50);
     }
 
     #[test]
     fn test_linear_100() {
-        let groups = BaseGroup::make_base_groups(100, false, false);
+        let groups = BaseGroup::make_base_groups(100, 0, false, false);
         // Should have 9 individual + grouped remainder
         assert!(groups.len() < 75);
         // First 9 are individual
@@ -228,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_exponential_150() {
-        let groups = BaseGroup::make_base_groups(150, false, true);
+        let groups = BaseGroup::make_base_groups(150, 0, false, true);
         // First 9 individual, then groups of 5 (since 150 > 75)
         assert_eq!(groups[0].label(), "1");
         assert_eq!(groups[8].label(), "9");
@@ -238,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_exponential_250() {
-        let groups = BaseGroup::make_base_groups(250, false, true);
+        let groups = BaseGroup::make_base_groups(250, 0, false, true);
         // After position 50 (1-based), interval goes to 10 since 250 > 200
         // Find the group starting at position 50 (1-based)
         let g50 = groups.iter().find(|g| g.lower_count == 49).unwrap();

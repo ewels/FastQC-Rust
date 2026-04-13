@@ -16,22 +16,29 @@ pub struct NContent {
     not_n_counts: Vec<u64>,
     nogroup: bool,
     expgroup: bool,
+    min_length: usize,
     limits: Limits,
 }
 
 impl NContent {
-    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool) -> Self {
+    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool, min_length: usize) -> Self {
         NContent {
             n_counts: Vec::new(),
             not_n_counts: Vec::new(),
             nogroup,
             expgroup,
+            min_length,
             limits: limits.clone(),
         }
     }
 
     fn calculate(&self) -> NContentData {
-        let groups = BaseGroup::make_base_groups(self.n_counts.len(), self.nogroup, self.expgroup);
+        let groups = BaseGroup::make_base_groups(
+            self.n_counts.len(),
+            self.min_length,
+            self.nogroup,
+            self.expgroup,
+        );
 
         let mut x_categories = Vec::with_capacity(groups.len());
         let mut percentages = vec![0.0f64; groups.len()];

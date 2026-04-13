@@ -169,14 +169,20 @@ pub fn create_modules(config: &FastQCConfig, limits: &Limits) -> Vec<Box<dyn QCM
     // 2. PerBaseQualityScores
     if limits.is_module_enabled("quality_base") {
         modules.push(Box::new(per_base_quality::PerBaseQualityScores::new(
-            limits, ng, eg,
+            limits,
+            ng,
+            eg,
+            config.min_length,
         )));
     }
 
     // 3. PerTileQualityScores
     if limits.is_module_enabled("tile") {
         modules.push(Box::new(per_tile_quality::PerTileQualityScores::new(
-            limits, ng, eg,
+            limits,
+            ng,
+            eg,
+            config.min_length,
         )));
     }
 
@@ -190,7 +196,12 @@ pub fn create_modules(config: &FastQCConfig, limits: &Limits) -> Vec<Box<dyn QCM
     // 5. PerBaseSequenceContent
     if limits.is_module_enabled("sequence") {
         modules.push(Box::new(
-            per_base_sequence_content::PerBaseSequenceContent::new(limits, ng, eg),
+            per_base_sequence_content::PerBaseSequenceContent::new(
+                limits,
+                ng,
+                eg,
+                config.min_length,
+            ),
         ));
     }
 
@@ -201,7 +212,12 @@ pub fn create_modules(config: &FastQCConfig, limits: &Limits) -> Vec<Box<dyn QCM
 
     // 7. NContent
     if limits.is_module_enabled("n_content") {
-        modules.push(Box::new(n_content::NContent::new(limits, ng, eg)));
+        modules.push(Box::new(n_content::NContent::new(
+            limits,
+            ng,
+            eg,
+            config.min_length,
+        )));
     }
 
     // 8. SequenceLengthDistribution
@@ -235,7 +251,11 @@ pub fn create_modules(config: &FastQCConfig, limits: &Limits) -> Vec<Box<dyn QCM
     // 11. AdapterContent
     if limits.is_module_enabled("adapter") {
         modules.push(Box::new(adapter_content::AdapterContent::new(
-            limits, &adapters, ng, eg,
+            limits,
+            &adapters,
+            ng,
+            eg,
+            config.min_length,
         )));
     }
 
@@ -247,6 +267,7 @@ pub fn create_modules(config: &FastQCConfig, limits: &Limits) -> Vec<Box<dyn QCM
             config.kmer_size,
             ng,
             eg,
+            config.min_length,
         )));
     }
 

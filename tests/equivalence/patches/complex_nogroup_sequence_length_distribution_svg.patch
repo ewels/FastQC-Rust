@@ -1,0 +1,26 @@
+--- java/Images/sequence_length_distribution.svg
++++ rust/Images/sequence_length_distribution.svg
+@@ -9,10 +9,10 @@
+ <text x="0" y="254" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">3</text>
+ <text x="0" y="150" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">4</text>
+ <text x="0" y="46" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">5</text>
+-<text x="240" y="30" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Distribution of sequence lengths over all sequences</text>
++<text x="250" y="30" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Distribution of sequence lengths over all sequences</text>
+ <line x1="10" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+ <line x1="10" y1="560" x2="10" y2="40" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+-<text x="330" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Sequence Length (bp)</text>
++<text x="340" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Sequence Length (bp)</text>
+ <text x="130" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">15</text>
+ <rect width="260" height="520" x="270" y="40" style="fill:rgb(230,230,230);stroke:none"/>
+ <text x="390" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">16</text>
+@@ -25,7 +25,7 @@
+ <line x1="10" y1="40" x2="790" y2="40" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <line x1="140" y1="560" x2="400" y2="40" stroke="rgb(136,34,85)" stroke-width="[SW]"/>
+ <line x1="400" y1="40" x2="660" y2="560" stroke="rgb(136,34,85)" stroke-width="[SW]"/>
+-<rect width="120" height="23" x="670" y="40" style="fill:rgb(255,255,255);stroke:none"/>
+-<rect width="120" height="23" x="670" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
+-<text x="670" y="55" fill="rgb(136,34,85)" font-family="[FONT]" font-size="12">Sequence Length</text>
++<rect width="100" height="23" x="680" y="40" style="fill:rgb(255,255,255);stroke:none"/>
++<rect width="100" height="23" x="680" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
++<text x="690" y="55" fill="rgb(136,34,85)" font-family="[FONT]" font-size="12">Sequence Length</text>
+ </svg>

@@ -1,4 +1,4 @@
-##FastQC	0.12.2.devel
+##FastQC	0.12.1
 >>Basic Statistics	pass
 #Measure	Value
 Filename	minimal.fastq

@@ -53,9 +53,12 @@ uv run tests/equivalence/compare.py --reference /path/to/java --actual /path/to/
 
 Generates an HTML report with text diffs and interactive image comparison (side-by-side, slider, fade, highlight). Test cases are defined in `tests/equivalence/test_cases.yaml`. Reference data in `tests/equivalence/reference/`. Patch files for known differences in `tests/equivalence/patches/`.
 
-To regenerate reference data after an upstream version update:
+All Python scripts use [uv](https://docs.astral.sh/uv/) with inline script dependencies (PEP 723) — no virtual environment or `pip install` needed. Just prefix with `uv run`.
+
+To regenerate reference data after an upstream version update (requires Docker):
 ```bash
-bash tests/equivalence/generate_reference.sh /path/to/java/fastqc/build
+docker pull quay.io/biocontainers/fastqc:0.12.1--hdfd78af_0
+uv run /path/to/regen_script.py  # or use tests/equivalence/generate_reference.sh
 ```
 
 ## Upstream Version Tracking

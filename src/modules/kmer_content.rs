@@ -49,6 +49,7 @@ pub struct KmerContent {
     limits: Limits,
     nogroup: bool,
     expgroup: bool,
+    min_length: usize,
     // Lazily computed
     computed: Option<ComputedKmerResults>,
 }
@@ -73,7 +74,13 @@ struct EnrichedKmer {
 }
 
 impl KmerContent {
-    pub fn new(limits: &Limits, kmer_size: u8, nogroup: bool, expgroup: bool) -> Self {
+    pub fn new(
+        limits: &Limits,
+        kmer_size: u8,
+        nogroup: bool,
+        expgroup: bool,
+        min_length: usize,
+    ) -> Self {
         let ks = kmer_size as usize;
         KmerContent {
             kmers: HashMap::with_capacity(4usize.pow(ks as u32)),
@@ -84,6 +91,7 @@ impl KmerContent {
             limits: limits.clone(),
             nogroup,
             expgroup,
+            min_length,
             computed: None,
         }
     }
@@ -128,7 +136,8 @@ impl KmerContent {
             0
         };
 
-        let groups = BaseGroup::make_base_groups(group_length, self.nogroup, self.expgroup);
+        let groups =
+            BaseGroup::make_base_groups(group_length, self.min_length, self.nogroup, self.expgroup);
 
         let mut uneven_kmers: Vec<(String, u64, f32, Vec<f32>, f32)> = Vec::new();
 

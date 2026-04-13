@@ -1,0 +1,22 @@
+--- java/Images/per_sequence_quality.svg
++++ rust/Images/per_sequence_quality.svg
+@@ -5,14 +5,14 @@
+ <rect width="800" height="600" x="0" y="0" style="fill:rgb(255,255,255);stroke:none"/>
+ <text x="0" y="566" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">0</text>
+ <text x="0" y="46" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">1</text>
+-<text x="260" y="30" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Quality score distribution over all sequences</text>
++<text x="270" y="30" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Quality score distribution over all sequences</text>
+ <line x1="10" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+ <line x1="10" y1="560" x2="10" y2="40" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+-<text x="280" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Mean Sequence Quality (Phred Score)</text>
++<text x="300" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Mean Sequence Quality (Phred Score)</text>
+ <text x="400" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">9</text>
+ <line x1="10" y1="560" x2="790" y2="560" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <line x1="10" y1="40" x2="790" y2="40" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+-<rect width="170" height="23" x="620" y="40" style="fill:rgb(255,255,255);stroke:none"/>
+-<rect width="170" height="23" x="620" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
+-<text x="620" y="55" fill="rgb(136,34,85)" font-family="[FONT]" font-size="12">Average Quality per read</text>
++<rect width="150" height="23" x="640" y="40" style="fill:rgb(255,255,255);stroke:none"/>
++<rect width="150" height="23" x="640" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
++<text x="640" y="55" fill="rgb(136,34,85)" font-family="[FONT]" font-size="12">Average Quality per read</text>
+ </svg>

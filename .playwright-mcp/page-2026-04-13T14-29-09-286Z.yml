@@ -1,0 +1,196 @@
+- generic [active] [ref=e1]:
+  - heading "FastQC Equivalence Report" [level=1] [ref=e2]
+  - paragraph [ref=e3]: Comparing Rust FastQC output against Java FastQC v0.12.1 reference data.
+  - table [ref=e5]:
+    - rowgroup [ref=e6]:
+      - row "Test Case File Args Text Images Status" [ref=e7]:
+        - columnheader "Test Case" [ref=e8]
+        - columnheader "File" [ref=e9]
+        - columnheader "Args" [ref=e10]
+        - columnheader "Text" [ref=e11]
+        - columnheader "Images" [ref=e12]
+        - columnheader "Status" [ref=e13]
+      - row "minimal_default minimal.fastq (default) 10/10 8/8 PASS" [ref=e14]:
+        - cell "minimal_default" [ref=e15]:
+          - link "minimal_default" [ref=e16] [cursor=pointer]:
+            - /url: "#minimal_default"
+        - cell "minimal.fastq" [ref=e17]
+        - cell "(default)" [ref=e18]
+        - cell "10/10" [ref=e19]:
+          - generic [ref=e20]: 10/10
+        - cell "8/8" [ref=e21]:
+          - generic [ref=e22]: 8/8
+        - cell "PASS" [ref=e23]:
+          - generic [ref=e24]: PASS
+  - generic [ref=e25]:
+    - heading "minimal_default PASS" [level=2] [ref=e26]:
+      - text: minimal_default
+      - generic [ref=e27]: PASS
+    - generic [ref=e28]: "Input: minimal.fastq | Args: (default)"
+    - table [ref=e29]:
+      - rowgroup [ref=e30]:
+        - row "File Java Rust Status" [ref=e31]:
+          - columnheader "File" [ref=e32]
+          - columnheader "Java" [ref=e33]
+          - columnheader "Rust" [ref=e34]
+          - columnheader "Status" [ref=e35]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e36] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e37]
+          - cell "✓" [ref=e38]
+          - cell "✓" [ref=e39]
+          - cell "✓ Identical" [ref=e40]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e41] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e42]
+          - cell "✓" [ref=e43]
+          - cell "✓" [ref=e44]
+          - cell "✓ Identical" [ref=e45]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e46] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e47]
+          - cell "✓" [ref=e48]
+          - cell "✓" [ref=e49]
+          - cell "✓ Identical" [ref=e50]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e51] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e52]
+          - cell "✓" [ref=e53]
+          - cell "✓" [ref=e54]
+          - cell "✓ Identical" [ref=e55]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e56] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e57]
+          - cell "✓" [ref=e58]
+          - cell "✓" [ref=e59]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e60]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e61] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e62]
+          - cell "✓" [ref=e63]
+          - cell "✓" [ref=e64]
+          - cell "✓ Expected diff" [ref=e65]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e66] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e67]
+          - cell "✓" [ref=e68]
+          - cell "✓" [ref=e69]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e70]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e71] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e72]
+          - cell "✓" [ref=e73]
+          - cell "✓" [ref=e74]
+          - cell "✓ Expected diff" [ref=e75]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e76] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e77]
+          - cell "✓" [ref=e78]
+          - cell "✓" [ref=e79]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e80]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e81] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e82]
+          - cell "✓" [ref=e83]
+          - cell "✓" [ref=e84]
+          - cell "✓ Expected diff" [ref=e85]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e86] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e87]
+          - cell "✓" [ref=e88]
+          - cell "✓" [ref=e89]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e90]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e91] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e92]
+          - cell "✓" [ref=e93]
+          - cell "✓" [ref=e94]
+          - cell "✓ Expected diff" [ref=e95]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (1.7% pixels differ)" [ref=e96] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e97]
+          - cell "✓" [ref=e98]
+          - cell "✓" [ref=e99]
+          - cell "✓ Diff within limits (1.7% pixels differ)" [ref=e100]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e101] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e102]
+          - cell "✓" [ref=e103]
+          - cell "✓" [ref=e104]
+          - cell "✓ Expected diff" [ref=e105]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e106] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e107]
+          - cell "✓" [ref=e108]
+          - cell "✓" [ref=e109]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e110]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e111] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e112]
+          - cell "✓" [ref=e113]
+          - cell "✓" [ref=e114]
+          - cell "✓ Expected diff" [ref=e115]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e116] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e117]
+          - cell "✓" [ref=e118]
+          - cell "✓" [ref=e119]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e120]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e121] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e122]
+          - cell "✓" [ref=e123]
+          - cell "✓" [ref=e124]
+          - cell "✓ Expected diff" [ref=e125]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e126] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e127]
+          - cell "✓" [ref=e128]
+          - cell "✓" [ref=e129]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e130]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e131] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e132]
+          - cell "✓" [ref=e133]
+          - cell "✓" [ref=e134]
+          - cell "✓ Expected diff" [ref=e135]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e136] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e137]
+          - cell "✓" [ref=e138]
+          - cell "✓" [ref=e139]
+          - cell "✓ Identical" [ref=e140]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e141] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e142]
+          - cell "✓" [ref=e143]
+          - cell "✓" [ref=e144]
+          - cell "✓ Expected diff" [ref=e145]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e146] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e147]
+          - cell "✓" [ref=e148]
+          - cell "✓" [ref=e149]
+          - cell "✓ Expected diff" [ref=e150]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e151] [cursor=pointer]:
+          - cell "summary.txt" [ref=e152]
+          - cell "✓" [ref=e153]
+          - cell "✓" [ref=e154]
+          - cell "✓ Identical" [ref=e155]
+  - generic [ref=e156]:
+    - heading "Known Differences" [level=2] [ref=e157]
+    - paragraph [ref=e158]: The following differences between Java and Rust output are expected and normalized during comparison. SVG files that show as "Expected diff" or "NORMALIZED" have had these normalizations applied before diffing.
+    - heading "Font family" [level=3] [ref=e159]
+    - paragraph [ref=e160]:
+      - text: Java uses
+      - code [ref=e161]: Arial
+      - text: (system font). Rust uses
+      - code [ref=e162]: Liberation Sans
+      - text: (bundled, metric-compatible with Arial). The font-family attribute is normalized to
+      - code [ref=e163]: "[FONT]"
+      - text: before comparison.
+    - heading "shape-rendering=\"crispEdges\"" [level=3] [ref=e164]
+    - paragraph [ref=e165]:
+      - text: Rust adds
+      - code [ref=e166]: shape-rendering="crispEdges"
+      - text: to rectangles and axis lines for pixel-sharp rendering. Java relies on Java2D's default rendering and doesn't include this attribute. It is stripped before comparison.
+    - heading "font-weight=\"bold\" on titles" [level=3] [ref=e167]
+    - paragraph [ref=e168]:
+      - text: Rust renders chart titles with
+      - code [ref=e169]: font-weight="bold"
+      - text: for visual correctness. Java's SVGGenerator doesn't capture the bold attribute in the SVG output (though the rendered PNG uses bold). The bold attribute is stripped before comparison.
+    - heading "stroke-width on data lines" [level=3] [ref=e170]
+    - paragraph [ref=e171]:
+      - text: Java's
+      - code [ref=e172]: SVGGenerator
+      - text: captures data lines with
+      - code [ref=e173]: stroke-width="1"
+      - text: ", but the actual PNG rendering uses"
+      - code [ref=e174]: BasicStroke(2)
+      - text: for 2px-wide lines. Rust uses
+      - code [ref=e175]: stroke-width="2"
+      - text: in the SVG so the PNG output matches Java visually. The stroke-width attribute is normalized before comparison.
+    - heading "SVG x-coordinate snapping" [level=3] [ref=e176]
+    - paragraph [ref=e177]:
+      - text: Text positioning in SVG depends on precise font metrics. Java uses
+      - code [ref=e178]: FontMetrics.stringWidth()
+      - text: with the actual Arial font, while Rust approximates character widths. This produces 1-7px differences in text element x-coordinates (titles, axis labels, legend positions). Coordinates are snapped to the nearest 5px before comparison to absorb these differences.
+    - heading "PNG rendering engine differences" [level=3] [ref=e179]
+    - paragraph [ref=e180]: Java renders PNGs via Java2D, Rust via resvg + tiny-skia. Even with identical SVG coordinates, subpixel antialiasing differs between the two engines. This produces ~1-2% pixel differences on most charts, and up to ~10% on charts with many diagonal data lines. The pixel tolerance threshold is 12.0%.

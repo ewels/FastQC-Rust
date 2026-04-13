@@ -5,10 +5,10 @@
 <rect width="800" height="600" x="0" y="0" style="fill:rgb(255,255,255);stroke:none"/>
 <text x="2" y="566" fill="rgb(0,0,0)" font-family="Arial" font-size="12">0</text>
 <text x="2" y="46" fill="rgb(0,0,0)" font-family="Arial" font-size="12">1</text>
-<text x="253" y="30" fill="rgb(0,0,0)" font-family="Arial" font-size="12">Distribution of sequence lengths over all sequences</text>
+<text x="238" y="30" fill="rgb(0,0,0)" font-family="Arial" font-size="12">Distribution of sequence lengths over all sequences</text>
 <line x1="13" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="1"/>
 <line x1="13" y1="560" x2="13" y2="40" stroke="rgb(0,0,0)" stroke-width="1"/>
-<text x="338" y="595" fill="rgb(0,0,0)" font-family="Arial" font-size="12">Sequence Length (bp)</text>
+<text x="330" y="595" fill="rgb(0,0,0)" font-family="Arial" font-size="12">Sequence Length (bp)</text>
 <text x="134" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">15</text>
 <rect width="259" height="520" x="272" y="40" style="fill:rgb(230,230,230);stroke:none"/>
 <text x="393" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">16</text>
@@ -17,7 +17,7 @@
 <line x1="13" y1="40" x2="790" y2="40" stroke="rgb(180,180,180)" stroke-width="1"/>
 <line x1="142" y1="560" x2="401" y2="40" stroke="rgb(136,34,85)" stroke-width="1"/>
 <line x1="401" y1="40" x2="660" y2="560" stroke="rgb(136,34,85)" stroke-width="1"/>
-<rect width="111" height="23" x="679" y="40" style="fill:rgb(255,255,255);stroke:none"/>
-<rect width="111" height="23" x="679" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
-<text x="682" y="55" fill="rgb(136,34,85)" font-family="Arial" font-size="12" font-weight="bold">Sequence Length</text>
+<rect width="121" height="23" x="669" y="40" style="fill:rgb(255,255,255);stroke:none"/>
+<rect width="121" height="23" x="669" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
+<text x="672" y="55" fill="rgb(136,34,85)" font-family="Arial" font-size="12" font-weight="bold">Sequence Length</text>
 </svg>

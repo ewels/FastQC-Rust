@@ -18,21 +18,28 @@ pub struct PerBaseSequenceContent {
     counts: Vec<[u64; 4]>,
     nogroup: bool,
     expgroup: bool,
+    min_length: usize,
     limits: Limits,
 }
 
 impl PerBaseSequenceContent {
-    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool) -> Self {
+    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool, min_length: usize) -> Self {
         PerBaseSequenceContent {
             counts: Vec::new(),
             nogroup,
             expgroup,
+            min_length,
             limits: limits.clone(),
         }
     }
 
     fn calculate(&self) -> ContentData {
-        let groups = BaseGroup::make_base_groups(self.counts.len(), self.nogroup, self.expgroup);
+        let groups = BaseGroup::make_base_groups(
+            self.counts.len(),
+            self.min_length,
+            self.nogroup,
+            self.expgroup,
+        );
 
         let mut x_categories = Vec::with_capacity(groups.len());
         let mut g_percent = vec![0.0f64; groups.len()];

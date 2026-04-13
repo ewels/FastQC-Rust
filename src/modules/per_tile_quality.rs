@@ -23,11 +23,12 @@ pub struct PerTileQualityScores {
     ignore_in_report: bool,
     nogroup: bool,
     expgroup: bool,
+    min_length: usize,
     limits: Limits,
 }
 
 impl PerTileQualityScores {
-    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool) -> Self {
+    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool, min_length: usize) -> Self {
         PerTileQualityScores {
             per_tile_quality_counts: HashMap::new(),
             current_length: 0,
@@ -36,6 +37,7 @@ impl PerTileQualityScores {
             ignore_in_report: false,
             nogroup,
             expgroup,
+            min_length,
             limits: limits.clone(),
         }
     }
@@ -55,7 +57,12 @@ impl PerTileQualityScores {
         // If no quality data, default to Sanger offset (33).
         let offset = phred::detect(min_char).map(|e| e.offset).unwrap_or(33);
 
-        let groups = BaseGroup::make_base_groups(self.current_length, self.nogroup, self.expgroup);
+        let groups = BaseGroup::make_base_groups(
+            self.current_length,
+            self.min_length,
+            self.nogroup,
+            self.expgroup,
+        );
 
         let mut tile_numbers: Vec<i32> = self.per_tile_quality_counts.keys().copied().collect();
         tile_numbers.sort();

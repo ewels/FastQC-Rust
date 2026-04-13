@@ -16,15 +16,17 @@ pub struct PerBaseQualityScores {
     quality_counts: Vec<QualityCount>,
     nogroup: bool,
     expgroup: bool,
+    min_length: usize,
     limits: Limits,
 }
 
 impl PerBaseQualityScores {
-    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool) -> Self {
+    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool, min_length: usize) -> Self {
         PerBaseQualityScores {
             quality_counts: Vec::new(),
             nogroup,
             expgroup,
+            min_length,
             limits: limits.clone(),
         }
     }
@@ -34,8 +36,12 @@ impl PerBaseQualityScores {
         // If no quality data, default to Sanger offset (33).
         let offset = phred::detect(min_char).map(|e| e.offset).unwrap_or(33);
 
-        let groups =
-            BaseGroup::make_base_groups(self.quality_counts.len(), self.nogroup, self.expgroup);
+        let groups = BaseGroup::make_base_groups(
+            self.quality_counts.len(),
+            self.min_length,
+            self.nogroup,
+            self.expgroup,
+        );
 
         let mut means = vec![0.0f64; groups.len()];
         let mut medians = vec![0.0f64; groups.len()];
@@ -121,10 +127,10 @@ impl PerBaseQualityScores {
     /// Generate the SVG chart for this module.
     fn build_chart_svg(&self) -> String {
         let data = self.calculate();
-        let (min_char, _) = quality_count::calculate_offsets(&self.quality_counts);
-        let encoding_name = phred::detect(min_char)
-            .map(|e| e.name)
-            .unwrap_or("Sanger / Illumina 1.9");
+        let (min_char, max_char) = quality_count::calculate_offsets(&self.quality_counts);
+        let (offset, encoding_name) = phred::detect(min_char)
+            .map(|e| (e.offset, e.name))
+            .unwrap_or((33, "Sanger / Illumina 1.9"));
 
         // The chart title includes the encoding scheme name
         let title = format!(
@@ -132,18 +138,14 @@ impl PerBaseQualityScores {
             encoding_name
         );
 
-        // maxY is calculated in Java as Math.ceil(max/yInterval)*yInterval
-        // where max starts at highest value rounded up. In practice Java uses
-        // the highest percentile value + padding. We compute a sensible max.
-        let mut max_val: f64 = 0.0;
-        for &v in &data.highest {
-            if v > max_val {
-                max_val = v;
-            }
+        // Java computes: high = maxChar - offset; if (high < 35) high = 35;
+        // This determines the Y-axis range from the encoding, not from the data.
+        // Java passes high directly as maxY (no rounding).
+        let mut max_y = (max_char as i32 - offset as i32).max(0) as f64;
+        if max_y < 35.0 {
+            max_y = 35.0;
         }
-        // Java passes yInterval=2 to the constructor
         let y_interval = 2.0;
-        let max_y = (max_val / y_interval).ceil() * y_interval;
         let min_y = 0.0;
 
         render_quality_boxplot(&QualityBoxPlotData {

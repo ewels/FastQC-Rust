@@ -5,7 +5,8 @@
 // This is the signature FastQC chart showing per-base quality with colored zones.
 
 use super::{
-    svg_footer, svg_header, svg_line, svg_rect_both, svg_rect_filled, ChartColor, ChartLayout,
+    render_centered_title, svg_footer, svg_header, svg_line, svg_rect_filled, svg_rect_stroked,
+    ChartColor, ChartLayout,
 };
 
 /// Parameters for drawing a quality box plot.
@@ -58,18 +59,15 @@ pub fn render_quality_boxplot(params: &QualityBoxPlotData) -> String {
     let mut svg = svg_header(layout.width, layout.height);
 
     // Render shared elements: background, Y-axis labels, title, X-axis labels, axes
-    layout.render_common_elements(
-        &mut svg,
-        &params.title,
-        &params.x_labels,
-        "Position in read (bp)",
-        num_positions,
-    );
+    // Match Java's QualityBoxPlot.paint() element order
+    layout.render_background(&mut svg);
+    layout.render_y_labels(&mut svg);
+    render_centered_title(&mut svg, &params.title, layout.x_offset, layout.width);
 
     let black = ChartColor::new(0, 0, 0);
 
-    // Draw quality zone backgrounds with alternating light/dark
-    // Order: ugly (red, <20) at bottom, bad (yellow, 20-28) in middle, good (green, >28) at top
+    // Zone backgrounds + x-labels interleaved per position (matching Java paint order)
+    let mut last_x_label_end: f64 = 0.0;
     for i in 0..num_positions {
         let x = layout.x_offset + base_width * i as f64;
 
@@ -118,7 +116,18 @@ pub fn render_quality_boxplot(params: &QualityBoxPlotData) -> String {
                 good,
             ));
         }
+
+        // X-category label for this position (interleaved with zone rects)
+        if i < params.x_labels.len() {
+            last_x_label_end = layout.render_x_category_label_at(
+                &mut svg, &params.x_labels[i], i, base_width, last_x_label_end,
+            );
+        }
     }
+
+    // Axes and x-axis label (after zones + x-labels, matching Java)
+    layout.render_axes(&mut svg);
+    layout.render_x_axis_label(&mut svg, "Position in read (bp)");
 
     // Draw box plots for each position
     for i in 0..num_positions {
@@ -134,12 +143,18 @@ pub fn render_quality_boxplot(params: &QualityBoxPlotData) -> String {
         let box_inset = 2.0;
         let box_w = base_width - 4.0;
         let box_h = box_bottom_y - box_top_y;
-        svg.push_str(&svg_rect_both(
+        svg.push_str(&svg_rect_filled(
             box_x + box_inset,
             box_top_y,
             box_w,
             box_h,
             &BOX_FILL,
+        ));
+        svg.push_str(&svg_rect_stroked(
+            box_x + box_inset,
+            box_top_y,
+            box_w,
+            box_h,
             &black,
         ));
 
@@ -190,22 +205,23 @@ pub fn render_quality_boxplot(params: &QualityBoxPlotData) -> String {
         ));
     }
 
-    // Mean line (blue), connecting all positions
+    // Mean line (blue), connecting all positions as individual line segments
+    let half_bw = layout.half_base_width(num_positions);
     if num_positions >= 2 {
-        let mut points = String::new();
+        let mut prev_x = 0i32;
+        let mut prev_y = 0i32;
         for i in 0..num_positions {
-            let x = (base_width / 2.0) + layout.x_offset + (base_width * i as f64);
-            let y = layout.get_y(params.means[i]);
-            if !points.is_empty() {
-                points.push(' ');
+            let x = (half_bw + layout.x_offset + (base_width * i as f64)) as i32;
+            let y = layout.get_y(params.means[i]) as i32;
+            if i > 0 {
+                svg.push_str(&format!(
+                    "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"1\"/>\n",
+                    prev_x, prev_y, x, y, MEAN_COLOR.to_rgb_string()
+                ));
             }
-            points.push_str(&format!("{},{}", x as i32, y as i32));
+            prev_x = x;
+            prev_y = y;
         }
-        svg.push_str(&format!(
-            "<polyline points=\"{}\" style=\"fill:none;stroke:{};stroke-width:1\"/>\n",
-            points,
-            MEAN_COLOR.to_rgb_string()
-        ));
     }
 
     svg.push_str(svg_footer());

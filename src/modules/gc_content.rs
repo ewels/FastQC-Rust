@@ -5,7 +5,6 @@ use std::io;
 
 use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
-use crate::report::charts::find_optimal_y_interval;
 use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
 use crate::sequence::Sequence;
 use crate::utils::format::java_format_double;
@@ -222,8 +221,8 @@ impl PerSequenceGCContent {
             .cloned()
             .fold(0.0_f64, f64::max);
 
-        let y_interval = find_optimal_y_interval(max_val);
-        let max_y = (max_val / y_interval).ceil() * y_interval;
+        // Java passes raw max to LineGraph (no ceil rounding)
+        let max_y = max_val;
 
         let x_categories: Vec<String> = (0..101).map(|i| format!("{}", i)).collect();
 

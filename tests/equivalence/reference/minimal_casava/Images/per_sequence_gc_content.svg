@@ -5,10 +5,10 @@
 <rect width="800" height="600" x="0" y="0" style="fill:rgb(255,255,255);stroke:none"/>
 <text x="2" y="566" fill="rgb(0,0,0)" font-family="Arial" font-size="12">0</text>
 <text x="2" y="46" fill="rgb(0,0,0)" font-family="Arial" font-size="12">1</text>
-<text x="303" y="30" fill="rgb(0,0,0)" font-family="Arial" font-size="12">GC distribution over all sequences</text>
+<text x="294" y="30" fill="rgb(0,0,0)" font-family="Arial" font-size="12">GC distribution over all sequences</text>
 <line x1="13" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="1"/>
 <line x1="13" y1="560" x2="13" y2="40" stroke="rgb(0,0,0)" stroke-width="1"/>
-<text x="341" y="595" fill="rgb(0,0,0)" font-family="Arial" font-size="12">Mean GC content (%)</text>
+<text x="334" y="595" fill="rgb(0,0,0)" font-family="Arial" font-size="12">Mean GC content (%)</text>
 <text x="12" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">0</text>
 <rect width="7" height="520" x="20" y="40" style="fill:rgb(230,230,230);stroke:none"/>
 <text x="26" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">2</text>
@@ -289,8 +289,8 @@
 <line x1="695" y1="560" x2="702" y2="560" stroke="rgb(51,34,136)" stroke-width="1"/>
 <line x1="702" y1="560" x2="709" y2="560" stroke="rgb(51,34,136)" stroke-width="1"/>
 <line x1="709" y1="560" x2="716" y2="560" stroke="rgb(51,34,136)" stroke-width="1"/>
-<rect width="155" height="43" x="635" y="40" style="fill:rgb(255,255,255);stroke:none"/>
-<rect width="155" height="43" x="635" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
-<text x="638" y="55" fill="rgb(136,34,85)" font-family="Arial" font-size="12" font-weight="bold">GC count per read</text>
-<text x="638" y="75" fill="rgb(51,34,136)" font-family="Arial" font-size="12" font-weight="bold">Theoretical Distribution</text>
+<rect width="161" height="43" x="629" y="40" style="fill:rgb(255,255,255);stroke:none"/>
+<rect width="161" height="43" x="629" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
+<text x="632" y="55" fill="rgb(136,34,85)" font-family="Arial" font-size="12" font-weight="bold">GC count per read</text>
+<text x="632" y="75" fill="rgb(51,34,136)" font-family="Arial" font-size="12" font-weight="bold">Theoretical Distribution</text>
 </svg>

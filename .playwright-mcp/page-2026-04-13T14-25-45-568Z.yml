@@ -1,0 +1,2644 @@
+- generic [active] [ref=e1]:
+  - heading "FastQC Equivalence Report" [level=1] [ref=e2]
+  - paragraph [ref=e3]: Comparing Rust FastQC output against Java FastQC v0.12.1 reference data.
+  - table [ref=e5]:
+    - rowgroup [ref=e6]:
+      - row "Test Case File Args Text Images Status" [ref=e7]:
+        - columnheader "Test Case" [ref=e8]
+        - columnheader "File" [ref=e9]
+        - columnheader "Args" [ref=e10]
+        - columnheader "Text" [ref=e11]
+        - columnheader "Images" [ref=e12]
+        - columnheader "Status" [ref=e13]
+      - row "minimal_default minimal.fastq (default) 10/10 8/8 PASS" [ref=e14]:
+        - cell "minimal_default" [ref=e15]:
+          - link "minimal_default" [ref=e16] [cursor=pointer]:
+            - /url: "#minimal_default"
+        - cell "minimal.fastq" [ref=e17]
+        - cell "(default)" [ref=e18]
+        - cell "10/10" [ref=e19]:
+          - generic [ref=e20]: 10/10
+        - cell "8/8" [ref=e21]:
+          - generic [ref=e22]: 8/8
+        - cell "PASS" [ref=e23]:
+          - generic [ref=e24]: PASS
+      - row "minimal_nogroup minimal.fastq --nogroup 10/10 8/8 PASS" [ref=e25]:
+        - cell "minimal_nogroup" [ref=e26]:
+          - link "minimal_nogroup" [ref=e27] [cursor=pointer]:
+            - /url: "#minimal_nogroup"
+        - cell "minimal.fastq" [ref=e28]
+        - cell "--nogroup" [ref=e29]
+        - cell "10/10" [ref=e30]:
+          - generic [ref=e31]: 10/10
+        - cell "8/8" [ref=e32]:
+          - generic [ref=e33]: 8/8
+        - cell "PASS" [ref=e34]:
+          - generic [ref=e35]: PASS
+      - row "minimal_expgroup minimal.fastq --expgroup 10/10 8/8 PASS" [ref=e36]:
+        - cell "minimal_expgroup" [ref=e37]:
+          - link "minimal_expgroup" [ref=e38] [cursor=pointer]:
+            - /url: "#minimal_expgroup"
+        - cell "minimal.fastq" [ref=e39]
+        - cell "--expgroup" [ref=e40]
+        - cell "10/10" [ref=e41]:
+          - generic [ref=e42]: 10/10
+        - cell "8/8" [ref=e43]:
+          - generic [ref=e44]: 8/8
+        - cell "PASS" [ref=e45]:
+          - generic [ref=e46]: PASS
+      - row "minimal_casava minimal.fastq --casava 10/10 8/8 PASS" [ref=e47]:
+        - cell "minimal_casava" [ref=e48]:
+          - link "minimal_casava" [ref=e49] [cursor=pointer]:
+            - /url: "#minimal_casava"
+        - cell "minimal.fastq" [ref=e50]
+        - cell "--casava" [ref=e51]
+        - cell "10/10" [ref=e52]:
+          - generic [ref=e53]: 10/10
+        - cell "8/8" [ref=e54]:
+          - generic [ref=e55]: 8/8
+        - cell "PASS" [ref=e56]:
+          - generic [ref=e57]: PASS
+      - row "minimal_casava_nofilter minimal.fastq --casava --nofilter 10/10 8/8 PASS" [ref=e58]:
+        - cell "minimal_casava_nofilter" [ref=e59]:
+          - link "minimal_casava_nofilter" [ref=e60] [cursor=pointer]:
+            - /url: "#minimal_casava_nofilter"
+        - cell "minimal.fastq" [ref=e61]
+        - cell "--casava --nofilter" [ref=e62]
+        - cell "10/10" [ref=e63]:
+          - generic [ref=e64]: 10/10
+        - cell "8/8" [ref=e65]:
+          - generic [ref=e66]: 8/8
+        - cell "PASS" [ref=e67]:
+          - generic [ref=e68]: PASS
+      - row "minimal_kmers5 minimal.fastq --kmers 5 10/10 8/8 PASS" [ref=e69]:
+        - cell "minimal_kmers5" [ref=e70]:
+          - link "minimal_kmers5" [ref=e71] [cursor=pointer]:
+            - /url: "#minimal_kmers5"
+        - cell "minimal.fastq" [ref=e72]
+        - cell "--kmers 5" [ref=e73]
+        - cell "10/10" [ref=e74]:
+          - generic [ref=e75]: 10/10
+        - cell "8/8" [ref=e76]:
+          - generic [ref=e77]: 8/8
+        - cell "PASS" [ref=e78]:
+          - generic [ref=e79]: PASS
+      - row "minimal_kmers10 minimal.fastq --kmers 10 10/10 8/8 PASS" [ref=e80]:
+        - cell "minimal_kmers10" [ref=e81]:
+          - link "minimal_kmers10" [ref=e82] [cursor=pointer]:
+            - /url: "#minimal_kmers10"
+        - cell "minimal.fastq" [ref=e83]
+        - cell "--kmers 10" [ref=e84]
+        - cell "10/10" [ref=e85]:
+          - generic [ref=e86]: 10/10
+        - cell "8/8" [ref=e87]:
+          - generic [ref=e88]: 8/8
+        - cell "PASS" [ref=e89]:
+          - generic [ref=e90]: PASS
+      - row "minimal_min_length_10 minimal.fastq --min_length 10 10/10 8/8 PASS" [ref=e91]:
+        - cell "minimal_min_length_10" [ref=e92]:
+          - link "minimal_min_length_10" [ref=e93] [cursor=pointer]:
+            - /url: "#minimal_min_length_10"
+        - cell "minimal.fastq" [ref=e94]
+        - cell "--min_length 10" [ref=e95]
+        - cell "10/10" [ref=e96]:
+          - generic [ref=e97]: 10/10
+        - cell "8/8" [ref=e98]:
+          - generic [ref=e99]: 8/8
+        - cell "PASS" [ref=e100]:
+          - generic [ref=e101]: PASS
+      - row "minimal_dup_length_10 minimal.fastq --dup_length 10 10/10 8/8 PASS" [ref=e102]:
+        - cell "minimal_dup_length_10" [ref=e103]:
+          - link "minimal_dup_length_10" [ref=e104] [cursor=pointer]:
+            - /url: "#minimal_dup_length_10"
+        - cell "minimal.fastq" [ref=e105]
+        - cell "--dup_length 10" [ref=e106]
+        - cell "10/10" [ref=e107]:
+          - generic [ref=e108]: 10/10
+        - cell "8/8" [ref=e109]:
+          - generic [ref=e110]: 8/8
+        - cell "PASS" [ref=e111]:
+          - generic [ref=e112]: PASS
+      - row "complex_default complex.fastq (default) 10/10 8/8 PASS" [ref=e113]:
+        - cell "complex_default" [ref=e114]:
+          - link "complex_default" [ref=e115] [cursor=pointer]:
+            - /url: "#complex_default"
+        - cell "complex.fastq" [ref=e116]
+        - cell "(default)" [ref=e117]
+        - cell "10/10" [ref=e118]:
+          - generic [ref=e119]: 10/10
+        - cell "8/8" [ref=e120]:
+          - generic [ref=e121]: 8/8
+        - cell "PASS" [ref=e122]:
+          - generic [ref=e123]: PASS
+      - row "complex_nogroup complex.fastq --nogroup 10/10 8/8 PASS" [ref=e124]:
+        - cell "complex_nogroup" [ref=e125]:
+          - link "complex_nogroup" [ref=e126] [cursor=pointer]:
+            - /url: "#complex_nogroup"
+        - cell "complex.fastq" [ref=e127]
+        - cell "--nogroup" [ref=e128]
+        - cell "10/10" [ref=e129]:
+          - generic [ref=e130]: 10/10
+        - cell "8/8" [ref=e131]:
+          - generic [ref=e132]: 8/8
+        - cell "PASS" [ref=e133]:
+          - generic [ref=e134]: PASS
+      - row "complex_expgroup complex.fastq --expgroup 10/10 8/8 PASS" [ref=e135]:
+        - cell "complex_expgroup" [ref=e136]:
+          - link "complex_expgroup" [ref=e137] [cursor=pointer]:
+            - /url: "#complex_expgroup"
+        - cell "complex.fastq" [ref=e138]
+        - cell "--expgroup" [ref=e139]
+        - cell "10/10" [ref=e140]:
+          - generic [ref=e141]: 10/10
+        - cell "8/8" [ref=e142]:
+          - generic [ref=e143]: 8/8
+        - cell "PASS" [ref=e144]:
+          - generic [ref=e145]: PASS
+      - row "complex_casava complex.fastq --casava 10/10 8/8 PASS" [ref=e146]:
+        - cell "complex_casava" [ref=e147]:
+          - link "complex_casava" [ref=e148] [cursor=pointer]:
+            - /url: "#complex_casava"
+        - cell "complex.fastq" [ref=e149]
+        - cell "--casava" [ref=e150]
+        - cell "10/10" [ref=e151]:
+          - generic [ref=e152]: 10/10
+        - cell "8/8" [ref=e153]:
+          - generic [ref=e154]: 8/8
+        - cell "PASS" [ref=e155]:
+          - generic [ref=e156]: PASS
+      - row "complex_casava_nofilter complex.fastq --casava --nofilter 10/10 8/8 PASS" [ref=e157]:
+        - cell "complex_casava_nofilter" [ref=e158]:
+          - link "complex_casava_nofilter" [ref=e159] [cursor=pointer]:
+            - /url: "#complex_casava_nofilter"
+        - cell "complex.fastq" [ref=e160]
+        - cell "--casava --nofilter" [ref=e161]
+        - cell "10/10" [ref=e162]:
+          - generic [ref=e163]: 10/10
+        - cell "8/8" [ref=e164]:
+          - generic [ref=e165]: 8/8
+        - cell "PASS" [ref=e166]:
+          - generic [ref=e167]: PASS
+      - row "complex_kmers5 complex.fastq --kmers 5 10/10 8/8 PASS" [ref=e168]:
+        - cell "complex_kmers5" [ref=e169]:
+          - link "complex_kmers5" [ref=e170] [cursor=pointer]:
+            - /url: "#complex_kmers5"
+        - cell "complex.fastq" [ref=e171]
+        - cell "--kmers 5" [ref=e172]
+        - cell "10/10" [ref=e173]:
+          - generic [ref=e174]: 10/10
+        - cell "8/8" [ref=e175]:
+          - generic [ref=e176]: 8/8
+        - cell "PASS" [ref=e177]:
+          - generic [ref=e178]: PASS
+      - row "complex_kmers10 complex.fastq --kmers 10 10/10 8/8 PASS" [ref=e179]:
+        - cell "complex_kmers10" [ref=e180]:
+          - link "complex_kmers10" [ref=e181] [cursor=pointer]:
+            - /url: "#complex_kmers10"
+        - cell "complex.fastq" [ref=e182]
+        - cell "--kmers 10" [ref=e183]
+        - cell "10/10" [ref=e184]:
+          - generic [ref=e185]: 10/10
+        - cell "8/8" [ref=e186]:
+          - generic [ref=e187]: 8/8
+        - cell "PASS" [ref=e188]:
+          - generic [ref=e189]: PASS
+      - row "complex_min_length_10 complex.fastq --min_length 10 10/10 8/8 PASS" [ref=e190]:
+        - cell "complex_min_length_10" [ref=e191]:
+          - link "complex_min_length_10" [ref=e192] [cursor=pointer]:
+            - /url: "#complex_min_length_10"
+        - cell "complex.fastq" [ref=e193]
+        - cell "--min_length 10" [ref=e194]
+        - cell "10/10" [ref=e195]:
+          - generic [ref=e196]: 10/10
+        - cell "8/8" [ref=e197]:
+          - generic [ref=e198]: 8/8
+        - cell "PASS" [ref=e199]:
+          - generic [ref=e200]: PASS
+      - row "complex_dup_length_10 complex.fastq --dup_length 10 10/10 8/8 PASS" [ref=e201]:
+        - cell "complex_dup_length_10" [ref=e202]:
+          - link "complex_dup_length_10" [ref=e203] [cursor=pointer]:
+            - /url: "#complex_dup_length_10"
+        - cell "complex.fastq" [ref=e204]
+        - cell "--dup_length 10" [ref=e205]
+        - cell "10/10" [ref=e206]:
+          - generic [ref=e207]: 10/10
+        - cell "8/8" [ref=e208]:
+          - generic [ref=e209]: 8/8
+        - cell "PASS" [ref=e210]:
+          - generic [ref=e211]: PASS
+  - generic [ref=e212]:
+    - heading "minimal_default PASS" [level=2] [ref=e213]:
+      - text: minimal_default
+      - generic [ref=e214]: PASS
+    - generic [ref=e215]: "Input: minimal.fastq | Args: (default)"
+    - table [ref=e216]:
+      - rowgroup [ref=e217]:
+        - row "File Java Rust Status" [ref=e218]:
+          - columnheader "File" [ref=e219]
+          - columnheader "Java" [ref=e220]
+          - columnheader "Rust" [ref=e221]
+          - columnheader "Status" [ref=e222]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e223] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e224]
+          - cell "✓" [ref=e225]
+          - cell "✓" [ref=e226]
+          - cell "✓ Identical" [ref=e227]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e228] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e229]
+          - cell "✓" [ref=e230]
+          - cell "✓" [ref=e231]
+          - cell "✓ Identical" [ref=e232]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e233] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e234]
+          - cell "✓" [ref=e235]
+          - cell "✓" [ref=e236]
+          - cell "✓ Identical" [ref=e237]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e238] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e239]
+          - cell "✓" [ref=e240]
+          - cell "✓" [ref=e241]
+          - cell "✓ Identical" [ref=e242]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e243] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e244]
+          - cell "✓" [ref=e245]
+          - cell "✓" [ref=e246]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e247]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e248] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e249]
+          - cell "✓" [ref=e250]
+          - cell "✓" [ref=e251]
+          - cell "✓ Expected diff" [ref=e252]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e253] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e254]
+          - cell "✓" [ref=e255]
+          - cell "✓" [ref=e256]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e257]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e258] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e259]
+          - cell "✓" [ref=e260]
+          - cell "✓" [ref=e261]
+          - cell "✓ Expected diff" [ref=e262]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e263] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e264]
+          - cell "✓" [ref=e265]
+          - cell "✓" [ref=e266]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e267]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e268] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e269]
+          - cell "✓" [ref=e270]
+          - cell "✓" [ref=e271]
+          - cell "✓ Expected diff" [ref=e272]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e273] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e274]
+          - cell "✓" [ref=e275]
+          - cell "✓" [ref=e276]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e277]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e278] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e279]
+          - cell "✓" [ref=e280]
+          - cell "✓" [ref=e281]
+          - cell "✓ Expected diff" [ref=e282]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (1.7% pixels differ)" [ref=e283] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e284]
+          - cell "✓" [ref=e285]
+          - cell "✓" [ref=e286]
+          - cell "✓ Diff within limits (1.7% pixels differ)" [ref=e287]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e288] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e289]
+          - cell "✓" [ref=e290]
+          - cell "✓" [ref=e291]
+          - cell "✓ Expected diff" [ref=e292]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e293] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e294]
+          - cell "✓" [ref=e295]
+          - cell "✓" [ref=e296]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e297]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e298] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e299]
+          - cell "✓" [ref=e300]
+          - cell "✓" [ref=e301]
+          - cell "✓ Expected diff" [ref=e302]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e303] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e304]
+          - cell "✓" [ref=e305]
+          - cell "✓" [ref=e306]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e307]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e308] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e309]
+          - cell "✓" [ref=e310]
+          - cell "✓" [ref=e311]
+          - cell "✓ Expected diff" [ref=e312]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e313] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e314]
+          - cell "✓" [ref=e315]
+          - cell "✓" [ref=e316]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e317]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e318] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e319]
+          - cell "✓" [ref=e320]
+          - cell "✓" [ref=e321]
+          - cell "✓ Expected diff" [ref=e322]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e323] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e324]
+          - cell "✓" [ref=e325]
+          - cell "✓" [ref=e326]
+          - cell "✓ Identical" [ref=e327]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e328] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e329]
+          - cell "✓" [ref=e330]
+          - cell "✓" [ref=e331]
+          - cell "✓ Expected diff" [ref=e332]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e333] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e334]
+          - cell "✓" [ref=e335]
+          - cell "✓" [ref=e336]
+          - cell "✓ Expected diff" [ref=e337]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e338] [cursor=pointer]:
+          - cell "summary.txt" [ref=e339]
+          - cell "✓" [ref=e340]
+          - cell "✓" [ref=e341]
+          - cell "✓ Identical" [ref=e342]
+  - generic [ref=e343]:
+    - heading "minimal_nogroup PASS" [level=2] [ref=e344]:
+      - text: minimal_nogroup
+      - generic [ref=e345]: PASS
+    - generic [ref=e346]: "Input: minimal.fastq | Args: --nogroup"
+    - table [ref=e347]:
+      - rowgroup [ref=e348]:
+        - row "File Java Rust Status" [ref=e349]:
+          - columnheader "File" [ref=e350]
+          - columnheader "Java" [ref=e351]
+          - columnheader "Rust" [ref=e352]
+          - columnheader "Status" [ref=e353]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e354] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e355]
+          - cell "✓" [ref=e356]
+          - cell "✓" [ref=e357]
+          - cell "✓ Identical" [ref=e358]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e359] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e360]
+          - cell "✓" [ref=e361]
+          - cell "✓" [ref=e362]
+          - cell "✓ Identical" [ref=e363]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e364] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e365]
+          - cell "✓" [ref=e366]
+          - cell "✓" [ref=e367]
+          - cell "✓ Identical" [ref=e368]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e369] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e370]
+          - cell "✓" [ref=e371]
+          - cell "✓" [ref=e372]
+          - cell "✓ Identical" [ref=e373]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e374] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e375]
+          - cell "✓" [ref=e376]
+          - cell "✓" [ref=e377]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e378]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e379] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e380]
+          - cell "✓" [ref=e381]
+          - cell "✓" [ref=e382]
+          - cell "✓ Expected diff" [ref=e383]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e384] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e385]
+          - cell "✓" [ref=e386]
+          - cell "✓" [ref=e387]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e388]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e389] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e390]
+          - cell "✓" [ref=e391]
+          - cell "✓" [ref=e392]
+          - cell "✓ Expected diff" [ref=e393]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e394] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e395]
+          - cell "✓" [ref=e396]
+          - cell "✓" [ref=e397]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e398]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e399] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e400]
+          - cell "✓" [ref=e401]
+          - cell "✓" [ref=e402]
+          - cell "✓ Expected diff" [ref=e403]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e404] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e405]
+          - cell "✓" [ref=e406]
+          - cell "✓" [ref=e407]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e408]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e409] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e410]
+          - cell "✓" [ref=e411]
+          - cell "✓" [ref=e412]
+          - cell "✓ Expected diff" [ref=e413]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (1.7% pixels differ)" [ref=e414] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e415]
+          - cell "✓" [ref=e416]
+          - cell "✓" [ref=e417]
+          - cell "✓ Diff within limits (1.7% pixels differ)" [ref=e418]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e419] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e420]
+          - cell "✓" [ref=e421]
+          - cell "✓" [ref=e422]
+          - cell "✓ Expected diff" [ref=e423]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e424] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e425]
+          - cell "✓" [ref=e426]
+          - cell "✓" [ref=e427]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e428]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e429] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e430]
+          - cell "✓" [ref=e431]
+          - cell "✓" [ref=e432]
+          - cell "✓ Expected diff" [ref=e433]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e434] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e435]
+          - cell "✓" [ref=e436]
+          - cell "✓" [ref=e437]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e438]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e439] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e440]
+          - cell "✓" [ref=e441]
+          - cell "✓" [ref=e442]
+          - cell "✓ Expected diff" [ref=e443]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e444] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e445]
+          - cell "✓" [ref=e446]
+          - cell "✓" [ref=e447]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e448]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e449] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e450]
+          - cell "✓" [ref=e451]
+          - cell "✓" [ref=e452]
+          - cell "✓ Expected diff" [ref=e453]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e454] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e455]
+          - cell "✓" [ref=e456]
+          - cell "✓" [ref=e457]
+          - cell "✓ Identical" [ref=e458]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e459] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e460]
+          - cell "✓" [ref=e461]
+          - cell "✓" [ref=e462]
+          - cell "✓ Expected diff" [ref=e463]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e464] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e465]
+          - cell "✓" [ref=e466]
+          - cell "✓" [ref=e467]
+          - cell "✓ Expected diff" [ref=e468]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e469] [cursor=pointer]:
+          - cell "summary.txt" [ref=e470]
+          - cell "✓" [ref=e471]
+          - cell "✓" [ref=e472]
+          - cell "✓ Identical" [ref=e473]
+  - generic [ref=e474]:
+    - heading "minimal_expgroup PASS" [level=2] [ref=e475]:
+      - text: minimal_expgroup
+      - generic [ref=e476]: PASS
+    - generic [ref=e477]: "Input: minimal.fastq | Args: --expgroup"
+    - table [ref=e478]:
+      - rowgroup [ref=e479]:
+        - row "File Java Rust Status" [ref=e480]:
+          - columnheader "File" [ref=e481]
+          - columnheader "Java" [ref=e482]
+          - columnheader "Rust" [ref=e483]
+          - columnheader "Status" [ref=e484]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e485] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e486]
+          - cell "✓" [ref=e487]
+          - cell "✓" [ref=e488]
+          - cell "✓ Identical" [ref=e489]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e490] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e491]
+          - cell "✓" [ref=e492]
+          - cell "✓" [ref=e493]
+          - cell "✓ Identical" [ref=e494]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e495] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e496]
+          - cell "✓" [ref=e497]
+          - cell "✓" [ref=e498]
+          - cell "✓ Identical" [ref=e499]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e500] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e501]
+          - cell "✓" [ref=e502]
+          - cell "✓" [ref=e503]
+          - cell "✓ Identical" [ref=e504]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e505] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e506]
+          - cell "✓" [ref=e507]
+          - cell "✓" [ref=e508]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e509]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e510] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e511]
+          - cell "✓" [ref=e512]
+          - cell "✓" [ref=e513]
+          - cell "✓ Expected diff" [ref=e514]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e515] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e516]
+          - cell "✓" [ref=e517]
+          - cell "✓" [ref=e518]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e519]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e520] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e521]
+          - cell "✓" [ref=e522]
+          - cell "✓" [ref=e523]
+          - cell "✓ Expected diff" [ref=e524]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e525] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e526]
+          - cell "✓" [ref=e527]
+          - cell "✓" [ref=e528]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e529]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e530] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e531]
+          - cell "✓" [ref=e532]
+          - cell "✓" [ref=e533]
+          - cell "✓ Expected diff" [ref=e534]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e535] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e536]
+          - cell "✓" [ref=e537]
+          - cell "✓" [ref=e538]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e539]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e540] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e541]
+          - cell "✓" [ref=e542]
+          - cell "✓" [ref=e543]
+          - cell "✓ Expected diff" [ref=e544]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (1.7% pixels differ)" [ref=e545] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e546]
+          - cell "✓" [ref=e547]
+          - cell "✓" [ref=e548]
+          - cell "✓ Diff within limits (1.7% pixels differ)" [ref=e549]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e550] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e551]
+          - cell "✓" [ref=e552]
+          - cell "✓" [ref=e553]
+          - cell "✓ Expected diff" [ref=e554]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e555] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e556]
+          - cell "✓" [ref=e557]
+          - cell "✓" [ref=e558]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e559]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e560] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e561]
+          - cell "✓" [ref=e562]
+          - cell "✓" [ref=e563]
+          - cell "✓ Expected diff" [ref=e564]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e565] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e566]
+          - cell "✓" [ref=e567]
+          - cell "✓" [ref=e568]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e569]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e570] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e571]
+          - cell "✓" [ref=e572]
+          - cell "✓" [ref=e573]
+          - cell "✓ Expected diff" [ref=e574]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e575] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e576]
+          - cell "✓" [ref=e577]
+          - cell "✓" [ref=e578]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e579]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e580] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e581]
+          - cell "✓" [ref=e582]
+          - cell "✓" [ref=e583]
+          - cell "✓ Expected diff" [ref=e584]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e585] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e586]
+          - cell "✓" [ref=e587]
+          - cell "✓" [ref=e588]
+          - cell "✓ Identical" [ref=e589]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e590] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e591]
+          - cell "✓" [ref=e592]
+          - cell "✓" [ref=e593]
+          - cell "✓ Expected diff" [ref=e594]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e595] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e596]
+          - cell "✓" [ref=e597]
+          - cell "✓" [ref=e598]
+          - cell "✓ Expected diff" [ref=e599]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e600] [cursor=pointer]:
+          - cell "summary.txt" [ref=e601]
+          - cell "✓" [ref=e602]
+          - cell "✓" [ref=e603]
+          - cell "✓ Identical" [ref=e604]
+  - generic [ref=e605]:
+    - heading "minimal_casava PASS" [level=2] [ref=e606]:
+      - text: minimal_casava
+      - generic [ref=e607]: PASS
+    - generic [ref=e608]: "Input: minimal.fastq | Args: --casava"
+    - table [ref=e609]:
+      - rowgroup [ref=e610]:
+        - row "File Java Rust Status" [ref=e611]:
+          - columnheader "File" [ref=e612]
+          - columnheader "Java" [ref=e613]
+          - columnheader "Rust" [ref=e614]
+          - columnheader "Status" [ref=e615]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e616] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e617]
+          - cell "✓" [ref=e618]
+          - cell "✓" [ref=e619]
+          - cell "✓ Identical" [ref=e620]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e621] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e622]
+          - cell "✓" [ref=e623]
+          - cell "✓" [ref=e624]
+          - cell "✓ Identical" [ref=e625]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e626] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e627]
+          - cell "✓" [ref=e628]
+          - cell "✓" [ref=e629]
+          - cell "✓ Identical" [ref=e630]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e631] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e632]
+          - cell "✓" [ref=e633]
+          - cell "✓" [ref=e634]
+          - cell "✓ Identical" [ref=e635]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e636] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e637]
+          - cell "✓" [ref=e638]
+          - cell "✓" [ref=e639]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e640]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e641] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e642]
+          - cell "✓" [ref=e643]
+          - cell "✓" [ref=e644]
+          - cell "✓ Expected diff" [ref=e645]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e646] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e647]
+          - cell "✓" [ref=e648]
+          - cell "✓" [ref=e649]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e650]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e651] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e652]
+          - cell "✓" [ref=e653]
+          - cell "✓" [ref=e654]
+          - cell "✓ Expected diff" [ref=e655]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e656] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e657]
+          - cell "✓" [ref=e658]
+          - cell "✓" [ref=e659]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e660]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e661] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e662]
+          - cell "✓" [ref=e663]
+          - cell "✓" [ref=e664]
+          - cell "✓ Expected diff" [ref=e665]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e666] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e667]
+          - cell "✓" [ref=e668]
+          - cell "✓" [ref=e669]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e670]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e671] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e672]
+          - cell "✓" [ref=e673]
+          - cell "✓" [ref=e674]
+          - cell "✓ Expected diff" [ref=e675]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (1.7% pixels differ)" [ref=e676] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e677]
+          - cell "✓" [ref=e678]
+          - cell "✓" [ref=e679]
+          - cell "✓ Diff within limits (1.7% pixels differ)" [ref=e680]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e681] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e682]
+          - cell "✓" [ref=e683]
+          - cell "✓" [ref=e684]
+          - cell "✓ Expected diff" [ref=e685]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e686] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e687]
+          - cell "✓" [ref=e688]
+          - cell "✓" [ref=e689]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e690]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e691] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e692]
+          - cell "✓" [ref=e693]
+          - cell "✓" [ref=e694]
+          - cell "✓ Expected diff" [ref=e695]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e696] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e697]
+          - cell "✓" [ref=e698]
+          - cell "✓" [ref=e699]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e700]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e701] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e702]
+          - cell "✓" [ref=e703]
+          - cell "✓" [ref=e704]
+          - cell "✓ Expected diff" [ref=e705]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e706] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e707]
+          - cell "✓" [ref=e708]
+          - cell "✓" [ref=e709]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e710]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e711] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e712]
+          - cell "✓" [ref=e713]
+          - cell "✓" [ref=e714]
+          - cell "✓ Expected diff" [ref=e715]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e716] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e717]
+          - cell "✓" [ref=e718]
+          - cell "✓" [ref=e719]
+          - cell "✓ Identical" [ref=e720]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e721] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e722]
+          - cell "✓" [ref=e723]
+          - cell "✓" [ref=e724]
+          - cell "✓ Expected diff" [ref=e725]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e726] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e727]
+          - cell "✓" [ref=e728]
+          - cell "✓" [ref=e729]
+          - cell "✓ Expected diff" [ref=e730]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e731] [cursor=pointer]:
+          - cell "summary.txt" [ref=e732]
+          - cell "✓" [ref=e733]
+          - cell "✓" [ref=e734]
+          - cell "✓ Identical" [ref=e735]
+  - generic [ref=e736]:
+    - heading "minimal_casava_nofilter PASS" [level=2] [ref=e737]:
+      - text: minimal_casava_nofilter
+      - generic [ref=e738]: PASS
+    - generic [ref=e739]: "Input: minimal.fastq | Args: --casava --nofilter"
+    - table [ref=e740]:
+      - rowgroup [ref=e741]:
+        - row "File Java Rust Status" [ref=e742]:
+          - columnheader "File" [ref=e743]
+          - columnheader "Java" [ref=e744]
+          - columnheader "Rust" [ref=e745]
+          - columnheader "Status" [ref=e746]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e747] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e748]
+          - cell "✓" [ref=e749]
+          - cell "✓" [ref=e750]
+          - cell "✓ Identical" [ref=e751]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e752] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e753]
+          - cell "✓" [ref=e754]
+          - cell "✓" [ref=e755]
+          - cell "✓ Identical" [ref=e756]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e757] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e758]
+          - cell "✓" [ref=e759]
+          - cell "✓" [ref=e760]
+          - cell "✓ Identical" [ref=e761]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e762] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e763]
+          - cell "✓" [ref=e764]
+          - cell "✓" [ref=e765]
+          - cell "✓ Identical" [ref=e766]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e767] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e768]
+          - cell "✓" [ref=e769]
+          - cell "✓" [ref=e770]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e771]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e772] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e773]
+          - cell "✓" [ref=e774]
+          - cell "✓" [ref=e775]
+          - cell "✓ Expected diff" [ref=e776]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e777] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e778]
+          - cell "✓" [ref=e779]
+          - cell "✓" [ref=e780]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e781]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e782] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e783]
+          - cell "✓" [ref=e784]
+          - cell "✓" [ref=e785]
+          - cell "✓ Expected diff" [ref=e786]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e787] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e788]
+          - cell "✓" [ref=e789]
+          - cell "✓" [ref=e790]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e791]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e792] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e793]
+          - cell "✓" [ref=e794]
+          - cell "✓" [ref=e795]
+          - cell "✓ Expected diff" [ref=e796]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e797] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e798]
+          - cell "✓" [ref=e799]
+          - cell "✓" [ref=e800]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e801]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e802] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e803]
+          - cell "✓" [ref=e804]
+          - cell "✓" [ref=e805]
+          - cell "✓ Expected diff" [ref=e806]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (1.7% pixels differ)" [ref=e807] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e808]
+          - cell "✓" [ref=e809]
+          - cell "✓" [ref=e810]
+          - cell "✓ Diff within limits (1.7% pixels differ)" [ref=e811]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e812] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e813]
+          - cell "✓" [ref=e814]
+          - cell "✓" [ref=e815]
+          - cell "✓ Expected diff" [ref=e816]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e817] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e818]
+          - cell "✓" [ref=e819]
+          - cell "✓" [ref=e820]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e821]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e822] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e823]
+          - cell "✓" [ref=e824]
+          - cell "✓" [ref=e825]
+          - cell "✓ Expected diff" [ref=e826]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e827] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e828]
+          - cell "✓" [ref=e829]
+          - cell "✓" [ref=e830]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e831]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e832] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e833]
+          - cell "✓" [ref=e834]
+          - cell "✓" [ref=e835]
+          - cell "✓ Expected diff" [ref=e836]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e837] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e838]
+          - cell "✓" [ref=e839]
+          - cell "✓" [ref=e840]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e841]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e842] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e843]
+          - cell "✓" [ref=e844]
+          - cell "✓" [ref=e845]
+          - cell "✓ Expected diff" [ref=e846]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e847] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e848]
+          - cell "✓" [ref=e849]
+          - cell "✓" [ref=e850]
+          - cell "✓ Identical" [ref=e851]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e852] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e853]
+          - cell "✓" [ref=e854]
+          - cell "✓" [ref=e855]
+          - cell "✓ Expected diff" [ref=e856]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e857] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e858]
+          - cell "✓" [ref=e859]
+          - cell "✓" [ref=e860]
+          - cell "✓ Expected diff" [ref=e861]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e862] [cursor=pointer]:
+          - cell "summary.txt" [ref=e863]
+          - cell "✓" [ref=e864]
+          - cell "✓" [ref=e865]
+          - cell "✓ Identical" [ref=e866]
+  - generic [ref=e867]:
+    - heading "minimal_kmers5 PASS" [level=2] [ref=e868]:
+      - text: minimal_kmers5
+      - generic [ref=e869]: PASS
+    - generic [ref=e870]: "Input: minimal.fastq | Args: --kmers 5"
+    - table [ref=e871]:
+      - rowgroup [ref=e872]:
+        - row "File Java Rust Status" [ref=e873]:
+          - columnheader "File" [ref=e874]
+          - columnheader "Java" [ref=e875]
+          - columnheader "Rust" [ref=e876]
+          - columnheader "Status" [ref=e877]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e878] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e879]
+          - cell "✓" [ref=e880]
+          - cell "✓" [ref=e881]
+          - cell "✓ Identical" [ref=e882]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e883] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e884]
+          - cell "✓" [ref=e885]
+          - cell "✓" [ref=e886]
+          - cell "✓ Identical" [ref=e887]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e888] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e889]
+          - cell "✓" [ref=e890]
+          - cell "✓" [ref=e891]
+          - cell "✓ Identical" [ref=e892]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e893] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e894]
+          - cell "✓" [ref=e895]
+          - cell "✓" [ref=e896]
+          - cell "✓ Identical" [ref=e897]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e898] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e899]
+          - cell "✓" [ref=e900]
+          - cell "✓" [ref=e901]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e902]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e903] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e904]
+          - cell "✓" [ref=e905]
+          - cell "✓" [ref=e906]
+          - cell "✓ Expected diff" [ref=e907]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e908] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e909]
+          - cell "✓" [ref=e910]
+          - cell "✓" [ref=e911]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e912]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e913] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e914]
+          - cell "✓" [ref=e915]
+          - cell "✓" [ref=e916]
+          - cell "✓ Expected diff" [ref=e917]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e918] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e919]
+          - cell "✓" [ref=e920]
+          - cell "✓" [ref=e921]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e922]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e923] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e924]
+          - cell "✓" [ref=e925]
+          - cell "✓" [ref=e926]
+          - cell "✓ Expected diff" [ref=e927]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e928] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e929]
+          - cell "✓" [ref=e930]
+          - cell "✓" [ref=e931]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e932]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e933] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e934]
+          - cell "✓" [ref=e935]
+          - cell "✓" [ref=e936]
+          - cell "✓ Expected diff" [ref=e937]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (1.7% pixels differ)" [ref=e938] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e939]
+          - cell "✓" [ref=e940]
+          - cell "✓" [ref=e941]
+          - cell "✓ Diff within limits (1.7% pixels differ)" [ref=e942]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e943] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e944]
+          - cell "✓" [ref=e945]
+          - cell "✓" [ref=e946]
+          - cell "✓ Expected diff" [ref=e947]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e948] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e949]
+          - cell "✓" [ref=e950]
+          - cell "✓" [ref=e951]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e952]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e953] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e954]
+          - cell "✓" [ref=e955]
+          - cell "✓" [ref=e956]
+          - cell "✓ Expected diff" [ref=e957]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e958] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e959]
+          - cell "✓" [ref=e960]
+          - cell "✓" [ref=e961]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e962]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e963] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e964]
+          - cell "✓" [ref=e965]
+          - cell "✓" [ref=e966]
+          - cell "✓ Expected diff" [ref=e967]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e968] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e969]
+          - cell "✓" [ref=e970]
+          - cell "✓" [ref=e971]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e972]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e973] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e974]
+          - cell "✓" [ref=e975]
+          - cell "✓" [ref=e976]
+          - cell "✓ Expected diff" [ref=e977]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e978] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e979]
+          - cell "✓" [ref=e980]
+          - cell "✓" [ref=e981]
+          - cell "✓ Identical" [ref=e982]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e983] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e984]
+          - cell "✓" [ref=e985]
+          - cell "✓" [ref=e986]
+          - cell "✓ Expected diff" [ref=e987]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e988] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e989]
+          - cell "✓" [ref=e990]
+          - cell "✓" [ref=e991]
+          - cell "✓ Expected diff" [ref=e992]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e993] [cursor=pointer]:
+          - cell "summary.txt" [ref=e994]
+          - cell "✓" [ref=e995]
+          - cell "✓" [ref=e996]
+          - cell "✓ Identical" [ref=e997]
+  - generic [ref=e998]:
+    - heading "minimal_kmers10 PASS" [level=2] [ref=e999]:
+      - text: minimal_kmers10
+      - generic [ref=e1000]: PASS
+    - generic [ref=e1001]: "Input: minimal.fastq | Args: --kmers 10"
+    - table [ref=e1002]:
+      - rowgroup [ref=e1003]:
+        - row "File Java Rust Status" [ref=e1004]:
+          - columnheader "File" [ref=e1005]
+          - columnheader "Java" [ref=e1006]
+          - columnheader "Rust" [ref=e1007]
+          - columnheader "Status" [ref=e1008]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e1009] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e1010]
+          - cell "✓" [ref=e1011]
+          - cell "✓" [ref=e1012]
+          - cell "✓ Identical" [ref=e1013]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e1014] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e1015]
+          - cell "✓" [ref=e1016]
+          - cell "✓" [ref=e1017]
+          - cell "✓ Identical" [ref=e1018]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e1019] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e1020]
+          - cell "✓" [ref=e1021]
+          - cell "✓" [ref=e1022]
+          - cell "✓ Identical" [ref=e1023]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e1024] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e1025]
+          - cell "✓" [ref=e1026]
+          - cell "✓" [ref=e1027]
+          - cell "✓ Identical" [ref=e1028]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e1029] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e1030]
+          - cell "✓" [ref=e1031]
+          - cell "✓" [ref=e1032]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e1033]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e1034] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e1035]
+          - cell "✓" [ref=e1036]
+          - cell "✓" [ref=e1037]
+          - cell "✓ Expected diff" [ref=e1038]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e1039] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e1040]
+          - cell "✓" [ref=e1041]
+          - cell "✓" [ref=e1042]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e1043]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e1044] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e1045]
+          - cell "✓" [ref=e1046]
+          - cell "✓" [ref=e1047]
+          - cell "✓ Expected diff" [ref=e1048]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e1049] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e1050]
+          - cell "✓" [ref=e1051]
+          - cell "✓" [ref=e1052]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e1053]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e1054] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e1055]
+          - cell "✓" [ref=e1056]
+          - cell "✓" [ref=e1057]
+          - cell "✓ Expected diff" [ref=e1058]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e1059] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e1060]
+          - cell "✓" [ref=e1061]
+          - cell "✓" [ref=e1062]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e1063]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1064] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e1065]
+          - cell "✓" [ref=e1066]
+          - cell "✓" [ref=e1067]
+          - cell "✓ Expected diff" [ref=e1068]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (1.7% pixels differ)" [ref=e1069] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e1070]
+          - cell "✓" [ref=e1071]
+          - cell "✓" [ref=e1072]
+          - cell "✓ Diff within limits (1.7% pixels differ)" [ref=e1073]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e1074] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e1075]
+          - cell "✓" [ref=e1076]
+          - cell "✓" [ref=e1077]
+          - cell "✓ Expected diff" [ref=e1078]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e1079] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e1080]
+          - cell "✓" [ref=e1081]
+          - cell "✓" [ref=e1082]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e1083]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e1084] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e1085]
+          - cell "✓" [ref=e1086]
+          - cell "✓" [ref=e1087]
+          - cell "✓ Expected diff" [ref=e1088]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e1089] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e1090]
+          - cell "✓" [ref=e1091]
+          - cell "✓" [ref=e1092]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e1093]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1094] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e1095]
+          - cell "✓" [ref=e1096]
+          - cell "✓" [ref=e1097]
+          - cell "✓ Expected diff" [ref=e1098]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e1099] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e1100]
+          - cell "✓" [ref=e1101]
+          - cell "✓" [ref=e1102]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e1103]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e1104] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e1105]
+          - cell "✓" [ref=e1106]
+          - cell "✓" [ref=e1107]
+          - cell "✓ Expected diff" [ref=e1108]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e1109] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e1110]
+          - cell "✓" [ref=e1111]
+          - cell "✓" [ref=e1112]
+          - cell "✓ Identical" [ref=e1113]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e1114] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e1115]
+          - cell "✓" [ref=e1116]
+          - cell "✓" [ref=e1117]
+          - cell "✓ Expected diff" [ref=e1118]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e1119] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e1120]
+          - cell "✓" [ref=e1121]
+          - cell "✓" [ref=e1122]
+          - cell "✓ Expected diff" [ref=e1123]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e1124] [cursor=pointer]:
+          - cell "summary.txt" [ref=e1125]
+          - cell "✓" [ref=e1126]
+          - cell "✓" [ref=e1127]
+          - cell "✓ Identical" [ref=e1128]
+  - generic [ref=e1129]:
+    - heading "minimal_min_length_10 PASS" [level=2] [ref=e1130]:
+      - text: minimal_min_length_10
+      - generic [ref=e1131]: PASS
+    - generic [ref=e1132]: "Input: minimal.fastq | Args: --min_length 10"
+    - table [ref=e1133]:
+      - rowgroup [ref=e1134]:
+        - row "File Java Rust Status" [ref=e1135]:
+          - columnheader "File" [ref=e1136]
+          - columnheader "Java" [ref=e1137]
+          - columnheader "Rust" [ref=e1138]
+          - columnheader "Status" [ref=e1139]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e1140] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e1141]
+          - cell "✓" [ref=e1142]
+          - cell "✓" [ref=e1143]
+          - cell "✓ Identical" [ref=e1144]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e1145] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e1146]
+          - cell "✓" [ref=e1147]
+          - cell "✓" [ref=e1148]
+          - cell "✓ Identical" [ref=e1149]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e1150] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e1151]
+          - cell "✓" [ref=e1152]
+          - cell "✓" [ref=e1153]
+          - cell "✓ Identical" [ref=e1154]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e1155] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e1156]
+          - cell "✓" [ref=e1157]
+          - cell "✓" [ref=e1158]
+          - cell "✓ Identical" [ref=e1159]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.5% pixels differ)" [ref=e1160] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e1161]
+          - cell "✓" [ref=e1162]
+          - cell "✓" [ref=e1163]
+          - cell "✓ Diff within limits (2.5% pixels differ)" [ref=e1164]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e1165] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e1166]
+          - cell "✓" [ref=e1167]
+          - cell "✓" [ref=e1168]
+          - cell "✓ Expected diff" [ref=e1169]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e1170] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e1171]
+          - cell "✓" [ref=e1172]
+          - cell "✓" [ref=e1173]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e1174]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e1175] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e1176]
+          - cell "✓" [ref=e1177]
+          - cell "✓" [ref=e1178]
+          - cell "✓ Expected diff" [ref=e1179]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e1180] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e1181]
+          - cell "✓" [ref=e1182]
+          - cell "✓" [ref=e1183]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e1184]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e1185] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e1186]
+          - cell "✓" [ref=e1187]
+          - cell "✓" [ref=e1188]
+          - cell "✓ Expected diff" [ref=e1189]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e1190] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e1191]
+          - cell "✓" [ref=e1192]
+          - cell "✓" [ref=e1193]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e1194]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1195] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e1196]
+          - cell "✓" [ref=e1197]
+          - cell "✓" [ref=e1198]
+          - cell "✓ Expected diff" [ref=e1199]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (1.7% pixels differ)" [ref=e1200] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e1201]
+          - cell "✓" [ref=e1202]
+          - cell "✓" [ref=e1203]
+          - cell "✓ Diff within limits (1.7% pixels differ)" [ref=e1204]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e1205] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e1206]
+          - cell "✓" [ref=e1207]
+          - cell "✓" [ref=e1208]
+          - cell "✓ Expected diff" [ref=e1209]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e1210] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e1211]
+          - cell "✓" [ref=e1212]
+          - cell "✓" [ref=e1213]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e1214]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e1215] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e1216]
+          - cell "✓" [ref=e1217]
+          - cell "✓" [ref=e1218]
+          - cell "✓ Expected diff" [ref=e1219]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e1220] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e1221]
+          - cell "✓" [ref=e1222]
+          - cell "✓" [ref=e1223]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e1224]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1225] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e1226]
+          - cell "✓" [ref=e1227]
+          - cell "✓" [ref=e1228]
+          - cell "✓ Expected diff" [ref=e1229]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e1230] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e1231]
+          - cell "✓" [ref=e1232]
+          - cell "✓" [ref=e1233]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e1234]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e1235] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e1236]
+          - cell "✓" [ref=e1237]
+          - cell "✓" [ref=e1238]
+          - cell "✓ Expected diff" [ref=e1239]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e1240] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e1241]
+          - cell "✓" [ref=e1242]
+          - cell "✓" [ref=e1243]
+          - cell "✓ Identical" [ref=e1244]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e1245] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e1246]
+          - cell "✓" [ref=e1247]
+          - cell "✓" [ref=e1248]
+          - cell "✓ Expected diff" [ref=e1249]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e1250] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e1251]
+          - cell "✓" [ref=e1252]
+          - cell "✓" [ref=e1253]
+          - cell "✓ Expected diff" [ref=e1254]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e1255] [cursor=pointer]:
+          - cell "summary.txt" [ref=e1256]
+          - cell "✓" [ref=e1257]
+          - cell "✓" [ref=e1258]
+          - cell "✓ Identical" [ref=e1259]
+  - generic [ref=e1260]:
+    - heading "minimal_dup_length_10 PASS" [level=2] [ref=e1261]:
+      - text: minimal_dup_length_10
+      - generic [ref=e1262]: PASS
+    - generic [ref=e1263]: "Input: minimal.fastq | Args: --dup_length 10"
+    - table [ref=e1264]:
+      - rowgroup [ref=e1265]:
+        - row "File Java Rust Status" [ref=e1266]:
+          - columnheader "File" [ref=e1267]
+          - columnheader "Java" [ref=e1268]
+          - columnheader "Rust" [ref=e1269]
+          - columnheader "Status" [ref=e1270]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e1271] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e1272]
+          - cell "✓" [ref=e1273]
+          - cell "✓" [ref=e1274]
+          - cell "✓ Identical" [ref=e1275]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e1276] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e1277]
+          - cell "✓" [ref=e1278]
+          - cell "✓" [ref=e1279]
+          - cell "✓ Identical" [ref=e1280]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e1281] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e1282]
+          - cell "✓" [ref=e1283]
+          - cell "✓" [ref=e1284]
+          - cell "✓ Identical" [ref=e1285]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e1286] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e1287]
+          - cell "✓" [ref=e1288]
+          - cell "✓" [ref=e1289]
+          - cell "✓ Identical" [ref=e1290]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e1291] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e1292]
+          - cell "✓" [ref=e1293]
+          - cell "✓" [ref=e1294]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e1295]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e1296] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e1297]
+          - cell "✓" [ref=e1298]
+          - cell "✓" [ref=e1299]
+          - cell "✓ Expected diff" [ref=e1300]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e1301] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e1302]
+          - cell "✓" [ref=e1303]
+          - cell "✓" [ref=e1304]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e1305]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e1306] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e1307]
+          - cell "✓" [ref=e1308]
+          - cell "✓" [ref=e1309]
+          - cell "✓ Expected diff" [ref=e1310]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e1311] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e1312]
+          - cell "✓" [ref=e1313]
+          - cell "✓" [ref=e1314]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e1315]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e1316] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e1317]
+          - cell "✓" [ref=e1318]
+          - cell "✓" [ref=e1319]
+          - cell "✓ Expected diff" [ref=e1320]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e1321] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e1322]
+          - cell "✓" [ref=e1323]
+          - cell "✓" [ref=e1324]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e1325]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1326] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e1327]
+          - cell "✓" [ref=e1328]
+          - cell "✓" [ref=e1329]
+          - cell "✓ Expected diff" [ref=e1330]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (1.7% pixels differ)" [ref=e1331] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e1332]
+          - cell "✓" [ref=e1333]
+          - cell "✓" [ref=e1334]
+          - cell "✓ Diff within limits (1.7% pixels differ)" [ref=e1335]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e1336] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e1337]
+          - cell "✓" [ref=e1338]
+          - cell "✓" [ref=e1339]
+          - cell "✓ Expected diff" [ref=e1340]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.2% pixels differ)" [ref=e1341] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e1342]
+          - cell "✓" [ref=e1343]
+          - cell "✓" [ref=e1344]
+          - cell "✓ Diff within limits (2.2% pixels differ)" [ref=e1345]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e1346] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e1347]
+          - cell "✓" [ref=e1348]
+          - cell "✓" [ref=e1349]
+          - cell "✓ Expected diff" [ref=e1350]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e1351] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e1352]
+          - cell "✓" [ref=e1353]
+          - cell "✓" [ref=e1354]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e1355]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1356] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e1357]
+          - cell "✓" [ref=e1358]
+          - cell "✓" [ref=e1359]
+          - cell "✓ Expected diff" [ref=e1360]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e1361] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e1362]
+          - cell "✓" [ref=e1363]
+          - cell "✓" [ref=e1364]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e1365]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e1366] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e1367]
+          - cell "✓" [ref=e1368]
+          - cell "✓" [ref=e1369]
+          - cell "✓ Expected diff" [ref=e1370]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e1371] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e1372]
+          - cell "✓" [ref=e1373]
+          - cell "✓" [ref=e1374]
+          - cell "✓ Identical" [ref=e1375]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e1376] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e1377]
+          - cell "✓" [ref=e1378]
+          - cell "✓" [ref=e1379]
+          - cell "✓ Expected diff" [ref=e1380]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e1381] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e1382]
+          - cell "✓" [ref=e1383]
+          - cell "✓" [ref=e1384]
+          - cell "✓ Expected diff" [ref=e1385]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e1386] [cursor=pointer]:
+          - cell "summary.txt" [ref=e1387]
+          - cell "✓" [ref=e1388]
+          - cell "✓" [ref=e1389]
+          - cell "✓ Identical" [ref=e1390]
+  - generic [ref=e1391]:
+    - heading "complex_default PASS" [level=2] [ref=e1392]:
+      - text: complex_default
+      - generic [ref=e1393]: PASS
+    - generic [ref=e1394]: "Input: complex.fastq | Args: (default)"
+    - table [ref=e1395]:
+      - rowgroup [ref=e1396]:
+        - row "File Java Rust Status" [ref=e1397]:
+          - columnheader "File" [ref=e1398]
+          - columnheader "Java" [ref=e1399]
+          - columnheader "Rust" [ref=e1400]
+          - columnheader "Status" [ref=e1401]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e1402] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e1403]
+          - cell "✓" [ref=e1404]
+          - cell "✓" [ref=e1405]
+          - cell "✓ Identical" [ref=e1406]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e1407] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e1408]
+          - cell "✓" [ref=e1409]
+          - cell "✓" [ref=e1410]
+          - cell "✓ Identical" [ref=e1411]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e1412] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e1413]
+          - cell "✓" [ref=e1414]
+          - cell "✓" [ref=e1415]
+          - cell "✓ Identical" [ref=e1416]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e1417] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e1418]
+          - cell "✓" [ref=e1419]
+          - cell "✓" [ref=e1420]
+          - cell "✓ Identical" [ref=e1421]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e1422] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e1423]
+          - cell "✓" [ref=e1424]
+          - cell "✓" [ref=e1425]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e1426]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e1427] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e1428]
+          - cell "✓" [ref=e1429]
+          - cell "✓" [ref=e1430]
+          - cell "✓ Expected diff" [ref=e1431]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.3% pixels differ)" [ref=e1432] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e1433]
+          - cell "✓" [ref=e1434]
+          - cell "✓" [ref=e1435]
+          - cell "✓ Diff within limits (2.3% pixels differ)" [ref=e1436]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e1437] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e1438]
+          - cell "✓" [ref=e1439]
+          - cell "✓" [ref=e1440]
+          - cell "✓ Expected diff" [ref=e1441]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e1442] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e1443]
+          - cell "✓" [ref=e1444]
+          - cell "✓" [ref=e1445]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e1446]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e1447] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e1448]
+          - cell "✓" [ref=e1449]
+          - cell "✓" [ref=e1450]
+          - cell "✓ Expected diff" [ref=e1451]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e1452] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e1453]
+          - cell "✓" [ref=e1454]
+          - cell "✓" [ref=e1455]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e1456]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1457] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e1458]
+          - cell "✓" [ref=e1459]
+          - cell "✓" [ref=e1460]
+          - cell "✓ Expected diff" [ref=e1461]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (10.2% pixels differ)" [ref=e1462] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e1463]
+          - cell "✓" [ref=e1464]
+          - cell "✓" [ref=e1465]
+          - cell "✓ Diff within limits (10.2% pixels differ)" [ref=e1466]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e1467] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e1468]
+          - cell "✓" [ref=e1469]
+          - cell "✓" [ref=e1470]
+          - cell "✓ Expected diff" [ref=e1471]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.7% pixels differ)" [ref=e1472] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e1473]
+          - cell "✓" [ref=e1474]
+          - cell "✓" [ref=e1475]
+          - cell "✓ Diff within limits (2.7% pixels differ)" [ref=e1476]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e1477] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e1478]
+          - cell "✓" [ref=e1479]
+          - cell "✓" [ref=e1480]
+          - cell "✓ Expected diff" [ref=e1481]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e1482] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e1483]
+          - cell "✓" [ref=e1484]
+          - cell "✓" [ref=e1485]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e1486]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1487] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e1488]
+          - cell "✓" [ref=e1489]
+          - cell "✓" [ref=e1490]
+          - cell "✓ Expected diff" [ref=e1491]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e1492] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e1493]
+          - cell "✓" [ref=e1494]
+          - cell "✓" [ref=e1495]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e1496]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e1497] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e1498]
+          - cell "✓" [ref=e1499]
+          - cell "✓" [ref=e1500]
+          - cell "✓ Expected diff" [ref=e1501]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e1502] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e1503]
+          - cell "✓" [ref=e1504]
+          - cell "✓" [ref=e1505]
+          - cell "✓ Identical" [ref=e1506]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e1507] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e1508]
+          - cell "✓" [ref=e1509]
+          - cell "✓" [ref=e1510]
+          - cell "✓ Expected diff" [ref=e1511]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e1512] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e1513]
+          - cell "✓" [ref=e1514]
+          - cell "✓" [ref=e1515]
+          - cell "✓ Expected diff" [ref=e1516]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e1517] [cursor=pointer]:
+          - cell "summary.txt" [ref=e1518]
+          - cell "✓" [ref=e1519]
+          - cell "✓" [ref=e1520]
+          - cell "✓ Identical" [ref=e1521]
+  - generic [ref=e1522]:
+    - heading "complex_nogroup PASS" [level=2] [ref=e1523]:
+      - text: complex_nogroup
+      - generic [ref=e1524]: PASS
+    - generic [ref=e1525]: "Input: complex.fastq | Args: --nogroup"
+    - table [ref=e1526]:
+      - rowgroup [ref=e1527]:
+        - row "File Java Rust Status" [ref=e1528]:
+          - columnheader "File" [ref=e1529]
+          - columnheader "Java" [ref=e1530]
+          - columnheader "Rust" [ref=e1531]
+          - columnheader "Status" [ref=e1532]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e1533] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e1534]
+          - cell "✓" [ref=e1535]
+          - cell "✓" [ref=e1536]
+          - cell "✓ Identical" [ref=e1537]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e1538] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e1539]
+          - cell "✓" [ref=e1540]
+          - cell "✓" [ref=e1541]
+          - cell "✓ Identical" [ref=e1542]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e1543] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e1544]
+          - cell "✓" [ref=e1545]
+          - cell "✓" [ref=e1546]
+          - cell "✓ Identical" [ref=e1547]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e1548] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e1549]
+          - cell "✓" [ref=e1550]
+          - cell "✓" [ref=e1551]
+          - cell "✓ Identical" [ref=e1552]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e1553] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e1554]
+          - cell "✓" [ref=e1555]
+          - cell "✓" [ref=e1556]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e1557]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e1558] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e1559]
+          - cell "✓" [ref=e1560]
+          - cell "✓" [ref=e1561]
+          - cell "✓ Expected diff" [ref=e1562]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.3% pixels differ)" [ref=e1563] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e1564]
+          - cell "✓" [ref=e1565]
+          - cell "✓" [ref=e1566]
+          - cell "✓ Diff within limits (2.3% pixels differ)" [ref=e1567]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e1568] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e1569]
+          - cell "✓" [ref=e1570]
+          - cell "✓" [ref=e1571]
+          - cell "✓ Expected diff" [ref=e1572]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e1573] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e1574]
+          - cell "✓" [ref=e1575]
+          - cell "✓" [ref=e1576]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e1577]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e1578] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e1579]
+          - cell "✓" [ref=e1580]
+          - cell "✓" [ref=e1581]
+          - cell "✓ Expected diff" [ref=e1582]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e1583] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e1584]
+          - cell "✓" [ref=e1585]
+          - cell "✓" [ref=e1586]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e1587]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1588] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e1589]
+          - cell "✓" [ref=e1590]
+          - cell "✓" [ref=e1591]
+          - cell "✓ Expected diff" [ref=e1592]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (10.2% pixels differ)" [ref=e1593] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e1594]
+          - cell "✓" [ref=e1595]
+          - cell "✓" [ref=e1596]
+          - cell "✓ Diff within limits (10.2% pixels differ)" [ref=e1597]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e1598] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e1599]
+          - cell "✓" [ref=e1600]
+          - cell "✓" [ref=e1601]
+          - cell "✓ Expected diff" [ref=e1602]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.7% pixels differ)" [ref=e1603] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e1604]
+          - cell "✓" [ref=e1605]
+          - cell "✓" [ref=e1606]
+          - cell "✓ Diff within limits (2.7% pixels differ)" [ref=e1607]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e1608] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e1609]
+          - cell "✓" [ref=e1610]
+          - cell "✓" [ref=e1611]
+          - cell "✓ Expected diff" [ref=e1612]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e1613] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e1614]
+          - cell "✓" [ref=e1615]
+          - cell "✓" [ref=e1616]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e1617]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1618] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e1619]
+          - cell "✓" [ref=e1620]
+          - cell "✓" [ref=e1621]
+          - cell "✓ Expected diff" [ref=e1622]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e1623] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e1624]
+          - cell "✓" [ref=e1625]
+          - cell "✓" [ref=e1626]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e1627]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e1628] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e1629]
+          - cell "✓" [ref=e1630]
+          - cell "✓" [ref=e1631]
+          - cell "✓ Expected diff" [ref=e1632]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e1633] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e1634]
+          - cell "✓" [ref=e1635]
+          - cell "✓" [ref=e1636]
+          - cell "✓ Identical" [ref=e1637]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e1638] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e1639]
+          - cell "✓" [ref=e1640]
+          - cell "✓" [ref=e1641]
+          - cell "✓ Expected diff" [ref=e1642]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e1643] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e1644]
+          - cell "✓" [ref=e1645]
+          - cell "✓" [ref=e1646]
+          - cell "✓ Expected diff" [ref=e1647]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e1648] [cursor=pointer]:
+          - cell "summary.txt" [ref=e1649]
+          - cell "✓" [ref=e1650]
+          - cell "✓" [ref=e1651]
+          - cell "✓ Identical" [ref=e1652]
+  - generic [ref=e1653]:
+    - heading "complex_expgroup PASS" [level=2] [ref=e1654]:
+      - text: complex_expgroup
+      - generic [ref=e1655]: PASS
+    - generic [ref=e1656]: "Input: complex.fastq | Args: --expgroup"
+    - table [ref=e1657]:
+      - rowgroup [ref=e1658]:
+        - row "File Java Rust Status" [ref=e1659]:
+          - columnheader "File" [ref=e1660]
+          - columnheader "Java" [ref=e1661]
+          - columnheader "Rust" [ref=e1662]
+          - columnheader "Status" [ref=e1663]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e1664] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e1665]
+          - cell "✓" [ref=e1666]
+          - cell "✓" [ref=e1667]
+          - cell "✓ Identical" [ref=e1668]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e1669] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e1670]
+          - cell "✓" [ref=e1671]
+          - cell "✓" [ref=e1672]
+          - cell "✓ Identical" [ref=e1673]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e1674] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e1675]
+          - cell "✓" [ref=e1676]
+          - cell "✓" [ref=e1677]
+          - cell "✓ Identical" [ref=e1678]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e1679] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e1680]
+          - cell "✓" [ref=e1681]
+          - cell "✓" [ref=e1682]
+          - cell "✓ Identical" [ref=e1683]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e1684] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e1685]
+          - cell "✓" [ref=e1686]
+          - cell "✓" [ref=e1687]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e1688]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e1689] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e1690]
+          - cell "✓" [ref=e1691]
+          - cell "✓" [ref=e1692]
+          - cell "✓ Expected diff" [ref=e1693]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.3% pixels differ)" [ref=e1694] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e1695]
+          - cell "✓" [ref=e1696]
+          - cell "✓" [ref=e1697]
+          - cell "✓ Diff within limits (2.3% pixels differ)" [ref=e1698]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e1699] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e1700]
+          - cell "✓" [ref=e1701]
+          - cell "✓" [ref=e1702]
+          - cell "✓ Expected diff" [ref=e1703]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e1704] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e1705]
+          - cell "✓" [ref=e1706]
+          - cell "✓" [ref=e1707]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e1708]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e1709] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e1710]
+          - cell "✓" [ref=e1711]
+          - cell "✓" [ref=e1712]
+          - cell "✓ Expected diff" [ref=e1713]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e1714] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e1715]
+          - cell "✓" [ref=e1716]
+          - cell "✓" [ref=e1717]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e1718]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1719] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e1720]
+          - cell "✓" [ref=e1721]
+          - cell "✓" [ref=e1722]
+          - cell "✓ Expected diff" [ref=e1723]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (10.2% pixels differ)" [ref=e1724] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e1725]
+          - cell "✓" [ref=e1726]
+          - cell "✓" [ref=e1727]
+          - cell "✓ Diff within limits (10.2% pixels differ)" [ref=e1728]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e1729] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e1730]
+          - cell "✓" [ref=e1731]
+          - cell "✓" [ref=e1732]
+          - cell "✓ Expected diff" [ref=e1733]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.7% pixels differ)" [ref=e1734] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e1735]
+          - cell "✓" [ref=e1736]
+          - cell "✓" [ref=e1737]
+          - cell "✓ Diff within limits (2.7% pixels differ)" [ref=e1738]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e1739] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e1740]
+          - cell "✓" [ref=e1741]
+          - cell "✓" [ref=e1742]
+          - cell "✓ Expected diff" [ref=e1743]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e1744] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e1745]
+          - cell "✓" [ref=e1746]
+          - cell "✓" [ref=e1747]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e1748]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1749] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e1750]
+          - cell "✓" [ref=e1751]
+          - cell "✓" [ref=e1752]
+          - cell "✓ Expected diff" [ref=e1753]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e1754] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e1755]
+          - cell "✓" [ref=e1756]
+          - cell "✓" [ref=e1757]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e1758]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e1759] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e1760]
+          - cell "✓" [ref=e1761]
+          - cell "✓" [ref=e1762]
+          - cell "✓ Expected diff" [ref=e1763]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e1764] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e1765]
+          - cell "✓" [ref=e1766]
+          - cell "✓" [ref=e1767]
+          - cell "✓ Identical" [ref=e1768]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e1769] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e1770]
+          - cell "✓" [ref=e1771]
+          - cell "✓" [ref=e1772]
+          - cell "✓ Expected diff" [ref=e1773]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e1774] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e1775]
+          - cell "✓" [ref=e1776]
+          - cell "✓" [ref=e1777]
+          - cell "✓ Expected diff" [ref=e1778]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e1779] [cursor=pointer]:
+          - cell "summary.txt" [ref=e1780]
+          - cell "✓" [ref=e1781]
+          - cell "✓" [ref=e1782]
+          - cell "✓ Identical" [ref=e1783]
+  - generic [ref=e1784]:
+    - heading "complex_casava PASS" [level=2] [ref=e1785]:
+      - text: complex_casava
+      - generic [ref=e1786]: PASS
+    - generic [ref=e1787]: "Input: complex.fastq | Args: --casava"
+    - table [ref=e1788]:
+      - rowgroup [ref=e1789]:
+        - row "File Java Rust Status" [ref=e1790]:
+          - columnheader "File" [ref=e1791]
+          - columnheader "Java" [ref=e1792]
+          - columnheader "Rust" [ref=e1793]
+          - columnheader "Status" [ref=e1794]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e1795] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e1796]
+          - cell "✓" [ref=e1797]
+          - cell "✓" [ref=e1798]
+          - cell "✓ Identical" [ref=e1799]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e1800] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e1801]
+          - cell "✓" [ref=e1802]
+          - cell "✓" [ref=e1803]
+          - cell "✓ Identical" [ref=e1804]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e1805] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e1806]
+          - cell "✓" [ref=e1807]
+          - cell "✓" [ref=e1808]
+          - cell "✓ Identical" [ref=e1809]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e1810] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e1811]
+          - cell "✓" [ref=e1812]
+          - cell "✓" [ref=e1813]
+          - cell "✓ Identical" [ref=e1814]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e1815] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e1816]
+          - cell "✓" [ref=e1817]
+          - cell "✓" [ref=e1818]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e1819]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e1820] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e1821]
+          - cell "✓" [ref=e1822]
+          - cell "✓" [ref=e1823]
+          - cell "✓ Expected diff" [ref=e1824]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.3% pixels differ)" [ref=e1825] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e1826]
+          - cell "✓" [ref=e1827]
+          - cell "✓" [ref=e1828]
+          - cell "✓ Diff within limits (2.3% pixels differ)" [ref=e1829]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e1830] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e1831]
+          - cell "✓" [ref=e1832]
+          - cell "✓" [ref=e1833]
+          - cell "✓ Expected diff" [ref=e1834]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e1835] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e1836]
+          - cell "✓" [ref=e1837]
+          - cell "✓" [ref=e1838]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e1839]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e1840] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e1841]
+          - cell "✓" [ref=e1842]
+          - cell "✓" [ref=e1843]
+          - cell "✓ Expected diff" [ref=e1844]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e1845] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e1846]
+          - cell "✓" [ref=e1847]
+          - cell "✓" [ref=e1848]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e1849]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1850] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e1851]
+          - cell "✓" [ref=e1852]
+          - cell "✓" [ref=e1853]
+          - cell "✓ Expected diff" [ref=e1854]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (10.2% pixels differ)" [ref=e1855] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e1856]
+          - cell "✓" [ref=e1857]
+          - cell "✓" [ref=e1858]
+          - cell "✓ Diff within limits (10.2% pixels differ)" [ref=e1859]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e1860] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e1861]
+          - cell "✓" [ref=e1862]
+          - cell "✓" [ref=e1863]
+          - cell "✓ Expected diff" [ref=e1864]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.7% pixels differ)" [ref=e1865] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e1866]
+          - cell "✓" [ref=e1867]
+          - cell "✓" [ref=e1868]
+          - cell "✓ Diff within limits (2.7% pixels differ)" [ref=e1869]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e1870] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e1871]
+          - cell "✓" [ref=e1872]
+          - cell "✓" [ref=e1873]
+          - cell "✓ Expected diff" [ref=e1874]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e1875] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e1876]
+          - cell "✓" [ref=e1877]
+          - cell "✓" [ref=e1878]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e1879]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1880] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e1881]
+          - cell "✓" [ref=e1882]
+          - cell "✓" [ref=e1883]
+          - cell "✓ Expected diff" [ref=e1884]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e1885] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e1886]
+          - cell "✓" [ref=e1887]
+          - cell "✓" [ref=e1888]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e1889]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e1890] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e1891]
+          - cell "✓" [ref=e1892]
+          - cell "✓" [ref=e1893]
+          - cell "✓ Expected diff" [ref=e1894]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e1895] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e1896]
+          - cell "✓" [ref=e1897]
+          - cell "✓" [ref=e1898]
+          - cell "✓ Identical" [ref=e1899]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e1900] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e1901]
+          - cell "✓" [ref=e1902]
+          - cell "✓" [ref=e1903]
+          - cell "✓ Expected diff" [ref=e1904]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e1905] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e1906]
+          - cell "✓" [ref=e1907]
+          - cell "✓" [ref=e1908]
+          - cell "✓ Expected diff" [ref=e1909]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e1910] [cursor=pointer]:
+          - cell "summary.txt" [ref=e1911]
+          - cell "✓" [ref=e1912]
+          - cell "✓" [ref=e1913]
+          - cell "✓ Identical" [ref=e1914]
+  - generic [ref=e1915]:
+    - heading "complex_casava_nofilter PASS" [level=2] [ref=e1916]:
+      - text: complex_casava_nofilter
+      - generic [ref=e1917]: PASS
+    - generic [ref=e1918]: "Input: complex.fastq | Args: --casava --nofilter"
+    - table [ref=e1919]:
+      - rowgroup [ref=e1920]:
+        - row "File Java Rust Status" [ref=e1921]:
+          - columnheader "File" [ref=e1922]
+          - columnheader "Java" [ref=e1923]
+          - columnheader "Rust" [ref=e1924]
+          - columnheader "Status" [ref=e1925]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e1926] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e1927]
+          - cell "✓" [ref=e1928]
+          - cell "✓" [ref=e1929]
+          - cell "✓ Identical" [ref=e1930]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e1931] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e1932]
+          - cell "✓" [ref=e1933]
+          - cell "✓" [ref=e1934]
+          - cell "✓ Identical" [ref=e1935]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e1936] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e1937]
+          - cell "✓" [ref=e1938]
+          - cell "✓" [ref=e1939]
+          - cell "✓ Identical" [ref=e1940]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e1941] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e1942]
+          - cell "✓" [ref=e1943]
+          - cell "✓" [ref=e1944]
+          - cell "✓ Identical" [ref=e1945]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e1946] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e1947]
+          - cell "✓" [ref=e1948]
+          - cell "✓" [ref=e1949]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e1950]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e1951] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e1952]
+          - cell "✓" [ref=e1953]
+          - cell "✓" [ref=e1954]
+          - cell "✓ Expected diff" [ref=e1955]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.3% pixels differ)" [ref=e1956] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e1957]
+          - cell "✓" [ref=e1958]
+          - cell "✓" [ref=e1959]
+          - cell "✓ Diff within limits (2.3% pixels differ)" [ref=e1960]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e1961] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e1962]
+          - cell "✓" [ref=e1963]
+          - cell "✓" [ref=e1964]
+          - cell "✓ Expected diff" [ref=e1965]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e1966] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e1967]
+          - cell "✓" [ref=e1968]
+          - cell "✓" [ref=e1969]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e1970]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e1971] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e1972]
+          - cell "✓" [ref=e1973]
+          - cell "✓" [ref=e1974]
+          - cell "✓ Expected diff" [ref=e1975]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e1976] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e1977]
+          - cell "✓" [ref=e1978]
+          - cell "✓" [ref=e1979]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e1980]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e1981] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e1982]
+          - cell "✓" [ref=e1983]
+          - cell "✓" [ref=e1984]
+          - cell "✓ Expected diff" [ref=e1985]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (10.2% pixels differ)" [ref=e1986] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e1987]
+          - cell "✓" [ref=e1988]
+          - cell "✓" [ref=e1989]
+          - cell "✓ Diff within limits (10.2% pixels differ)" [ref=e1990]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e1991] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e1992]
+          - cell "✓" [ref=e1993]
+          - cell "✓" [ref=e1994]
+          - cell "✓ Expected diff" [ref=e1995]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.7% pixels differ)" [ref=e1996] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e1997]
+          - cell "✓" [ref=e1998]
+          - cell "✓" [ref=e1999]
+          - cell "✓ Diff within limits (2.7% pixels differ)" [ref=e2000]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e2001] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e2002]
+          - cell "✓" [ref=e2003]
+          - cell "✓" [ref=e2004]
+          - cell "✓ Expected diff" [ref=e2005]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e2006] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e2007]
+          - cell "✓" [ref=e2008]
+          - cell "✓" [ref=e2009]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e2010]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e2011] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e2012]
+          - cell "✓" [ref=e2013]
+          - cell "✓" [ref=e2014]
+          - cell "✓ Expected diff" [ref=e2015]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e2016] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e2017]
+          - cell "✓" [ref=e2018]
+          - cell "✓" [ref=e2019]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e2020]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e2021] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e2022]
+          - cell "✓" [ref=e2023]
+          - cell "✓" [ref=e2024]
+          - cell "✓ Expected diff" [ref=e2025]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e2026] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e2027]
+          - cell "✓" [ref=e2028]
+          - cell "✓" [ref=e2029]
+          - cell "✓ Identical" [ref=e2030]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e2031] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e2032]
+          - cell "✓" [ref=e2033]
+          - cell "✓" [ref=e2034]
+          - cell "✓ Expected diff" [ref=e2035]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e2036] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e2037]
+          - cell "✓" [ref=e2038]
+          - cell "✓" [ref=e2039]
+          - cell "✓ Expected diff" [ref=e2040]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e2041] [cursor=pointer]:
+          - cell "summary.txt" [ref=e2042]
+          - cell "✓" [ref=e2043]
+          - cell "✓" [ref=e2044]
+          - cell "✓ Identical" [ref=e2045]
+  - generic [ref=e2046]:
+    - heading "complex_kmers5 PASS" [level=2] [ref=e2047]:
+      - text: complex_kmers5
+      - generic [ref=e2048]: PASS
+    - generic [ref=e2049]: "Input: complex.fastq | Args: --kmers 5"
+    - table [ref=e2050]:
+      - rowgroup [ref=e2051]:
+        - row "File Java Rust Status" [ref=e2052]:
+          - columnheader "File" [ref=e2053]
+          - columnheader "Java" [ref=e2054]
+          - columnheader "Rust" [ref=e2055]
+          - columnheader "Status" [ref=e2056]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e2057] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e2058]
+          - cell "✓" [ref=e2059]
+          - cell "✓" [ref=e2060]
+          - cell "✓ Identical" [ref=e2061]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e2062] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e2063]
+          - cell "✓" [ref=e2064]
+          - cell "✓" [ref=e2065]
+          - cell "✓ Identical" [ref=e2066]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e2067] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e2068]
+          - cell "✓" [ref=e2069]
+          - cell "✓" [ref=e2070]
+          - cell "✓ Identical" [ref=e2071]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e2072] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e2073]
+          - cell "✓" [ref=e2074]
+          - cell "✓" [ref=e2075]
+          - cell "✓ Identical" [ref=e2076]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e2077] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e2078]
+          - cell "✓" [ref=e2079]
+          - cell "✓" [ref=e2080]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e2081]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e2082] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e2083]
+          - cell "✓" [ref=e2084]
+          - cell "✓" [ref=e2085]
+          - cell "✓ Expected diff" [ref=e2086]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.3% pixels differ)" [ref=e2087] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e2088]
+          - cell "✓" [ref=e2089]
+          - cell "✓" [ref=e2090]
+          - cell "✓ Diff within limits (2.3% pixels differ)" [ref=e2091]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e2092] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e2093]
+          - cell "✓" [ref=e2094]
+          - cell "✓" [ref=e2095]
+          - cell "✓ Expected diff" [ref=e2096]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e2097] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e2098]
+          - cell "✓" [ref=e2099]
+          - cell "✓" [ref=e2100]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e2101]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e2102] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e2103]
+          - cell "✓" [ref=e2104]
+          - cell "✓" [ref=e2105]
+          - cell "✓ Expected diff" [ref=e2106]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e2107] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e2108]
+          - cell "✓" [ref=e2109]
+          - cell "✓" [ref=e2110]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e2111]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e2112] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e2113]
+          - cell "✓" [ref=e2114]
+          - cell "✓" [ref=e2115]
+          - cell "✓ Expected diff" [ref=e2116]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (10.2% pixels differ)" [ref=e2117] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e2118]
+          - cell "✓" [ref=e2119]
+          - cell "✓" [ref=e2120]
+          - cell "✓ Diff within limits (10.2% pixels differ)" [ref=e2121]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e2122] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e2123]
+          - cell "✓" [ref=e2124]
+          - cell "✓" [ref=e2125]
+          - cell "✓ Expected diff" [ref=e2126]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.7% pixels differ)" [ref=e2127] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e2128]
+          - cell "✓" [ref=e2129]
+          - cell "✓" [ref=e2130]
+          - cell "✓ Diff within limits (2.7% pixels differ)" [ref=e2131]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e2132] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e2133]
+          - cell "✓" [ref=e2134]
+          - cell "✓" [ref=e2135]
+          - cell "✓ Expected diff" [ref=e2136]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e2137] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e2138]
+          - cell "✓" [ref=e2139]
+          - cell "✓" [ref=e2140]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e2141]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e2142] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e2143]
+          - cell "✓" [ref=e2144]
+          - cell "✓" [ref=e2145]
+          - cell "✓ Expected diff" [ref=e2146]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e2147] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e2148]
+          - cell "✓" [ref=e2149]
+          - cell "✓" [ref=e2150]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e2151]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e2152] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e2153]
+          - cell "✓" [ref=e2154]
+          - cell "✓" [ref=e2155]
+          - cell "✓ Expected diff" [ref=e2156]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e2157] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e2158]
+          - cell "✓" [ref=e2159]
+          - cell "✓" [ref=e2160]
+          - cell "✓ Identical" [ref=e2161]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e2162] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e2163]
+          - cell "✓" [ref=e2164]
+          - cell "✓" [ref=e2165]
+          - cell "✓ Expected diff" [ref=e2166]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e2167] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e2168]
+          - cell "✓" [ref=e2169]
+          - cell "✓" [ref=e2170]
+          - cell "✓ Expected diff" [ref=e2171]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e2172] [cursor=pointer]:
+          - cell "summary.txt" [ref=e2173]
+          - cell "✓" [ref=e2174]
+          - cell "✓" [ref=e2175]
+          - cell "✓ Identical" [ref=e2176]
+  - generic [ref=e2177]:
+    - heading "complex_kmers10 PASS" [level=2] [ref=e2178]:
+      - text: complex_kmers10
+      - generic [ref=e2179]: PASS
+    - generic [ref=e2180]: "Input: complex.fastq | Args: --kmers 10"
+    - table [ref=e2181]:
+      - rowgroup [ref=e2182]:
+        - row "File Java Rust Status" [ref=e2183]:
+          - columnheader "File" [ref=e2184]
+          - columnheader "Java" [ref=e2185]
+          - columnheader "Rust" [ref=e2186]
+          - columnheader "Status" [ref=e2187]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e2188] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e2189]
+          - cell "✓" [ref=e2190]
+          - cell "✓" [ref=e2191]
+          - cell "✓ Identical" [ref=e2192]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e2193] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e2194]
+          - cell "✓" [ref=e2195]
+          - cell "✓" [ref=e2196]
+          - cell "✓ Identical" [ref=e2197]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e2198] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e2199]
+          - cell "✓" [ref=e2200]
+          - cell "✓" [ref=e2201]
+          - cell "✓ Identical" [ref=e2202]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e2203] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e2204]
+          - cell "✓" [ref=e2205]
+          - cell "✓" [ref=e2206]
+          - cell "✓ Identical" [ref=e2207]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e2208] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e2209]
+          - cell "✓" [ref=e2210]
+          - cell "✓" [ref=e2211]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e2212]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e2213] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e2214]
+          - cell "✓" [ref=e2215]
+          - cell "✓" [ref=e2216]
+          - cell "✓ Expected diff" [ref=e2217]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.3% pixels differ)" [ref=e2218] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e2219]
+          - cell "✓" [ref=e2220]
+          - cell "✓" [ref=e2221]
+          - cell "✓ Diff within limits (2.3% pixels differ)" [ref=e2222]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e2223] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e2224]
+          - cell "✓" [ref=e2225]
+          - cell "✓" [ref=e2226]
+          - cell "✓ Expected diff" [ref=e2227]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e2228] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e2229]
+          - cell "✓" [ref=e2230]
+          - cell "✓" [ref=e2231]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e2232]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e2233] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e2234]
+          - cell "✓" [ref=e2235]
+          - cell "✓" [ref=e2236]
+          - cell "✓ Expected diff" [ref=e2237]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e2238] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e2239]
+          - cell "✓" [ref=e2240]
+          - cell "✓" [ref=e2241]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e2242]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e2243] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e2244]
+          - cell "✓" [ref=e2245]
+          - cell "✓" [ref=e2246]
+          - cell "✓ Expected diff" [ref=e2247]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (10.2% pixels differ)" [ref=e2248] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e2249]
+          - cell "✓" [ref=e2250]
+          - cell "✓" [ref=e2251]
+          - cell "✓ Diff within limits (10.2% pixels differ)" [ref=e2252]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e2253] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e2254]
+          - cell "✓" [ref=e2255]
+          - cell "✓" [ref=e2256]
+          - cell "✓ Expected diff" [ref=e2257]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.7% pixels differ)" [ref=e2258] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e2259]
+          - cell "✓" [ref=e2260]
+          - cell "✓" [ref=e2261]
+          - cell "✓ Diff within limits (2.7% pixels differ)" [ref=e2262]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e2263] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e2264]
+          - cell "✓" [ref=e2265]
+          - cell "✓" [ref=e2266]
+          - cell "✓ Expected diff" [ref=e2267]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e2268] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e2269]
+          - cell "✓" [ref=e2270]
+          - cell "✓" [ref=e2271]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e2272]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e2273] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e2274]
+          - cell "✓" [ref=e2275]
+          - cell "✓" [ref=e2276]
+          - cell "✓ Expected diff" [ref=e2277]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e2278] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e2279]
+          - cell "✓" [ref=e2280]
+          - cell "✓" [ref=e2281]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e2282]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e2283] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e2284]
+          - cell "✓" [ref=e2285]
+          - cell "✓" [ref=e2286]
+          - cell "✓ Expected diff" [ref=e2287]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e2288] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e2289]
+          - cell "✓" [ref=e2290]
+          - cell "✓" [ref=e2291]
+          - cell "✓ Identical" [ref=e2292]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e2293] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e2294]
+          - cell "✓" [ref=e2295]
+          - cell "✓" [ref=e2296]
+          - cell "✓ Expected diff" [ref=e2297]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e2298] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e2299]
+          - cell "✓" [ref=e2300]
+          - cell "✓" [ref=e2301]
+          - cell "✓ Expected diff" [ref=e2302]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e2303] [cursor=pointer]:
+          - cell "summary.txt" [ref=e2304]
+          - cell "✓" [ref=e2305]
+          - cell "✓" [ref=e2306]
+          - cell "✓ Identical" [ref=e2307]
+  - generic [ref=e2308]:
+    - heading "complex_min_length_10 PASS" [level=2] [ref=e2309]:
+      - text: complex_min_length_10
+      - generic [ref=e2310]: PASS
+    - generic [ref=e2311]: "Input: complex.fastq | Args: --min_length 10"
+    - table [ref=e2312]:
+      - rowgroup [ref=e2313]:
+        - row "File Java Rust Status" [ref=e2314]:
+          - columnheader "File" [ref=e2315]
+          - columnheader "Java" [ref=e2316]
+          - columnheader "Rust" [ref=e2317]
+          - columnheader "Status" [ref=e2318]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e2319] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e2320]
+          - cell "✓" [ref=e2321]
+          - cell "✓" [ref=e2322]
+          - cell "✓ Identical" [ref=e2323]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e2324] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e2325]
+          - cell "✓" [ref=e2326]
+          - cell "✓" [ref=e2327]
+          - cell "✓ Identical" [ref=e2328]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e2329] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e2330]
+          - cell "✓" [ref=e2331]
+          - cell "✓" [ref=e2332]
+          - cell "✓ Identical" [ref=e2333]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e2334] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e2335]
+          - cell "✓" [ref=e2336]
+          - cell "✓" [ref=e2337]
+          - cell "✓ Identical" [ref=e2338]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.1% pixels differ)" [ref=e2339] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e2340]
+          - cell "✓" [ref=e2341]
+          - cell "✓" [ref=e2342]
+          - cell "✓ Diff within limits (2.1% pixels differ)" [ref=e2343]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e2344] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e2345]
+          - cell "✓" [ref=e2346]
+          - cell "✓" [ref=e2347]
+          - cell "✓ Expected diff" [ref=e2348]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.3% pixels differ)" [ref=e2349] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e2350]
+          - cell "✓" [ref=e2351]
+          - cell "✓" [ref=e2352]
+          - cell "✓ Diff within limits (2.3% pixels differ)" [ref=e2353]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e2354] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e2355]
+          - cell "✓" [ref=e2356]
+          - cell "✓" [ref=e2357]
+          - cell "✓ Expected diff" [ref=e2358]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e2359] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e2360]
+          - cell "✓" [ref=e2361]
+          - cell "✓" [ref=e2362]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e2363]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e2364] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e2365]
+          - cell "✓" [ref=e2366]
+          - cell "✓" [ref=e2367]
+          - cell "✓ Expected diff" [ref=e2368]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e2369] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e2370]
+          - cell "✓" [ref=e2371]
+          - cell "✓" [ref=e2372]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e2373]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e2374] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e2375]
+          - cell "✓" [ref=e2376]
+          - cell "✓" [ref=e2377]
+          - cell "✓ Expected diff" [ref=e2378]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (10.2% pixels differ)" [ref=e2379] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e2380]
+          - cell "✓" [ref=e2381]
+          - cell "✓" [ref=e2382]
+          - cell "✓ Diff within limits (10.2% pixels differ)" [ref=e2383]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e2384] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e2385]
+          - cell "✓" [ref=e2386]
+          - cell "✓" [ref=e2387]
+          - cell "✓ Expected diff" [ref=e2388]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.7% pixels differ)" [ref=e2389] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e2390]
+          - cell "✓" [ref=e2391]
+          - cell "✓" [ref=e2392]
+          - cell "✓ Diff within limits (2.7% pixels differ)" [ref=e2393]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e2394] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e2395]
+          - cell "✓" [ref=e2396]
+          - cell "✓" [ref=e2397]
+          - cell "✓ Expected diff" [ref=e2398]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e2399] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e2400]
+          - cell "✓" [ref=e2401]
+          - cell "✓" [ref=e2402]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e2403]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e2404] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e2405]
+          - cell "✓" [ref=e2406]
+          - cell "✓" [ref=e2407]
+          - cell "✓ Expected diff" [ref=e2408]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e2409] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e2410]
+          - cell "✓" [ref=e2411]
+          - cell "✓" [ref=e2412]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e2413]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e2414] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e2415]
+          - cell "✓" [ref=e2416]
+          - cell "✓" [ref=e2417]
+          - cell "✓ Expected diff" [ref=e2418]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e2419] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e2420]
+          - cell "✓" [ref=e2421]
+          - cell "✓" [ref=e2422]
+          - cell "✓ Identical" [ref=e2423]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e2424] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e2425]
+          - cell "✓" [ref=e2426]
+          - cell "✓" [ref=e2427]
+          - cell "✓ Expected diff" [ref=e2428]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e2429] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e2430]
+          - cell "✓" [ref=e2431]
+          - cell "✓" [ref=e2432]
+          - cell "✓ Expected diff" [ref=e2433]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e2434] [cursor=pointer]:
+          - cell "summary.txt" [ref=e2435]
+          - cell "✓" [ref=e2436]
+          - cell "✓" [ref=e2437]
+          - cell "✓ Identical" [ref=e2438]
+  - generic [ref=e2439]:
+    - heading "complex_dup_length_10 PASS" [level=2] [ref=e2440]:
+      - text: complex_dup_length_10
+      - generic [ref=e2441]: PASS
+    - generic [ref=e2442]: "Input: complex.fastq | Args: --dup_length 10"
+    - table [ref=e2443]:
+      - rowgroup [ref=e2444]:
+        - row "File Java Rust Status" [ref=e2445]:
+          - columnheader "File" [ref=e2446]
+          - columnheader "Java" [ref=e2447]
+          - columnheader "Rust" [ref=e2448]
+          - columnheader "Status" [ref=e2449]
+        - row "Icons/error.png ✓ ✓ ✓ Identical" [ref=e2450] [cursor=pointer]:
+          - cell "Icons/error.png" [ref=e2451]
+          - cell "✓" [ref=e2452]
+          - cell "✓" [ref=e2453]
+          - cell "✓ Identical" [ref=e2454]
+        - row "Icons/fastqc_icon.png ✓ ✓ ✓ Identical" [ref=e2455] [cursor=pointer]:
+          - cell "Icons/fastqc_icon.png" [ref=e2456]
+          - cell "✓" [ref=e2457]
+          - cell "✓" [ref=e2458]
+          - cell "✓ Identical" [ref=e2459]
+        - row "Icons/tick.png ✓ ✓ ✓ Identical" [ref=e2460] [cursor=pointer]:
+          - cell "Icons/tick.png" [ref=e2461]
+          - cell "✓" [ref=e2462]
+          - cell "✓" [ref=e2463]
+          - cell "✓ Identical" [ref=e2464]
+        - row "Icons/warning.png ✓ ✓ ✓ Identical" [ref=e2465] [cursor=pointer]:
+          - cell "Icons/warning.png" [ref=e2466]
+          - cell "✓" [ref=e2467]
+          - cell "✓" [ref=e2468]
+          - cell "✓ Identical" [ref=e2469]
+        - row "▶ Images/adapter_content.png ✓ ✓ ✓ Diff within limits (2.0% pixels differ)" [ref=e2470] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.png" [ref=e2471]
+          - cell "✓" [ref=e2472]
+          - cell "✓" [ref=e2473]
+          - cell "✓ Diff within limits (2.0% pixels differ)" [ref=e2474]
+        - row "▶ Images/adapter_content.svg ✓ ✓ ✓ Expected diff" [ref=e2475] [cursor=pointer]:
+          - cell "▶ Images/adapter_content.svg" [ref=e2476]
+          - cell "✓" [ref=e2477]
+          - cell "✓" [ref=e2478]
+          - cell "✓ Expected diff" [ref=e2479]
+        - row "▶ Images/duplication_levels.png ✓ ✓ ✓ Diff within limits (2.3% pixels differ)" [ref=e2480] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.png" [ref=e2481]
+          - cell "✓" [ref=e2482]
+          - cell "✓" [ref=e2483]
+          - cell "✓ Diff within limits (2.3% pixels differ)" [ref=e2484]
+        - row "▶ Images/duplication_levels.svg ✓ ✓ ✓ Expected diff" [ref=e2485] [cursor=pointer]:
+          - cell "▶ Images/duplication_levels.svg" [ref=e2486]
+          - cell "✓" [ref=e2487]
+          - cell "✓" [ref=e2488]
+          - cell "✓ Expected diff" [ref=e2489]
+        - row "▶ Images/per_base_n_content.png ✓ ✓ ✓ Diff within limits (1.2% pixels differ)" [ref=e2490] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.png" [ref=e2491]
+          - cell "✓" [ref=e2492]
+          - cell "✓" [ref=e2493]
+          - cell "✓ Diff within limits (1.2% pixels differ)" [ref=e2494]
+        - row "▶ Images/per_base_n_content.svg ✓ ✓ ✓ Expected diff" [ref=e2495] [cursor=pointer]:
+          - cell "▶ Images/per_base_n_content.svg" [ref=e2496]
+          - cell "✓" [ref=e2497]
+          - cell "✓" [ref=e2498]
+          - cell "✓ Expected diff" [ref=e2499]
+        - row "▶ Images/per_base_quality.png ✓ ✓ ✓ Diff within limits (1.5% pixels differ)" [ref=e2500] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.png" [ref=e2501]
+          - cell "✓" [ref=e2502]
+          - cell "✓" [ref=e2503]
+          - cell "✓ Diff within limits (1.5% pixels differ)" [ref=e2504]
+        - row "▶ Images/per_base_quality.svg ✓ ✓ ✓ Expected diff" [ref=e2505] [cursor=pointer]:
+          - cell "▶ Images/per_base_quality.svg" [ref=e2506]
+          - cell "✓" [ref=e2507]
+          - cell "✓" [ref=e2508]
+          - cell "✓ Expected diff" [ref=e2509]
+        - row "▶ Images/per_base_sequence_content.png ✓ ✓ ✓ Diff within limits (10.2% pixels differ)" [ref=e2510] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.png" [ref=e2511]
+          - cell "✓" [ref=e2512]
+          - cell "✓" [ref=e2513]
+          - cell "✓ Diff within limits (10.2% pixels differ)" [ref=e2514]
+        - row "▶ Images/per_base_sequence_content.svg ✓ ✓ ✓ Expected diff" [ref=e2515] [cursor=pointer]:
+          - cell "▶ Images/per_base_sequence_content.svg" [ref=e2516]
+          - cell "✓" [ref=e2517]
+          - cell "✓" [ref=e2518]
+          - cell "✓ Expected diff" [ref=e2519]
+        - row "▶ Images/per_sequence_gc_content.png ✓ ✓ ✓ Diff within limits (2.7% pixels differ)" [ref=e2520] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.png" [ref=e2521]
+          - cell "✓" [ref=e2522]
+          - cell "✓" [ref=e2523]
+          - cell "✓ Diff within limits (2.7% pixels differ)" [ref=e2524]
+        - row "▶ Images/per_sequence_gc_content.svg ✓ ✓ ✓ Expected diff" [ref=e2525] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_gc_content.svg" [ref=e2526]
+          - cell "✓" [ref=e2527]
+          - cell "✓" [ref=e2528]
+          - cell "✓ Expected diff" [ref=e2529]
+        - row "▶ Images/per_sequence_quality.png ✓ ✓ ✓ Diff within limits (1.0% pixels differ)" [ref=e2530] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.png" [ref=e2531]
+          - cell "✓" [ref=e2532]
+          - cell "✓" [ref=e2533]
+          - cell "✓ Diff within limits (1.0% pixels differ)" [ref=e2534]
+        - row "▶ Images/per_sequence_quality.svg ✓ ✓ ✓ Expected diff" [ref=e2535] [cursor=pointer]:
+          - cell "▶ Images/per_sequence_quality.svg" [ref=e2536]
+          - cell "✓" [ref=e2537]
+          - cell "✓" [ref=e2538]
+          - cell "✓ Expected diff" [ref=e2539]
+        - row "▶ Images/sequence_length_distribution.png ✓ ✓ ✓ Diff within limits (1.6% pixels differ)" [ref=e2540] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.png" [ref=e2541]
+          - cell "✓" [ref=e2542]
+          - cell "✓" [ref=e2543]
+          - cell "✓ Diff within limits (1.6% pixels differ)" [ref=e2544]
+        - row "▶ Images/sequence_length_distribution.svg ✓ ✓ ✓ Expected diff" [ref=e2545] [cursor=pointer]:
+          - cell "▶ Images/sequence_length_distribution.svg" [ref=e2546]
+          - cell "✓" [ref=e2547]
+          - cell "✓" [ref=e2548]
+          - cell "✓ Expected diff" [ref=e2549]
+        - row "fastqc.fo ✓ ✓ ✓ Identical" [ref=e2550] [cursor=pointer]:
+          - cell "fastqc.fo" [ref=e2551]
+          - cell "✓" [ref=e2552]
+          - cell "✓" [ref=e2553]
+          - cell "✓ Identical" [ref=e2554]
+        - row "▶ fastqc_data.txt ✓ ✓ ✓ Expected diff" [ref=e2555] [cursor=pointer]:
+          - cell "▶ fastqc_data.txt" [ref=e2556]
+          - cell "✓" [ref=e2557]
+          - cell "✓" [ref=e2558]
+          - cell "✓ Expected diff" [ref=e2559]
+        - row "▶ fastqc_report.html ✓ ✓ ✓ Expected diff" [ref=e2560] [cursor=pointer]:
+          - cell "▶ fastqc_report.html" [ref=e2561]
+          - cell "✓" [ref=e2562]
+          - cell "✓" [ref=e2563]
+          - cell "✓ Expected diff" [ref=e2564]
+        - row "summary.txt ✓ ✓ ✓ Identical" [ref=e2565] [cursor=pointer]:
+          - cell "summary.txt" [ref=e2566]
+          - cell "✓" [ref=e2567]
+          - cell "✓" [ref=e2568]
+          - cell "✓ Identical" [ref=e2569]
+  - generic [ref=e2570]:
+    - heading "Known Differences" [level=2] [ref=e2571]
+    - paragraph [ref=e2572]: The following differences between Java and Rust output are expected and normalized during comparison. SVG files that show as "Expected diff" or "NORMALIZED" have had these normalizations applied before diffing.
+    - heading "Font family" [level=3] [ref=e2573]
+    - paragraph [ref=e2574]:
+      - text: Java uses
+      - code [ref=e2575]: Arial
+      - text: (system font). Rust uses
+      - code [ref=e2576]: Liberation Sans
+      - text: (bundled, metric-compatible with Arial). The font-family attribute is normalized to
+      - code [ref=e2577]: "[FONT]"
+      - text: before comparison.
+    - heading "shape-rendering=\"crispEdges\"" [level=3] [ref=e2578]
+    - paragraph [ref=e2579]:
+      - text: Rust adds
+      - code [ref=e2580]: shape-rendering="crispEdges"
+      - text: to rectangles and axis lines for pixel-sharp rendering. Java relies on Java2D's default rendering and doesn't include this attribute. It is stripped before comparison.
+    - heading "font-weight=\"bold\" on titles" [level=3] [ref=e2581]
+    - paragraph [ref=e2582]:
+      - text: Rust renders chart titles with
+      - code [ref=e2583]: font-weight="bold"
+      - text: for visual correctness. Java's SVGGenerator doesn't capture the bold attribute in the SVG output (though the rendered PNG uses bold). The bold attribute is stripped before comparison.
+    - heading "stroke-width on data lines" [level=3] [ref=e2584]
+    - paragraph [ref=e2585]:
+      - text: Java's
+      - code [ref=e2586]: SVGGenerator
+      - text: captures data lines with
+      - code [ref=e2587]: stroke-width="1"
+      - text: ", but the actual PNG rendering uses"
+      - code [ref=e2588]: BasicStroke(2)
+      - text: for 2px-wide lines. Rust uses
+      - code [ref=e2589]: stroke-width="2"
+      - text: in the SVG so the PNG output matches Java visually. The stroke-width attribute is normalized before comparison.
+    - heading "SVG x-coordinate snapping" [level=3] [ref=e2590]
+    - paragraph [ref=e2591]:
+      - text: Text positioning in SVG depends on precise font metrics. Java uses
+      - code [ref=e2592]: FontMetrics.stringWidth()
+      - text: with the actual Arial font, while Rust approximates character widths. This produces 1-7px differences in text element x-coordinates (titles, axis labels, legend positions). Coordinates are snapped to the nearest 5px before comparison to absorb these differences.
+    - heading "PNG rendering engine differences" [level=3] [ref=e2593]
+    - paragraph [ref=e2594]: Java renders PNGs via Java2D, Rust via resvg + tiny-skia. Even with identical SVG coordinates, subpixel antialiasing differs between the two engines. This produces ~1-2% pixel differences on most charts, and up to ~10% on charts with many diagonal data lines. The pixel tolerance threshold is 12.0%.

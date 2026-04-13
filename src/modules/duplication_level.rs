@@ -180,24 +180,12 @@ impl DuplicationLevel {
         // Java uses fixed maxCount=100 (percentage scale 0-100%), not dynamic
         let max_count = 100.0_f64;
 
-        // Labels array, with "+" appended to last label
-        let labels: Vec<String> = LABELS
-            .iter()
-            .enumerate()
-            .map(|(i, &l)| {
-                if i == 15 {
-                    format!("{}+", l)
-                } else {
-                    l.to_string()
-                }
-            })
-            .collect();
+        let labels: Vec<String> = LABELS.iter().map(|&l| l.to_string()).collect();
 
-        // Title includes the deduplicated percentage formatted to 2 decimal places
-        let title = format!(
-            "Percent of seqs remaining if deduplicated {:.2}%",
-            computed.percent_different_seqs
-        );
+        // Title uses Java's DecimalFormat("#.##") — up to 2 decimals, trailing zeros stripped
+        let pct_str = format!("{:.2}", computed.percent_different_seqs);
+        let pct_str = pct_str.trim_end_matches('0').trim_end_matches('.');
+        let title = format!("Percent of seqs remaining if deduplicated {}%", pct_str);
 
         render_line_graph(&LineGraphData {
             data: vec![computed.total_percentages.to_vec()],

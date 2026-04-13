@@ -45,9 +45,9 @@ const FONT_SIZE: f64 = 12.0;
 /// Bold text in Java AWT is approximately 13% wider than plain text.
 /// Used when measuring text that will be rendered with font-weight="bold".
 pub const BOLD_WIDTH_SCALE: f64 = 1.13;
-// Java uses SansSerif which maps to Arial/Helvetica. We use Liberation Sans
-// (bundled, metric-compatible with Arial) to avoid system font dependency.
-const FONT_FAMILY: &str = "Liberation Sans";
+// Java uses SansSerif which maps to Arial/Helvetica. We specify Liberation Sans
+// first (bundled, metric-compatible with Arial) with web-safe fallbacks.
+const FONT_FAMILY: &str = "'Liberation Sans', Arial, Helvetica, sans-serif";
 
 /// Approximate the width of a string in pixels at 12pt Arial.
 /// Java uses FontMetrics.stringWidth() which measures actual glyph widths.
@@ -150,32 +150,12 @@ pub fn svg_rect_filled(x: f64, y: f64, width: f64, height: f64, color: &ChartCol
 /// Emit an SVG stroked rectangle (no fill).
 pub fn svg_rect_stroked(x: f64, y: f64, width: f64, height: f64, color: &ChartColor) -> String {
     format!(
-        "<rect width=\"{}\" height=\"{}\" x=\"{}\" y=\"{}\" style=\"fill:none;stroke-width:1;stroke:{}\" shape-rendering=\"crispEdges\"/>\n",
+        "<rect width=\"{}\" height=\"{}\" x=\"{}\" y=\"{}\" rx=\"0\" ry=\"0\" style=\"fill:none;stroke-width:1;stroke:{}\" shape-rendering=\"crispEdges\"/>\n",
         width as i32,
         height as i32,
         x as i32,
         y as i32,
         color.to_rgb_string()
-    )
-}
-
-/// Emit an SVG filled + stroked rectangle.
-pub fn svg_rect_both(
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-    fill: &ChartColor,
-    stroke: &ChartColor,
-) -> String {
-    format!(
-        "<rect width=\"{}\" height=\"{}\" x=\"{}\" y=\"{}\" style=\"fill:{};stroke-width:1;stroke:{}\" shape-rendering=\"crispEdges\"/>\n",
-        width as i32,
-        height as i32,
-        x as i32,
-        y as i32,
-        fill.to_rgb_string(),
-        stroke.to_rgb_string()
     )
 }
 
@@ -256,8 +236,8 @@ impl ChartLayout {
             }
             y_val += y_interval;
         }
-        // Add 5px breathing space
-        x_offset += 5.0;
+        // Add 5px breathing space, then truncate to int to match Java's `int xOffset` // JAVA COMPAT
+        x_offset = (x_offset + 5.0).trunc();
 
         ChartLayout {
             width,
@@ -271,11 +251,14 @@ impl ChartLayout {
     }
 
     /// getY() maps a data value to a pixel Y coordinate.
-    /// y = (height-40) - ((height-80)/(maxY-minY)) * (value - minY)
+    /// Matches Java: `(getHeight()-40) - (int)(((getHeight()-80)/(maxY-minY))*(y-minY))`
+    /// The inner multiplication result is truncated to int before subtraction. // JAVA COMPAT
     pub fn get_y(&self, value: f64) -> f64 {
         let plot_height = self.height - 80.0;
         let y_range = self.max_y - self.min_y;
-        (self.height - 40.0) - (plot_height / y_range) * (value - self.min_y)
+        // Java: (int)(NaN) == 0, so NaN values map to height-40 (bottom of plot). // JAVA COMPAT
+        let scaled = (plot_height / y_range) * (value - self.min_y);
+        (self.height - 40.0) - if scaled.is_nan() { 0.0 } else { scaled.trunc() }
     }
 
     /// Calculate the width of each data column in the plot area.
@@ -287,21 +270,22 @@ impl ChartLayout {
             .max(1.0)
     }
 
-    /// Render the shared SVG boilerplate: white background, Y-axis labels,
-    /// centered title, X-axis labels (with overlap prevention), axes, and
-    /// X-axis label text.
-    pub fn render_common_elements(
-        &self,
-        svg: &mut String,
-        title: &str,
-        x_categories: &[String],
-        x_label: &str,
-        num_points: usize,
-    ) {
-        let black = ChartColor::new(0, 0, 0);
-        let base_width = self.base_width(num_points);
+    /// Half of base_width, truncated to match Java's `baseWidth/2` int division. // JAVA COMPAT
+    pub fn half_base_width(&self, num_points: usize) -> f64 {
+        (self.base_width(num_points) / 2.0).trunc()
+    }
 
-        // White background
+    /// Render gray + white background rectangles matching Java's JPanel default paint.
+    pub fn render_background(&self, svg: &mut String) {
+        // Gray background then white overlay — matches Java's JPanel default
+        // paint which fills with the panel background (238,238,238) first
+        svg.push_str(&svg_rect_filled(
+            0.0,
+            0.0,
+            self.width,
+            self.height,
+            &ChartColor::new(238, 238, 238),
+        ));
         svg.push_str(&svg_rect_filled(
             0.0,
             0.0,
@@ -309,8 +293,11 @@ impl ChartLayout {
             self.height,
             &ChartColor::new(255, 255, 255),
         ));
+    }
 
-        // Y-axis labels
+    /// Render Y-axis labels at each tick interval.
+    pub fn render_y_labels(&self, svg: &mut String) {
+        let black = ChartColor::new(0, 0, 0);
         let mut y_val = self.y_start;
         while y_val <= self.max_y + self.y_interval * 0.001 {
             let label = format_y_label(y_val);
@@ -328,25 +315,11 @@ impl ChartLayout {
             ));
             y_val += self.y_interval;
         }
+    }
 
-        render_centered_title(svg, title, self.x_offset, self.width);
-
-        // X-axis labels with overlap prevention
-        let mut last_x_label_end: f64 = 0.0;
-        for i in 0..num_points {
-            if i < x_categories.len() {
-                let label = &x_categories[i];
-                let label_w = approx_text_width(label);
-                let label_x =
-                    (base_width / 2.0) + self.x_offset + (base_width * i as f64) - (label_w / 2.0);
-                if label_x > last_x_label_end {
-                    svg.push_str(&svg_text(label_x, self.height - 25.0, label, &black, false));
-                    last_x_label_end = label_x + label_w + 5.0;
-                }
-            }
-        }
-
-        // Axes
+    /// Render the X and Y axis lines.
+    pub fn render_axes(&self, svg: &mut String) {
+        let black = ChartColor::new(0, 0, 0);
         svg.push_str(&svg_line(
             self.x_offset,
             self.height - 40.0,
@@ -363,17 +336,42 @@ impl ChartLayout {
             &black,
             1.0,
         ));
+    }
 
-        // X-axis label centered below axis
-        let x_label_w = approx_text_width(x_label);
+    /// Render the X-axis label centered below the axis.
+    pub fn render_x_axis_label(&self, svg: &mut String, label: &str) {
+        let black = ChartColor::new(0, 0, 0);
+        let x_label_w = approx_text_width(label);
         let x_label_x = self.width / 2.0 - x_label_w / 2.0;
         svg.push_str(&svg_text(
             x_label_x,
             self.height - 5.0,
-            x_label,
+            label,
             &black,
             false,
         ));
+    }
+
+    /// Render a single X-axis category label at position `i`, if it doesn't overlap
+    /// the previous label. Returns the updated `last_x_label_end` value.
+    pub fn render_x_category_label_at(
+        &self,
+        svg: &mut String,
+        label: &str,
+        i: usize,
+        base_width: f64,
+        last_x_label_end: f64,
+    ) -> f64 {
+        let half_bw = (base_width / 2.0).trunc();
+        let label_w = approx_text_width(label).trunc();
+        let label_x = half_bw + self.x_offset + (base_width * i as f64) - (label_w / 2.0).trunc();
+        if label_x > last_x_label_end {
+            let black = ChartColor::new(0, 0, 0);
+            svg.push_str(&svg_text(label_x, self.height - 25.0, label, &black, false));
+            label_x + label_w + 5.0
+        } else {
+            last_x_label_end
+        }
     }
 
     /// Render horizontal gridlines at each Y-axis tick.

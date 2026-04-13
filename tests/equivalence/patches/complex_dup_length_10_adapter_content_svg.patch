@@ -1,0 +1,32 @@
+--- java/Images/adapter_content.svg
++++ rust/Images/adapter_content.svg
+@@ -17,7 +17,7 @@
+ <text x="380" y="30" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">% Adapter</text>
+ <line x1="30" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+ <line x1="30" y1="560" x2="30" y2="40" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+-<text x="340" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Position in read (bp)</text>
++<text x="350" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Position in read (bp)</text>
+ <text x="100" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">1</text>
+ <rect width="150" height="520" x="180" y="40" style="fill:rgb(230,230,230);stroke:none"/>
+ <text x="250" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">2</text>
+@@ -60,12 +60,12 @@
+ <line x1="260" y1="560" x2="410" y2="560" stroke="rgb(170,68,153)" stroke-width="[SW]"/>
+ <line x1="410" y1="560" x2="560" y2="560" stroke="rgb(170,68,153)" stroke-width="[SW]"/>
+ <line x1="560" y1="560" x2="710" y2="560" stroke="rgb(170,68,153)" stroke-width="[SW]"/>
+-<rect width="220" height="123" x="570" y="40" style="fill:rgb(255,255,255);stroke:none"/>
+-<rect width="220" height="123" x="570" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
+-<text x="580" y="55" fill="rgb(136,34,85)" font-family="[FONT]" font-size="12">Illumina Universal Adapter</text>
+-<text x="580" y="75" fill="rgb(51,34,136)" font-family="[FONT]" font-size="12">Illumina Small RNA 3' Adapter</text>
+-<text x="580" y="95" fill="rgb(17,119,51)" font-family="[FONT]" font-size="12">Illumina Small RNA 5' Adapter</text>
+-<text x="580" y="115" fill="rgb(221,204,119)" font-family="[FONT]" font-size="12">Nextera Transposase Sequence</text>
+-<text x="580" y="135" fill="rgb(68,170,153)" font-family="[FONT]" font-size="12">PolyA</text>
+-<text x="580" y="155" fill="rgb(170,68,153)" font-family="[FONT]" font-size="12">PolyG</text>
++<rect width="200" height="123" x="590" y="40" style="fill:rgb(255,255,255);stroke:none"/>
++<rect width="200" height="123" x="590" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
++<text x="600" y="55" fill="rgb(136,34,85)" font-family="[FONT]" font-size="12">Illumina Universal Adapter</text>
++<text x="600" y="75" fill="rgb(51,34,136)" font-family="[FONT]" font-size="12">Illumina Small RNA 3' Adapter</text>
++<text x="600" y="95" fill="rgb(17,119,51)" font-family="[FONT]" font-size="12">Illumina Small RNA 5' Adapter</text>
++<text x="600" y="115" fill="rgb(221,204,119)" font-family="[FONT]" font-size="12">Nextera Transposase Sequence</text>
++<text x="600" y="135" fill="rgb(68,170,153)" font-family="[FONT]" font-size="12">PolyA</text>
++<text x="600" y="155" fill="rgb(170,68,153)" font-family="[FONT]" font-size="12">PolyG</text>
+ </svg>

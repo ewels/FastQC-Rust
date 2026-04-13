@@ -75,10 +75,48 @@ class TextDiff:
     name: str
     identical: bool
     patch_applied: bool
-    normalized: bool  # True if HTML normalization was applied
+    normalized: bool  # True if normalization was applied
     rows: list[SideBySideRow]  # side-by-side diff rows
     patch_content: str  # patch file content (empty if none)
     passed: bool
+    ref_svg: str = ""  # raw SVG content for inline rendering
+    actual_svg: str = ""  # raw SVG content for inline rendering
+
+    @property
+    def patch_html(self) -> str:
+        """Return HTML with syntax highlighting for the patch content."""
+        if not self.patch_content:
+            return ""
+        lines = self.patch_content.splitlines()
+        parts: list[str] = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if line.startswith("@@"):
+                parts.append(f'<span class="ph">{html_mod.escape(line)}</span>')
+                i += 1
+            elif line.startswith("-"):
+                # Check if next line is a paired + line for word highlighting
+                if i + 1 < len(lines) and lines[i + 1].startswith("+"):
+                    old_text = line[1:]
+                    new_text = lines[i + 1][1:]
+                    old_hl, new_hl = _word_highlight(old_text, new_text)
+                    parts.append(f'<span class="pd">-{old_hl}</span>')
+                    parts.append(f'<span class="pa">+{new_hl}</span>')
+                    i += 2
+                else:
+                    parts.append(f'<span class="pd">{html_mod.escape(line)}</span>')
+                    i += 1
+            elif line.startswith("+"):
+                parts.append(f'<span class="pa">{html_mod.escape(line)}</span>')
+                i += 1
+            elif line.startswith(" "):
+                parts.append(f'<span class="pm">{html_mod.escape(line)}</span>')
+                i += 1
+            else:
+                parts.append(f'<span class="pm">{html_mod.escape(line)}</span>')
+                i += 1
+        return "\n".join(parts)
 
 
 @dataclass
@@ -195,15 +233,12 @@ _BASE64_RE = re.compile(r'(data:image/png;base64,)[A-Za-z0-9+/=]+')
 _BASE64_PLACEHOLDER = r'\1[BASE64_IMAGE_DATA]'
 
 
-_VERSION_RE = re.compile(r'(version\s+)\d+\.\d+\.\d+(?:\.\w+)?')
-_VERSION_PLACEHOLDER = r'\g<1>[VERSION]'
-
 _TAG_BOUNDARY_RE = re.compile(r'>(\s*)<')
 _BLANK_LINES_RE = re.compile(r'\n{3,}')
 
 
 def _normalize_html(text: str) -> str:
-    """Normalize HTML for comparison: pretty-print and replace base64 images."""
+    """Normalize HTML for comparison: replace base64 images and pretty-print."""
     # Replace base64 image data with placeholder
     text = _BASE64_RE.sub(_BASE64_PLACEHOLDER, text)
     # Simple pretty-print: add newlines after closing tags for readable diffs
@@ -213,9 +248,34 @@ def _normalize_html(text: str) -> str:
     return text
 
 
+_FONT_FAMILY_RE = re.compile(r'font-family="[^"]*"')
+_CRISP_EDGES_RE = re.compile(r'\s*shape-rendering="crispEdges"')
+_FONT_WEIGHT_BOLD_RE = re.compile(r'\s*font-weight="bold"')
+_STROKE_WIDTH_RE = re.compile(r'stroke-width="[^"]*"')
+_SVG_X_COORD_RE = re.compile(r'\b(x1?|x2|width)="(\d+(?:\.\d+)?)"')
+
+
+def _snap_x_coord(m: re.Match) -> str:
+    """Snap x/x1/x2/width attributes to the nearest 10px."""
+    attr = m.group(1)
+    val = float(m.group(2))
+    snapped = round(val / 10) * 10
+    return f'{attr}="{snapped}"'
+
+
+def _normalize_svg(text: str) -> str:
+    """Normalize SVG for comparison: strip font/rendering differences and snap coordinates."""
+    text = _FONT_FAMILY_RE.sub('font-family="[FONT]"', text)
+    text = _CRISP_EDGES_RE.sub('', text)
+    text = _FONT_WEIGHT_BOLD_RE.sub('', text)
+    text = _STROKE_WIDTH_RE.sub('stroke-width="[SW]"', text)
+    text = _SVG_X_COORD_RE.sub(_snap_x_coord, text)
+    return text
+
+
 def compare_text(
     ref_path: Path, actual_path: Path, patch_paths: list[Path] | None,
-    normalize_images: bool = False,
+    normalize_html: bool = False, normalize_svg: bool = False,
 ) -> TextDiff:
     """Compare two text files, optionally applying patches to the reference first."""
     name = ref_path.name
@@ -226,9 +286,14 @@ def compare_text(
     patch_applied = False
 
     # Normalize HTML before patching (patches are written against normalized form)
-    if normalize_images:
+    if normalize_html:
         ref_text = _normalize_html(ref_text)
         actual_text = _normalize_html(actual_text)
+
+    # Normalize SVG before patching
+    if normalize_svg:
+        ref_text = _normalize_svg(ref_text)
+        actual_text = _normalize_svg(actual_text)
 
     if patch_paths:
         all_patches = []
@@ -240,6 +305,7 @@ def compare_text(
         patch_applied = True
 
     identical = ref_text == actual_text
+    normalized = normalize_html or normalize_svg
 
     rows: list[SideBySideRow] = []
     if not identical:
@@ -249,7 +315,7 @@ def compare_text(
         name=name,
         identical=identical,
         patch_applied=patch_applied,
-        normalized=normalize_images,
+        normalized=normalized,
         rows=rows,
         patch_content=patch_content,
         passed=identical,
@@ -353,7 +419,7 @@ def _apply_patch(text: str, patch: str) -> str:
             old_spec = parts[1]  # e.g. -1,5
             old_start = int(old_spec.split(",")[0].lstrip("-"))
             # Copy lines before this hunk
-            while i < old_start - 1:
+            while i < old_start - 1 and i < len(lines):
                 result.append(lines[i])
                 i += 1
             p += 1
@@ -361,7 +427,8 @@ def _apply_patch(text: str, patch: str) -> str:
 
         if line.startswith("-"):
             # Remove line from original
-            i += 1
+            if i < len(lines):
+                i += 1
             p += 1
         elif line.startswith("+"):
             # Add line to result
@@ -369,8 +436,9 @@ def _apply_patch(text: str, patch: str) -> str:
             p += 1
         elif line.startswith(" "):
             # Context line
-            result.append(lines[i])
-            i += 1
+            if i < len(lines):
+                result.append(lines[i])
+                i += 1
             p += 1
         else:
             p += 1
@@ -503,10 +571,12 @@ def run_test_case(
                 img_diff.name = str(rel)
                 result.image_diffs.append(img_diff)
                 fe.has_detail = True
-                fe.status = "differs"
-                fe.detail_summary = f"{img_diff.diff_percent:.1f}% pixels differ"
-                if not img_diff.passed:
+                if img_diff.passed:
+                    fe.status = "within_limits"
+                else:
+                    fe.status = "differs"
                     result.passed = False
+                fe.detail_summary = f"{img_diff.diff_percent:.1f}% pixels differ"
                 continue
 
             # Text-like files — unified diff
@@ -518,26 +588,41 @@ def run_test_case(
                 fe.detail_summary = "binary file differs"
                 continue
 
-            # Check for patches (for .txt files)
+            # Check for patches
             patch_paths = []
             stem = rel.stem  # e.g. "fastqc_data"
-            universal_patch = patches_dir / f"_universal_{stem}.patch"
+            if suffix != ".txt":
+                patch_stem = f"{stem}_{suffix.lstrip('.')}"
+            else:
+                patch_stem = stem
+            universal_patch = patches_dir / f"_universal_{patch_stem}.patch"
             if universal_patch.exists():
                 patch_paths.append(universal_patch)
-            case_patch = patches_dir / f"{name}_{stem}.patch"
+            case_patch = patches_dir / f"{name}_{patch_stem}.patch"
             if case_patch.exists():
                 patch_paths.append(case_patch)
 
-            normalize_images = suffix == ".html"
+            normalize_html = suffix == ".html"
+            normalize_svg = suffix == ".svg"
             td = compare_text(ref_path, act_path, patch_paths if patch_paths else None,
-                              normalize_images=normalize_images)
+                              normalize_html=normalize_html, normalize_svg=normalize_svg)
             td.name = str(rel)
+
+            # Store raw SVG for inline rendering
+            if suffix == ".svg":
+                td.ref_svg = ref_path.read_text()
+                td.actual_svg = act_path.read_text()
+
             result.text_diffs.append(td)
             fe.has_detail = True
             if td.passed:
                 if td.patch_applied:
                     fe.status = "patched"
-                elif normalize_images:
+                    changed = sum(1 for l in td.patch_content.splitlines()
+                                  if (l.startswith('+') or l.startswith('-'))
+                                  and not l.startswith('+++') and not l.startswith('---'))
+                    fe.detail_summary = f"{changed} lines patched"
+                elif td.normalized:
                     fe.status = "patched"  # identical after normalization
                 else:
                     fe.status = "identical"
@@ -546,7 +631,7 @@ def run_test_case(
                 fe.status = "differs"
                 diff_count = sum(1 for r in td.rows if r.kind in ("change", "delete", "insert"))
                 fe.detail_summary = f"{diff_count} lines differ"
-                if rel.name in STRICT_FILES:
+                if rel.name in STRICT_FILES or suffix == ".svg":
                     result.passed = False
 
     return result
@@ -557,12 +642,13 @@ def run_test_case(
 # ---------------------------------------------------------------------------
 
 HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="overflow-x: hidden">
 <head>
 <meta charset="utf-8">
 <title>FastQC Equivalence Report</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { overflow-x: hidden; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
          background: #f5f5f5; color: #333; padding: 20px; }
   h1 { margin-bottom: 10px; }
@@ -605,8 +691,13 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
                            font-size: 11px; padding: 4px; }
   mark.del-word { background: #fdb8c0; border-radius: 2px; padding: 0 1px; }
   mark.add-word { background: #acf2bd; border-radius: 2px; padding: 0 1px; }
-  .patch-block { background: #f0f0f0; padding: 10px; border-radius: 4px; font-family: monospace;
-                 font-size: 12px; margin: 8px 0; white-space: pre; overflow-x: auto; }
+  .patch-block { background: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace;
+                 font-size: 12px; margin: 8px 0; white-space: pre; overflow-x: auto;
+                 border: 1px solid #e1e4e8; line-height: 1.5; }
+  .patch-block .pa { color: #22863a; }
+  .patch-block .pd { color: #cb2431; }
+  .patch-block .ph { color: #0366d6; }
+  .patch-block .pm { color: #6a737d; }
   .image-stats { font-size: 13px; color: #666; margin: 5px 0; }
   .identical { color: #28a745; }
   .differs { color: #dc3545; }
@@ -641,6 +732,19 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
   .img-compare .side-by-side .col { flex: 1; text-align: center; }
   .img-compare .side-by-side .col img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
   .img-compare .side-by-side .col .label { font-size: 12px; color: #666; margin-bottom: 4px; }
+
+  /* SVG preview */
+  .svg-preview { display: flex; gap: 10px; margin: 10px 0; }
+  .svg-preview .col { flex: 1; text-align: center; }
+  .svg-preview .col .label { font-size: 12px; color: #666; margin-bottom: 4px; }
+  .svg-preview svg { width: 100%; height: auto; }
+
+  /* Known differences footer */
+  .known-diffs { margin: 30px 0 10px; padding: 20px; background: #fff; border-radius: 8px;
+                 box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .known-diffs h2 { margin-bottom: 10px; }
+  .known-diffs dt { font-weight: bold; margin-top: 10px; }
+  .known-diffs dd { margin-left: 20px; color: #555; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -684,13 +788,14 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 {% for f in r.files %}
 {% set td = lu.text.get(f.name) %}
 {% set img = lu.img.get(f.name) %}
-{% set expandable = (td and (td.rows or td.patch_applied or td.normalized)) or img %}
+{% set expandable = (td and (td.rows or td.patch_applied or td.normalized or td.ref_svg)) or img %}
 <tr class="file-row {{ 'expandable' if expandable }}" {% if expandable %}onclick="toggleDetail(this)"{% endif %}>
   <td>{{ f.name }}</td>
   <td style="text-align:center">{{ '✓' if f.in_reference else '✗' }}</td>
   <td style="text-align:center">{{ '✓' if f.in_actual else '✗' }}</td>
   <td>{% if f.status == 'identical' %}<span class="identical">✓ Identical</span>
-  {% elif f.status == 'patched' %}<span class="identical">✓ Expected diff</span>
+  {% elif f.status == 'patched' %}<span class="identical">✓ Expected diff{{ ' (' + f.detail_summary + ')' if f.detail_summary }}</span>
+  {% elif f.status == 'within_limits' %}<span class="identical">✓ Diff within limits{{ ' (' + f.detail_summary + ')' if f.detail_summary }}</span>
   {% elif f.status == 'differs' %}<span class="differs">✗ Differs{{ ' (' + f.detail_summary + ')' if f.detail_summary }}</span>
   {% elif f.status == 'missing' %}<span class="differs">✗ {{ 'Only in Java' if f.in_reference else 'Only in Rust' }}</span>
   {% else %}-{% endif %}</td>
@@ -701,7 +806,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 {% if td and td.rows %}
 {% if td.patch_content %}
 <details><summary style="font-size:12px;color:#666;cursor:pointer">Patch applied</summary>
-<div class="patch-block">{{ td.patch_content | e }}</div></details>
+<div class="patch-block">{{ td.patch_html }}</div></details>
 {% endif %}
 <div class="diff-wrap"><table class="diff-table">
 <thead><tr><td class="ln"></td><td class="code"><div><strong>Java</strong></div></td><td class="sep"></td><td class="ln"></td><td class="code"><div><strong>Rust</strong></div></td></tr></thead>
@@ -716,11 +821,29 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 {% elif td and (td.patch_applied or td.normalized) %}
 {% if td.patch_content %}
 <p style="margin:4px 0;color:#666;font-size:13px">Identical after applying patch:</p>
-<div class="patch-block">{{ td.patch_content | e }}</div>
+<div class="patch-block">{{ td.patch_html }}</div>
 {% endif %}
 {% if td.normalized %}
-<p style="margin:4px 0;color:#666;font-size:13px">Base64 images and version strings normalized. Remaining structure is identical.</p>
+<ul style="margin:4px 0;color:#666;font-size:13px;list-style:none;padding:0">
+{% if td.name.endswith('.html') %}
+<li>base64-encoded PNG images replaced with placeholders</li>
 {% endif %}
+{% if td.name.endswith('.svg') %}
+<li><a href="#kd-font-family">font-family</a> attributes normalized</li>
+<li><a href="#kd-shape-rendering">shape-rendering</a> attributes stripped</li>
+<li><a href="#kd-font-weight">font-weight</a> attributes stripped</li>
+<li><a href="#kd-stroke-width">stroke-width</a> attributes normalized</li>
+<li><a href="#kd-x-coordinates">x-coordinates</a> snapped to nearest 10px</li>
+{% endif %}
+</ul>
+{% endif %}
+{% endif %}
+
+{% if td and td.ref_svg %}
+<div class="svg-preview">
+  <div class="col"><div class="label">Java</div>{{ td.ref_svg }}</div>
+  <div class="col"><div class="label">Rust</div>{{ td.actual_svg }}</div>
+</div>
 {% endif %}
 
 {% if img %}
@@ -759,6 +882,26 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 {% endif %}
 </div>
 {% endfor %}
+
+<div class="known-diffs">
+<h2>Known Differences</h2>
+<dl>
+  <dt id="kd-font-family">font-family</dt>
+  <dd>Java uses platform-dependent font families (e.g. SansSerif); Rust uses explicit font names. Normalized during SVG comparison.</dd>
+  <dt id="kd-shape-rendering">shape-rendering</dt>
+  <dd>Java emits <code>shape-rendering="crispEdges"</code> on some elements; Rust omits it. Stripped during SVG comparison.</dd>
+  <dt id="kd-font-weight">font-weight</dt>
+  <dd>Java emits <code>font-weight="bold"</code> on some text elements; Rust handles bold via font selection. Stripped during SVG comparison.</dd>
+  <dt id="kd-stroke-width">stroke-width</dt>
+  <dd>Minor differences in stroke-width values between Java and Rust SVG output. Normalized during comparison.</dd>
+  <dt id="kd-x-coordinates">x-coordinates</dt>
+  <dd>Small differences in x/x1/x2/width positioning due to font metrics. Snapped to nearest 10px during SVG comparison.</dd>
+  <dt id="kd-png-rendering">PNG rendering</dt>
+  <dd>Pixel-level differences in PNG charts due to different rendering engines (Java AWT vs Rust). Compared with configurable tolerance.</dd>
+  <dt id="kd-upstream-pr">Upstream PR</dt>
+  <dd>Some differences are covered by patches that account for known upstream behavior differences.</dd>
+</dl>
+</div>
 
 <script>
 function toggleDetail(row) {
@@ -815,8 +958,8 @@ def main():
     parser.add_argument("--actual", type=Path, help="Actual directory (for ad-hoc comparison)")
     parser.add_argument("--output", type=Path, help="Output HTML report path")
     parser.add_argument("--pixel-tolerance", type=int, default=2, help="Per-channel pixel tolerance (default: 2)")
-    parser.add_argument("--max-diff-percent", type=float, default=100.0,
-                        help="Max %% of differing pixels to pass (default: 100, images always reported but don't fail)")
+    parser.add_argument("--max-diff-percent", type=float, default=12.0,
+                        help="Max %% of differing pixels to pass (default: 12.0)")
     args = parser.parse_args()
 
     # Find project root (where Cargo.toml lives)

@@ -5,7 +5,6 @@ use std::io;
 
 use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
-use crate::report::charts::find_optimal_y_interval;
 use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
 use crate::sequence::Sequence;
 use crate::utils::format::java_format_double;
@@ -100,9 +99,8 @@ impl PerSequenceQualityScores {
             .iter()
             .cloned()
             .fold(0.0_f64, f64::max);
-        // maxY is rounded up using findOptimalYInterval
-        let y_interval = find_optimal_y_interval(max_count);
-        let max_y = (max_count / y_interval).ceil() * y_interval;
+        // Java passes raw max to LineGraph (no ceil rounding)
+        let max_y = max_count;
 
         let x_categories: Vec<String> =
             data.x_categories.iter().map(|v| format!("{}", v)).collect();
