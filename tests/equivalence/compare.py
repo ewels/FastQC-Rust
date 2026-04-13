@@ -188,17 +188,32 @@ def compare_images(
     exceeds = max_per_pixel > pixel_tolerance
     differing = int(exceeds.sum())
 
-    # Build diff image: dimmed actual with red highlights on differing pixels
-    diff_arr = act_arr.copy()
-    # Dim the background (preserve alpha)
-    diff_arr[:, :, :3] //= 3
+    # Build diff image: dimmed background with colored highlights.
+    # Red = pixel brighter/present in Java (missing from Rust)
+    # Green = pixel brighter/present in Rust (extra in Rust)
+    diff_arr = ((ref_arr.astype(np.int32) + act_arr.astype(np.int32)) // 2).astype(np.int16)
+    diff_arr[:, :, :3] //= 3  # dim
 
-    # Highlight differing pixels in red, intensity proportional to difference
+    # Use luminance to determine direction
+    ref_lum = ref_arr[:, :, 0] * 0.299 + ref_arr[:, :, 1] * 0.587 + ref_arr[:, :, 2] * 0.114
+    act_lum = act_arr[:, :, 0] * 0.299 + act_arr[:, :, 1] * 0.587 + act_arr[:, :, 2] * 0.114
+    lum_diff = ref_lum - act_lum  # positive = Java brighter
+
     intensity = np.clip(max_per_pixel * 3, 0, 255).astype(np.uint8)
-    diff_arr[exceeds, 0] = intensity[exceeds]
-    diff_arr[exceeds, 1] = 0
-    diff_arr[exceeds, 2] = 0
-    diff_arr[exceeds, 3] = 255
+
+    # Java brighter (missing from Rust) → red
+    java_brighter = exceeds & (lum_diff >= 0)
+    diff_arr[java_brighter, 0] = intensity[java_brighter]
+    diff_arr[java_brighter, 1] = 0
+    diff_arr[java_brighter, 2] = 0
+    diff_arr[java_brighter, 3] = 255
+
+    # Rust brighter (extra in Rust) → green
+    rust_brighter = exceeds & (lum_diff < 0)
+    diff_arr[rust_brighter, 0] = 0
+    diff_arr[rust_brighter, 1] = intensity[rust_brighter]
+    diff_arr[rust_brighter, 2] = 0
+    diff_arr[rust_brighter, 3] = 255
 
     diff_img = Image.fromarray(diff_arr.astype(np.uint8), "RGBA")
     pct = (differing / total * 100) if total > 0 else 0.0
@@ -725,8 +740,6 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
   .img-compare .viewport img { display: block; max-width: 100%; }
   .img-compare .viewport .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   .img-compare .viewport .overlay img { width: 100%; height: 100%; display: block; }
-  .img-compare .slider-input { width: 100%; margin-top: 4px; }
-  .img-compare .labels { display: flex; justify-content: space-between; font-size: 11px; color: #666; }
   /* Side-by-side mode */
   .img-compare .side-by-side { display: flex; gap: 10px; }
   .img-compare .side-by-side .col { flex: 1; text-align: center; }
@@ -740,11 +753,6 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
   .svg-preview svg { width: 100%; height: auto; }
 
   /* Known differences footer */
-  .known-diffs { margin: 30px 0 10px; padding: 20px; background: #fff; border-radius: 8px;
-                 box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-  .known-diffs h2 { margin-bottom: 10px; }
-  .known-diffs dt { font-weight: bold; margin-top: 10px; }
-  .known-diffs dd { margin-left: 20px; color: #555; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -829,11 +837,11 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 <li>base64-encoded PNG images replaced with placeholders</li>
 {% endif %}
 {% if td.name.endswith('.svg') %}
-<li><a href="#kd-font-family">font-family</a> attributes normalized</li>
-<li><a href="#kd-shape-rendering">shape-rendering</a> attributes stripped</li>
-<li><a href="#kd-font-weight">font-weight</a> attributes stripped</li>
-<li><a href="#kd-stroke-width">stroke-width</a> attributes normalized</li>
-<li><a href="#kd-x-coordinates">x-coordinates</a> snapped to nearest 10px</li>
+<li><a href="#known-font-family">font-family</a> attributes normalized</li>
+<li><a href="#known-shape-rendering">shape-rendering</a> attributes stripped</li>
+<li><a href="#known-font-weight">font-weight</a> attributes stripped</li>
+<li><a href="#known-stroke-width">stroke-width</a> attributes normalized</li>
+<li><a href="#known-svg-coords">x-coordinates</a> snapped to nearest 10px</li>
 {% endif %}
 </ul>
 {% endif %}
@@ -860,18 +868,26 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     <div class="col"><div class="label">Rust</div>{% if img.actual_b64 %}<img src="data:image/png;base64,{{ img.actual_b64 }}" alt="Rust">{% endif %}</div>
     <div class="col"><div class="label">Pixel Diff</div>{% if img.diff_b64 %}<img src="data:image/png;base64,{{ img.diff_b64 }}" alt="Diff">{% endif %}</div>
   </div></div>
-  <div class="view view-slider" style="display:none"><div class="viewport" style="position:relative">
-    {% if img.ref_b64 %}<img src="data:image/png;base64,{{ img.ref_b64 }}" style="display:block;max-width:100%">{% endif %}
-    <div class="overlay" style="position:absolute;top:0;left:0;height:100%;overflow:hidden;width:50%">{% if img.actual_b64 %}<img src="data:image/png;base64,{{ img.actual_b64 }}" style="display:block;max-width:none">{% endif %}</div>
-    <div style="position:absolute;top:0;width:2px;height:100%;background:red;left:50%;pointer-events:none"></div>
-  </div><input type="range" class="slider-input" min="0" max="100" value="50" oninput="updateSlider(this)"><div class="labels"><span>Java</span><span>Rust</span></div></div>
-  <div class="view view-fade" style="display:none"><div class="viewport" style="position:relative">
-    {% if img.ref_b64 %}<img src="data:image/png;base64,{{ img.ref_b64 }}" style="display:block;max-width:100%">{% endif %}
-    <div class="overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0.5">{% if img.actual_b64 %}<img src="data:image/png;base64,{{ img.actual_b64 }}" style="width:100%;height:100%">{% endif %}</div>
-  </div><input type="range" class="slider-input" min="0" max="100" value="50" oninput="updateFade(this)"><div class="labels"><span>Java</span><span>Rust</span></div></div>
+  <div class="view view-slider" style="display:none"><div class="viewport drag-compare" style="position:relative;cursor:col-resize" onmousedown="startDrag(event,'slider')" >
+    {% if img.ref_b64 %}<img src="data:image/png;base64,{{ img.ref_b64 }}" style="display:block;max-width:100%" draggable="false">{% endif %}
+    <div class="overlay" style="position:absolute;top:0;left:0;height:100%;overflow:hidden;width:50%">{% if img.actual_b64 %}<img src="data:image/png;base64,{{ img.actual_b64 }}" style="display:block;max-width:none" draggable="false">{% endif %}</div>
+    <div class="drag-line" style="position:absolute;top:0;width:2px;height:100%;background:rgba(255,0,0,0.8);left:50%;pointer-events:none;z-index:2"></div>
+    <div class="drag-handle" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:28px;height:28px;background:rgba(255,255,255,0.9);border:2px solid rgba(255,0,0,0.8);border-radius:50%;pointer-events:none;z-index:3;display:flex;align-items:center;justify-content:center"><span style="color:#c00;font-size:14px;font-weight:bold;letter-spacing:-2px">◀▶</span></div>
+    <div style="position:absolute;top:4px;left:6px;font-size:10px;color:rgba(0,0,0,0.5);pointer-events:none">Rust</div>
+    <div style="position:absolute;top:4px;right:6px;font-size:10px;color:rgba(0,0,0,0.5);pointer-events:none">Java</div>
+  </div></div>
+  <div class="view view-fade" style="display:none"><div class="viewport drag-compare" style="position:relative;cursor:ew-resize" onmousedown="startDrag(event,'fade')" >
+    {% if img.ref_b64 %}<img src="data:image/png;base64,{{ img.ref_b64 }}" style="display:block;max-width:100%" draggable="false">{% endif %}
+    <div class="overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0.5">{% if img.actual_b64 %}<img src="data:image/png;base64,{{ img.actual_b64 }}" style="width:100%;height:100%" draggable="false">{% endif %}</div>
+    <div class="fade-track" style="position:absolute;bottom:12px;left:10%;right:10%;height:6px;background:rgba(0,0,0,0.3);border-radius:3px;pointer-events:none;z-index:2">
+      <div class="fade-thumb" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:20px;height:20px;background:rgba(255,255,255,0.9);border:2px solid rgba(0,0,0,0.5);border-radius:50%"></div>
+    </div>
+    <div style="position:absolute;top:4px;left:6px;font-size:10px;color:rgba(0,0,0,0.5);pointer-events:none">Rust</div>
+    <div style="position:absolute;top:4px;right:6px;font-size:10px;color:rgba(0,0,0,0.5);pointer-events:none">Java</div>
+  </div></div>
   <div class="view view-highlight" style="display:none"><div class="viewport">
     {% if img.diff_b64 %}<img src="data:image/png;base64,{{ img.diff_b64 }}" style="display:block;max-width:100%">{% endif %}
-  </div><p style="font-size:12px;color:#666;margin-top:4px">Differing pixels in red on dimmed Rust image.</p></div>
+  </div><p style="font-size:12px;color:#666;margin-top:4px"><span style="color:#c00">Red</span> = only in Java, <span style="color:#0a0">Green</span> = only in Rust.</p></div>
 </div>
 {% endif %}
 
@@ -883,24 +899,30 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 </div>
 {% endfor %}
 
-<div class="known-diffs">
+<div class="case-section" id="known-differences">
 <h2>Known Differences</h2>
-<dl>
-  <dt id="kd-font-family">font-family</dt>
-  <dd>Java uses platform-dependent font families (e.g. SansSerif); Rust uses explicit font names. Normalized during SVG comparison.</dd>
-  <dt id="kd-shape-rendering">shape-rendering</dt>
-  <dd>Java emits <code>shape-rendering="crispEdges"</code> on some elements; Rust omits it. Stripped during SVG comparison.</dd>
-  <dt id="kd-font-weight">font-weight</dt>
-  <dd>Java emits <code>font-weight="bold"</code> on some text elements; Rust handles bold via font selection. Stripped during SVG comparison.</dd>
-  <dt id="kd-stroke-width">stroke-width</dt>
-  <dd>Minor differences in stroke-width values between Java and Rust SVG output. Normalized during comparison.</dd>
-  <dt id="kd-x-coordinates">x-coordinates</dt>
-  <dd>Small differences in x/x1/x2/width positioning due to font metrics. Snapped to nearest 10px during SVG comparison.</dd>
-  <dt id="kd-png-rendering">PNG rendering</dt>
-  <dd>Pixel-level differences in PNG charts due to different rendering engines (Java AWT vs Rust). Compared with configurable tolerance.</dd>
-  <dt id="kd-upstream-pr">Upstream PR</dt>
-  <dd>Some differences are covered by patches that account for known upstream behavior differences.</dd>
-</dl>
+<p style="color:#666;margin-bottom:15px">The following differences between Java and Rust output are expected and normalized during comparison. SVG files that show as "Expected diff" or "NORMALIZED" have had these normalizations applied before diffing.</p>
+
+<h3 id="known-font-family">Font family</h3>
+<p>Java uses <code>Arial</code> (system font). Rust uses <code>'Liberation Sans', Arial, Helvetica, sans-serif</code> (bundled Liberation Sans, metric-compatible with Arial). The font-family attribute is normalized to <code>[FONT]</code> before comparison.</p>
+
+<h3 id="known-shape-rendering">shape-rendering="crispEdges"</h3>
+<p>Rust adds <code>shape-rendering="crispEdges"</code> to rectangles and axis lines for pixel-sharp rendering. Java relies on Java2D's default rendering and doesn't include this attribute. It is stripped before comparison.</p>
+
+<h3 id="known-font-weight">font-weight="bold" on titles</h3>
+<p>Rust renders chart titles with <code>font-weight="bold"</code> for visual correctness. Java's SVGGenerator doesn't capture the bold attribute in the SVG output (though the rendered PNG uses bold). The bold attribute is stripped before comparison.</p>
+
+<h3 id="known-stroke-width">stroke-width on data lines</h3>
+<p>Java's <code>SVGGenerator</code> captures data lines with <code>stroke-width="1"</code>, but the actual PNG rendering uses <code>BasicStroke(2)</code> for 2px-wide lines. Rust uses <code>stroke-width="2"</code> in the SVG so the PNG output matches Java visually. The stroke-width attribute is normalized before comparison.</p>
+
+<h3 id="known-svg-coords">SVG x-coordinate snapping</h3>
+<p>Text positioning in SVG depends on precise font metrics. Java uses <code>FontMetrics.stringWidth()</code> with the actual Arial font, while Rust approximates character widths. This produces 1-7px differences in text element x-coordinates (titles, axis labels, legend positions). Coordinates are snapped to the nearest 10px before comparison to absorb these differences.</p>
+
+<h3 id="known-png-rendering">PNG rendering engine differences</h3>
+<p>Java renders PNGs via Java2D, Rust via resvg + tiny-skia. Even with identical SVG coordinates, subpixel antialiasing differs between the two engines. This produces ~1-2% pixel differences on most charts, and up to ~10% on charts with many diagonal data lines. The pixel tolerance threshold is {{ max_diff_pct }}%.</p>
+
+<h3 id="known-upstream-pr">Upstream font bundling</h3>
+<p><a href="https://github.com/s-andrews/FastQC/pull/185">s-andrews/FastQC#185</a> (merged) bundles Liberation Sans in Java FastQC, matching the font used by this Rust rewrite. Once the reference data is regenerated from a release that includes this change, many SVG differences caused by font-metric mismatches (x-coordinate positioning, legend box sizing, title centering) should be eliminated or significantly reduced.</p>
 </div>
 
 <script>
@@ -915,14 +937,35 @@ function setMode(btn, mode) {
   w.querySelectorAll('.view').forEach(v => v.style.display = 'none');
   w.querySelector('.view-' + mode).style.display = '';
 }
-function updateSlider(input) {
-  const v = input.closest('.view-slider'), pct = input.value;
-  v.querySelector('.overlay').style.width = pct + '%';
-  const ln = v.querySelector('.overlay + div'); if (ln) ln.style.left = pct + '%';
-  const vp = v.querySelector('.viewport'), img = v.querySelector('.overlay img');
-  if (img && vp) img.style.width = vp.offsetWidth + 'px';
+var _dragging = null;
+function startDrag(e, mode) {
+  e.preventDefault();
+  _dragging = { el: e.currentTarget, mode: mode };
+  onDrag(e, mode);
 }
-function updateFade(input) { input.closest('.view-fade').querySelector('.overlay').style.opacity = input.value / 100; }
+function _updateDrag(e) {
+  if (!_dragging) return;
+  const rect = _dragging.el.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+  if (_dragging.mode === 'slider') {
+    const vp = _dragging.el;
+    vp.querySelector('.overlay').style.width = pct + '%';
+    const ln = vp.querySelector('.drag-line');
+    if (ln) ln.style.left = pct + '%';
+    const handle = vp.querySelector('.drag-handle');
+    if (handle) handle.style.left = pct + '%';
+    const img = vp.querySelector('.overlay img');
+    if (img) img.style.width = vp.offsetWidth + 'px';
+  } else {
+    _dragging.el.querySelector('.overlay').style.opacity = pct / 100;
+    const thumb = _dragging.el.querySelector('.fade-thumb');
+    if (thumb) thumb.style.left = pct + '%';
+  }
+}
+function onDrag(e) { _updateDrag(e); }
+function stopDrag() { _dragging = null; }
+document.addEventListener('mouseup', stopDrag);
+document.addEventListener('mousemove', function(e) { _updateDrag(e); });
 window.addEventListener('load', function() {
   document.querySelectorAll('.view-slider').forEach(function(v) {
     const vp = v.querySelector('.viewport'), img = v.querySelector('.overlay img');
@@ -942,7 +985,8 @@ def generate_report(results: list[TestCaseResult], output_path: Path, upstream_v
         text_map = {td.name: td for td in r.text_diffs}
         img_map = {img.name: img for img in r.image_diffs}
         diff_lookups[r.name] = {"text": text_map, "img": img_map}
-    html = HTML_TEMPLATE.render(results=results, upstream_version=upstream_version, diff_lookups=diff_lookups)
+    html = HTML_TEMPLATE.render(results=results, upstream_version=upstream_version,
+                               diff_lookups=diff_lookups, max_diff_pct=12.0)
     output_path.write_text(html)
 
 
