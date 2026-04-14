@@ -272,7 +272,6 @@ def _normalize_html(text: str) -> str:
 
 
 _FONT_FAMILY_RE = re.compile(r'font-family="[^"]*"')
-_CRISP_EDGES_RE = re.compile(r'\s*shape-rendering="crispEdges"')
 _FONT_WEIGHT_BOLD_RE = re.compile(r'\s*font-weight="bold"')
 _STROKE_WIDTH_RE = re.compile(r'stroke-width="[^"]*"')
 _SVG_X_COORD_RE = re.compile(r'\b(x1?|x2|width)="(\d+(?:\.\d+)?)"')
@@ -289,7 +288,6 @@ def _snap_x_coord(m: re.Match) -> str:
 def _normalize_svg(text: str) -> str:
     """Normalize SVG for comparison: strip font/rendering differences and snap coordinates."""
     text = _FONT_FAMILY_RE.sub('font-family="[FONT]"', text)
-    text = _CRISP_EDGES_RE.sub('', text)
     text = _FONT_WEIGHT_BOLD_RE.sub('', text)
     text = _STROKE_WIDTH_RE.sub('stroke-width="[SW]"', text)
     text = _SVG_X_COORD_RE.sub(_snap_x_coord, text)
@@ -849,7 +847,6 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 {% endif %}
 {% if td.name.endswith('.svg') %}
 <li><a href="#known-font-family">font-family</a> attributes normalized</li>
-<li><a href="#known-shape-rendering">shape-rendering</a> attributes stripped</li>
 <li><a href="#known-font-weight">font-weight</a> attributes stripped</li>
 <li><a href="#known-stroke-width">stroke-width</a> attributes normalized</li>
 <li><a href="#known-svg-coords">x-coordinates</a> snapped to nearest 10px</li>
@@ -916,9 +913,6 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 
 <h3 id="known-font-family">Font family</h3>
 <p>Java uses <code>Arial</code> (system font). Rust uses <code>'Liberation Sans', Arial, Helvetica, sans-serif</code> (bundled Liberation Sans, metric-compatible with Arial). The font-family attribute is normalized to <code>[FONT]</code> before comparison.</p>
-
-<h3 id="known-shape-rendering">shape-rendering="crispEdges"</h3>
-<p>Rust adds <code>shape-rendering="crispEdges"</code> to rectangles and axis lines for pixel-sharp rendering. Java relies on Java2D's default rendering and doesn't include this attribute. It is stripped before comparison.</p>
 
 <h3 id="known-font-weight">font-weight="bold" on titles</h3>
 <p>Rust renders chart titles with <code>font-weight="bold"</code> for visual correctness. Java's SVGGenerator doesn't capture the bold attribute in the SVG output (though the rendered PNG uses bold). The bold attribute is stripped before comparison.</p>

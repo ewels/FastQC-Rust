@@ -37,9 +37,7 @@ const base = import.meta.env.BASE_URL;
       <li>PNG charts are rendered via resvg + tiny-skia instead of Java2D. Antialiasing differs, producing 1-2% pixel differences.</li>
       <li>SVG charts use a bundled font
         (<a href="https://github.com/liberationfonts/liberation-fonts">Liberation Sans</a>)
-        instead of system Arial, so text positions shift by a few pixels.
-        Rust also adds <code>shape-rendering="crispEdges"</code> for sharper PNGs
-        and renders titles in bold.</li>
+        instead of system Arial, so text positions shift by a few pixels.</li>
       <li>The HTML report is structurally identical once you strip out the embedded chart images (which differ for the same rendering reasons).</li>
     </ul>
     <p style="color: var(--ink-muted); margin-top: 1rem">

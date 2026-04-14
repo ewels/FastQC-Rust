@@ -24,7 +24,7 @@ use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
 use crate::modules::QCModule;
-use crate::report::charts::{svg_to_png, xml_escape, CHART_HEIGHT, CHART_WIDTH};
+use crate::report::charts::{strip_crisp_edges, svg_to_png, xml_escape, CHART_HEIGHT, CHART_WIDTH};
 use crate::report::text;
 
 // Embed icon files at compile time, same PNGs as in Templates/Icons/
@@ -103,7 +103,7 @@ pub fn create_zip_archive(
             if svg_output {
                 zip.start_file(format!("{}/Images/{}.svg", folder, image_name), options)
                     .map_err(zip_err)?;
-                zip.write_all(svg.as_bytes())?;
+                zip.write_all(strip_crisp_edges(&svg).as_bytes())?;
             }
 
             // Write PNG file

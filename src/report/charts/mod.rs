@@ -113,6 +113,15 @@ fn svg_text_sized(x: f64, y: f64, text: &str, color: &ChartColor, bold: bool, si
     )
 }
 
+/// Strip `shape-rendering="crispEdges"` from SVG output.
+///
+/// crispEdges is included in the SVG so that resvg renders pixel-sharp lines
+/// and rectangles in PNGs, but it is stripped from saved SVG files to minimise
+/// the diff from upstream Java output (which doesn't include it).
+pub fn strip_crisp_edges(svg: &str) -> String {
+    svg.replace(" shape-rendering=\"crispEdges\"", "")
+}
+
 /// Emit an SVG line element.
 pub fn svg_line(
     x1: f64,
@@ -122,7 +131,6 @@ pub fn svg_line(
     color: &ChartColor,
     stroke_width: f64,
 ) -> String {
-    // crispEdges disables antialiasing so axis lines and whiskers render pixel-sharp
     format!(
         "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"{}\" shape-rendering=\"crispEdges\"/>\n",
         x1 as i32,
@@ -136,7 +144,6 @@ pub fn svg_line(
 
 /// Emit an SVG filled rectangle.
 pub fn svg_rect_filled(x: f64, y: f64, width: f64, height: f64, color: &ChartColor) -> String {
-    // crispEdges ensures rectangles render pixel-sharp without antialiased edges
     format!(
         "<rect width=\"{}\" height=\"{}\" x=\"{}\" y=\"{}\" style=\"fill:{};stroke:none\" shape-rendering=\"crispEdges\"/>\n",
         width as i32,

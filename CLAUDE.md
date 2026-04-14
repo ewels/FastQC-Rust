@@ -77,7 +77,7 @@ uv run /path/to/regen_script.py  # or use tests/equivalence/generate_reference.s
 
 **Module ordering matters.** `create_modules()` in `modules/mod.rs` instantiates modules in the exact order they appear in the report. DuplicationLevel and OverRepresentedSeqs share data via `Arc<Mutex<OverRepresentedData>>` — DuplicationLevel appears before OverRepresentedSeqs in the report but reads from its data.
 
-**Chart rendering:** Modules generate SVG strings via `report::charts::*`, which are converted to PNG via `resvg`+`tiny-skia` with a bundled Liberation Sans font (no system font dependency). Rects and lines use `shape-rendering="crispEdges"` for pixel-sharp rendering; data polylines use default antialiasing.
+**Chart rendering:** Modules generate SVG strings via `report::charts::*`, which are converted to PNG via `resvg`+`tiny-skia` with a bundled Liberation Sans font (no system font dependency).
 
 **Report generation:** `report::text` writes `fastqc_data.txt` and `summary.txt`. `report::html` generates the HTML report with base64-embedded PNG charts. `report::archive` creates the zip file. HTML generation happens once and is passed to the archive to avoid redundant SVG→PNG rendering.
 
