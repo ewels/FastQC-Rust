@@ -1,0 +1,64 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Credits - FastQC">
+  <h1>Credits</h1>
+
+  <section>
+    <h2>Original FastQC</h2>
+    <p>
+      Written by <strong>Simon Andrews</strong> at
+      <a href="https://www.bioinformatics.babraham.ac.uk/">Babraham Bioinformatics</a>.
+    </p>
+    <p>
+      <a href="https://github.com/s-andrews/FastQC">github.com/s-andrews/FastQC</a>
+    </p>
+  </section>
+
+  <section>
+    <h2>Rust rewrite</h2>
+    <p>
+      By <strong>Phil Ewels</strong>
+      (<a href="https://github.com/ewels">@ewels</a>).
+      This rewrite was developed with the assistance of AI
+      (<a href="https://claude.ai/claude-code">Claude Code</a> by Anthropic).
+    </p>
+    <p>
+      <a href="https://github.com/ewels/FastQC">github.com/ewels/FastQC</a>
+    </p>
+  </section>
+
+  <section>
+    <h2>Citation</h2>
+    <p>
+      If you use FastQC in your research, please cite the original project,
+      not this rewrite. The analysis, algorithms, and scientific contribution
+      are entirely the work of Simon Andrews.
+    </p>
+  </section>
+
+  <section>
+    <h2>License</h2>
+    <p>
+      Both versions are licensed under the
+      <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU General Public License v3.0</a>.
+    </p>
+  </section>
+
+  <section>
+    <h2>Dependencies</h2>
+    <ul>
+      <li><a href="https://crates.io/crates/clap">clap</a> &mdash; CLI argument parsing</li>
+      <li><a href="https://crates.io/crates/noodles">noodles</a> &mdash; BAM/SAM reading</li>
+      <li><a href="https://crates.io/crates/flate2">flate2</a> &mdash; gzip decompression</li>
+      <li><a href="https://crates.io/crates/rayon">rayon</a> &mdash; parallel file processing</li>
+      <li><a href="https://crates.io/crates/resvg">resvg</a> + <a href="https://crates.io/crates/tiny-skia">tiny-skia</a> &mdash; SVG to PNG rendering</li>
+      <li><a href="https://crates.io/crates/statrs">statrs</a> &mdash; statistical distributions</li>
+      <li><a href="https://crates.io/crates/hdf5-pure">hdf5-pure</a> &mdash; Fast5/HDF5 nanopore support</li>
+    </ul>
+    <p style="margin-top: 0.75rem">
+      Font: <a href="https://github.com/liberationfonts/liberation-fonts">Liberation Sans</a> (SIL Open Font License), bundled for consistent chart rendering.
+    </p>
+  </section>
+</Base>

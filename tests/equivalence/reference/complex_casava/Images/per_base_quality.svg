@@ -21,7 +21,7 @@
 <text x="2" y="121" fill="rgb(0,0,0)" font-family="Arial" font-size="12">30</text>
 <text x="2" y="91" fill="rgb(0,0,0)" font-family="Arial" font-size="12">32</text>
 <text x="2" y="61" fill="rgb(0,0,0)" font-family="Arial" font-size="12">34</text>
-<text x="235" y="30" fill="rgb(0,0,0)" font-family="Arial" font-size="12">Quality scores across all bases (Illumina 1.5 encoding)</text>
+<text x="249" y="30" fill="rgb(0,0,0)" font-family="Arial" font-size="12">Quality scores across all bases (Illumina 1.5 encoding)</text>
 <rect width="48" height="297" x="21" y="263" style="fill:rgb(230,175,175);stroke:none"/>
 <rect width="48" height="119" x="21" y="144" style="fill:rgb(230,215,175);stroke:none"/>
 <rect width="48" height="104" x="21" y="40" style="fill:rgb(175,230,175);stroke:none"/>
@@ -88,7 +88,7 @@
 <text x="757" y="575" fill="rgb(0,0,0)" font-family="Arial" font-size="12">16</text>
 <line x1="21" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="1"/>
 <line x1="21" y1="560" x2="21" y2="40" stroke="rgb(0,0,0)" stroke-width="1"/>
-<text x="336" y="595" fill="rgb(0,0,0)" font-family="Arial" font-size="12">Position in read (bp)</text>
+<text x="342" y="595" fill="rgb(0,0,0)" font-family="Arial" font-size="12">Position in read (bp)</text>
 <rect width="44" height="0" x="23" y="560" style="fill:rgb(240,240,0);stroke:none"/>
 <rect width="44" height="0" x="23" y="560" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(0,0,0)"/>
 <line x1="45" y1="560" x2="45" y2="560" stroke="rgb(0,0,0)" stroke-width="1"/>

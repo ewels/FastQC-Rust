@@ -1,0 +1,186 @@
+---
+import Base from '../layouts/Base.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Base title="FastQC (Rust)">
+
+  <section class="section-divider">
+    <p class="label">Unofficial community rewrite</p>
+    <h1>FastQC, rewritten in Rust</h1>
+    <div class="quality-bars"><span class="qb-1"></span><span class="qb-2"></span><span class="qb-3"></span><span class="qb-4"></span><span class="qb-5"></span><span class="qb-6"></span></div>
+    <p class="lead">
+      An <strong>unofficial</strong> rewrite of
+      <a href="https://www.bioinformatics.babraham.ac.uk/projects/fastqc/">FastQC</a>,
+      the sequencing QC tool by Simon Andrews at the Babraham Institute.
+      Produces <a href={`${base}about/equivalence/`}><strong>identical output</strong></a> to the
+      <a href="https://github.com/s-andrews/FastQC">official Java version</a>.
+      Same analysis, different packaging.
+    </p>
+    <div class="callout">
+      <p>
+        <strong>Looking for the official FastQC?</strong>
+        <a href="https://www.bioinformatics.babraham.ac.uk/projects/fastqc/">bioinformatics.babraham.ac.uk/projects/fastqc</a>
+        or <a href="https://github.com/s-andrews/FastQC">GitHub</a>.
+      </p>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 2.5rem">
+      <a href="#install" class="btn btn-primary">Installation</a>
+      <a href={`${base}about/equivalence/`} class="btn btn-outline">Output comparison</a>
+    </div>
+    <img
+      src={`${base}images/fastqc.png`}
+      alt="FastQC report screenshot"
+      class="screenshot"
+    />
+  </section>
+
+  <section style="margin-bottom: 3rem">
+    <h2>Why a Rust rewrite?</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 1.5rem">
+      The Java version works well. This rewrite packages it as a single static binary
+      with no JVM or font configuration needed, while producing identical output.
+    </p>
+    <div class="grid-3">
+      <div>
+        <h3 style="margin-top: 0">2–3x faster</h3>
+        <p style="font-size: 0.875rem; color: var(--ink-muted)">
+          2.5–3x faster on short-read FASTQ, 7–18x less memory.
+          See the <a href={`${base}about/performance/`}>benchmarks</a>.
+        </p>
+      </div>
+      <div>
+        <h3 style="margin-top: 0">Single binary</h3>
+        <p style="font-size: 0.875rem; color: var(--ink-muted)">
+          No JVM or font dependencies. One 4.8 MB file, any platform.
+        </p>
+      </div>
+      <div>
+        <h3 style="margin-top: 0">Truly identical output</h3>
+        <p style="font-size: 0.875rem; color: var(--ink-muted)">
+          <code>fastqc_data.txt</code> and <code>summary.txt</code> are
+          byte-identical. <a href={`${base}about/equivalence/`}>Verified on every commit</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-bottom: 3rem">
+    <h2>Performance</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 1rem">
+      Single-threaded, one file (7.3 GB Illumina WES). <a href={`${base}about/performance/`}>Full benchmarks</a>.
+    </p>
+    <div class="grid-2">
+      <div>
+        <h3 class="bench-title">Wall clock time</h3>
+        <div class="bench-chart">
+          <div class="bench-row">
+            <span class="bench-label">Java</span>
+            <div class="bench-bar bench-bar-java" style="width: 100%"></div>
+            <span class="bench-time">9m 46s</span>
+          </div>
+          <div class="bench-row">
+            <span class="bench-label">Rust</span>
+            <div class="bench-bar bench-bar-rust" style="width: 33%"></div>
+            <span class="bench-time">3m 13s</span>
+            <span class="bench-speedup">3.0x faster</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3 class="bench-title">Peak memory (RSS)</h3>
+        <div class="bench-chart">
+          <div class="bench-row">
+            <span class="bench-label">Java</span>
+            <div class="bench-bar bench-bar-java" style="width: 100%"></div>
+            <span class="bench-time">444 MB</span>
+          </div>
+          <div class="bench-row">
+            <span class="bench-label">Rust</span>
+            <div class="bench-bar bench-bar-rust" style="width: 6.3%"></div>
+            <span class="bench-time">28 MB</span>
+            <span class="bench-speedup">16x less</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install" style="margin-bottom: 3rem">
+    <h2>Install</h2>
+    <div class="grid-2" style="margin-top: 0.5rem">
+      <div>
+        <h3 style="font-family: var(--font-body); font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); margin-top: 0">From crates.io</h3>
+        <pre><code>cargo install fastqc-rust</code></pre>
+      </div>
+      <div>
+        <h3 style="font-family: var(--font-body); font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); margin-top: 0">From source</h3>
+        <pre><code>git clone https://github.com/ewels/FastQC.git
+cd FastQC && cargo build --release</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-bottom: 3rem">
+    <h2>Usage</h2>
+    <pre><code>fastqc sample.fastq.gz                    # single file
+fastqc -o results/ *.fastq.gz             # batch with output dir
+fastqc -t 4 --format bam aligned.bam      # parallel, BAM input</code></pre>
+    <p style="margin-top: 0.75rem; color: var(--ink-muted)">
+      The CLI matches the original. See <code>fastqc --help</code> for all options.
+    </p>
+  </section>
+
+</Base>
+
+<style>
+.bench-title {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  margin-top: 0;
+  margin-bottom: 0.625rem;
+}
+.bench-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.bench-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  width: 2.5rem;
+  flex-shrink: 0;
+  color: var(--ink-muted);
+}
+.bench-bar {
+  height: 1.5rem;
+  border-radius: 3px;
+  min-width: 4px;
+}
+.bench-bar-java {
+  background: var(--color-java);
+}
+.bench-bar-rust {
+  background: var(--brand-maroon);
+}
+.bench-time {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.bench-speedup {
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--brand-maroon);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+</style>

@@ -2,7 +2,7 @@
 
 A Rust rewrite of [FastQC](https://github.com/s-andrews/FastQC), a quality control tool for high-throughput sequencing data.
 
-![FastQC Screenshot](docs/fastqc.png)
+![FastQC Screenshot](docs/public/images/fastqc.png)
 
 This is a complete rewrite of the original Java FastQC application in Rust. It produces **byte-identical text output** (`fastqc_data.txt`, `summary.txt`) to the Java version, while being significantly faster and distributed as a single static binary.
 

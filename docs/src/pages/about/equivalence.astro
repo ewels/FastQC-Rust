@@ -1,0 +1,69 @@
+---
+import Base from '../../layouts/Base.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Base title="Equivalence - FastQC">
+  <p class="label">Verification</p>
+  <h1>Equivalence testing</h1>
+  <p style="color: var(--ink-muted); margin-bottom: 1.5rem">
+    Every commit is compared against Java FastQC reference output across
+    18 test cases covering all CLI flag combinations.
+    The report shows text diffs with word highlighting, pixel-level image comparison,
+    and side-by-side SVG previews.
+  </p>
+  <div style="margin-bottom: 2.5rem">
+    <a href={`${base}about/equivalence/equivalence_report.html`} class="btn btn-primary">
+      View the latest equivalence report
+    </a>
+  </div>
+
+  <section style="margin-bottom: 3rem">
+    <h2>What is tested</h2>
+    <ul style="color: var(--ink-muted)">
+      <li><code>fastqc_data.txt</code> and <code>summary.txt</code> must be byte-identical after applying known-difference patches</li>
+      <li><code>fastqc_report.html</code> must be structurally identical after normalizing embedded images</li>
+      <li>SVG charts must be structurally identical after normalizing font and rendering differences</li>
+      <li>PNG charts are compared pixel-by-pixel with a configurable tolerance (currently 12%)</li>
+    </ul>
+  </section>
+
+  <section style="margin-bottom: 3rem">
+    <h2>What is different</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 1rem">
+      Text output is identical. Some non-text outputs differ because the rendering stack is different:
+    </p>
+    <ul style="color: var(--ink-muted)">
+      <li>PNG charts are rendered via resvg + tiny-skia instead of Java2D. Antialiasing differs, producing 1-2% pixel differences.</li>
+      <li>SVG charts use a bundled font
+        (<a href="https://github.com/liberationfonts/liberation-fonts">Liberation Sans</a>)
+        instead of system Arial, so text positions shift by a few pixels.
+        Rust also adds <code>shape-rendering="crispEdges"</code> for sharper PNGs
+        and renders titles in bold.</li>
+      <li>The HTML report is structurally identical once you strip out the embedded chart images (which differ for the same rendering reasons).</li>
+      <li>The XSL-FO file has minor formatting differences.</li>
+    </ul>
+    <p style="color: var(--ink-muted); margin-top: 1rem">
+      None of this affects analysis results. <code>fastqc_data.txt</code> and <code>summary.txt</code> are byte-identical.
+    </p>
+  </section>
+
+  <section style="margin-bottom: 3rem">
+    <h2>CI integration</h2>
+    <p style="color: var(--ink-muted)">
+      The comparison runs on every commit and pull request via GitHub Actions.
+      If any strict file differs from reference after patching, the build fails.
+      The HTML report is uploaded as a build artifact on every run (pass or fail)
+      so reviewers can inspect differences visually.
+    </p>
+  </section>
+
+  <section style="margin-bottom: 3rem">
+    <h2>Running locally</h2>
+    <pre><code>cargo build --release
+uv run tests/equivalence/compare.py --binary ./target/release/fastqc</code></pre>
+    <p style="margin-top: 0.75rem; color: var(--ink-muted)">
+      Writes the report to <code>tests/equivalence/reports/equivalence_report.html</code>.
+    </p>
+  </section>
+</Base>

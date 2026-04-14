@@ -1,0 +1,113 @@
+---
+import Base from '../../layouts/Base.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Base title="Performance - FastQC">
+  <p class="label">Benchmarks</p>
+  <h1>Performance</h1>
+  <p style="color: var(--ink-muted); margin-bottom: 2rem">
+    Single-threaded benchmarks comparing Rust and Java FastQC on the same hardware and inputs.
+    Pipelines typically parallelise across files via an external scheduler (Nextflow, Snakemake),
+    so single-file throughput is the relevant metric.
+  </p>
+
+  <div style="margin-bottom: 2.5rem">
+    <a href={`${base}about/performance/benchmark_report.html`} class="btn btn-primary">
+      Full benchmark report
+    </a>
+  </div>
+
+  <section style="margin-bottom: 3rem">
+    <h2>Summary</h2>
+    <div class="grid-2" style="margin-top: 1rem">
+      <div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem">
+          <thead>
+            <tr>
+              <th style="text-align: left; padding: 0.5rem; border-bottom: 2px solid var(--border); color: var(--ink-muted); font-weight: 600">Metric</th>
+              <th style="text-align: right; padding: 0.5rem; border-bottom: 2px solid var(--border); color: var(--ink-muted); font-weight: 600">Java</th>
+              <th style="text-align: right; padding: 0.5rem; border-bottom: 2px solid var(--border); color: var(--ink-muted); font-weight: 600">Rust</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">Short-read throughput</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border); text-align: right; color: var(--ink-muted)">14 MB/s</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border); text-align: right; font-weight: 600">38 MB/s</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">Long-read throughput</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border); text-align: right; color: var(--ink-muted)">19 MB/s</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border); text-align: right; font-weight: 600">34 MB/s</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">BAM throughput</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border); text-align: right; color: var(--ink-muted)">23 MB/s</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border); text-align: right; font-weight: 600">39 MB/s</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">Memory (short-read)</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border); text-align: right; color: var(--ink-muted)">361–483 MB</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border); text-align: right; font-weight: 600">25–55 MB</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.5rem">Binary size</td>
+              <td style="padding: 0.5rem; text-align: right; color: var(--ink-muted)">~100 MB</td>
+              <td style="padding: 0.5rem; text-align: right; font-weight: 600">4.8 MB</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <h3 style="font-size: 1rem; margin-top: 0">Highlights</h3>
+        <ul style="font-size: 0.9rem; color: var(--ink-muted)">
+          <li>2.5–3.0x faster on short-read FASTQ (Illumina, AVITI)</li>
+          <li>1.6–2.0x faster on long-read and BAM</li>
+          <li>7–18x less memory for short-read data</li>
+          <li>Text output is identical across all 11 test files</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-bottom: 3rem">
+    <h2>Where the speed comes from</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 1rem">
+      Three specific optimisations, each identified through CPU profiling:
+    </p>
+    <div class="grid-3">
+      <div>
+        <h3 style="font-size: 1rem; margin-top: 0">SIMD adapter search</h3>
+        <p style="font-size: 0.875rem; color: var(--ink-muted)">
+          The <code>memchr</code> crate uses ARM NEON / SSE to compare 16 bytes per cycle.
+          Adapter search drops from 35% to 6% of runtime.
+        </p>
+      </div>
+      <div>
+        <h3 style="font-size: 1rem; margin-top: 0">Lookup-table base counting</h3>
+        <p style="font-size: 0.875rem; color: var(--ink-muted)">
+          A 256-byte compile-time table replaces unpredictable branch chains,
+          halving time spent in per-base modules.
+        </p>
+      </div>
+      <div>
+        <h3 style="font-size: 1rem; margin-top: 0">Zero per-read allocation</h3>
+        <p style="font-size: 0.875rem; color: var(--ink-muted)">
+          In-place uppercase conversion, zero-copy tile parsing, byte-slice tracking.
+          No garbage collection overhead.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-bottom: 3rem">
+    <h2>Test dataset</h2>
+    <p style="color: var(--ink-muted)">
+      119 GB across 11 files: Illumina WES, Element AVITI, ONT PromethION long-read, and BAM.
+      Apple Silicon (aarch64-apple-darwin).
+      The <a href={`${base}about/performance/benchmark_report.html`}>full report</a> has per-file results,
+      memory profiles, a CPU breakdown, and analysis of whether these optimisations could be back-ported to Java.
+    </p>
+  </section>
+</Base>

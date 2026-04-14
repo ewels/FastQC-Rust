@@ -1,0 +1,53 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+
+<Base title="Contributing - FastQC">
+  <h1>Contributing</h1>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Setup</h2>
+    <pre><code>git clone https://github.com/ewels/FastQC.git
+cd FastQC
+cargo build --release
+cargo test</code></pre>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Equivalence tests</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      Compares Rust output against stored Java FastQC reference data.
+      Requires <a href="https://docs.astral.sh/uv/">uv</a>.
+    </p>
+    <pre><code>cargo build --release
+uv run tests/equivalence/compare.py --binary ./target/release/fastqc</code></pre>
+    <p style="margin-top: 0.75rem; color: var(--ink-muted)">
+      Writes an HTML report to <code>tests/equivalence/reports/equivalence_report.html</code>.
+    </p>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Code quality</h2>
+    <pre><code>cargo clippy --all-targets -- -D warnings  # Lint
+cargo fmt --check                          # Format check
+cargo test                                 # Unit + integration tests</code></pre>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Updating reference data</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 0.5rem">When the tracked upstream version changes:</p>
+    <ol style="color: var(--ink-muted)">
+      <li>Update version in <code>UPSTREAM.toml</code>, <code>Cargo.toml</code>, <code>src/lib.rs</code></li>
+      <li>Run Java FastQC via Docker to generate new reference output</li>
+      <li>Regenerate SVG patch files</li>
+      <li>Run equivalence tests to verify</li>
+    </ol>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Issues</h2>
+    <p style="color: var(--ink-muted)">
+      Bugs and feature requests: <a href="https://github.com/ewels/FastQC/issues">GitHub Issues</a>.
+    </p>
+  </section>
+</Base>

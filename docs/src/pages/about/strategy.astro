@@ -1,0 +1,63 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+
+<Base title="Strategy - FastQC">
+  <p class="label">Strategy</p>
+  <h1>Keeping pace with upstream</h1>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Goal</h2>
+    <p style="color: var(--ink-muted)">
+      Produce byte-identical <code>fastqc_data.txt</code> and <code>summary.txt</code>
+      for the same inputs as
+      <a href="https://github.com/s-andrews/FastQC">FastQC</a>,
+      so the two can be used interchangeably.
+    </p>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Upstream tracking</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      <code>UPSTREAM.toml</code> pins the tracked Java FastQC version.
+      A nightly CI job checks for new releases and opens a GitHub issue when one appears.
+    </p>
+    <p style="color: var(--ink-muted); margin-bottom: 0.5rem">When a new release is published:</p>
+    <ol style="color: var(--ink-muted)">
+      <li>Review upstream changes</li>
+      <li>Update <code>UPSTREAM.toml</code>, <code>Cargo.toml</code>, and <code>src/lib.rs</code></li>
+      <li>Implement any algorithm changes</li>
+      <li>Regenerate reference data and patch files</li>
+      <li>Run equivalence tests</li>
+    </ol>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Equivalence testing</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      Every commit is tested against stored reference output across 18 test cases:
+    </p>
+    <ul style="color: var(--ink-muted)">
+      <li>Text files must be byte-identical after applying known-difference patches</li>
+      <li>HTML report must match structurally after normalizing embedded images</li>
+      <li>SVG charts must match after normalizing font and rendering attributes</li>
+      <li>PNG charts are compared pixel-by-pixel with a tolerance threshold</li>
+    </ul>
+    <p style="color: var(--ink-muted); margin-top: 0.75rem">
+      See the <a href="equivalence/">equivalence page</a> for details.
+    </p>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Known differences</h2>
+    <ul style="color: var(--ink-muted)">
+      <li>Rust bundles Liberation Sans; Java uses system Arial. Character widths differ slightly, shifting text positions in charts.</li>
+      <li>PNG rendering uses resvg + tiny-skia instead of Java2D. Antialiasing differs.</li>
+      <li>SVG output includes <code>shape-rendering="crispEdges"</code>, bold titles, and <code>stroke-width="2"</code> on data lines to match the Java PNG appearance.</li>
+    </ul>
+    <p style="color: var(--ink-muted); margin-top: 0.75rem; font-size: 0.9rem">
+      <a href="https://github.com/s-andrews/FastQC/pull/185">s-andrews/FastQC#185</a> bundles Liberation Sans
+      in Java FastQC. Once a release includes this change, most font-metric differences will shrink or disappear.
+    </p>
+  </section>
+</Base>

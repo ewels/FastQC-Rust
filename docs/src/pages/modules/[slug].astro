@@ -1,0 +1,119 @@
+---
+import Base from '../../layouts/Base.astro';
+import fs from 'node:fs';
+import path from 'node:path';
+
+export function getStaticPaths() {
+  const dir = path.join(process.cwd(), 'src/content/modules');
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.html'));
+
+  return files.map(file => {
+    const slug = file.replace('.html', '');
+    const raw = fs.readFileSync(path.join(dir, file), 'utf-8');
+
+    // Extract title from <title> tag or first <h1>
+    const titleMatch = raw.match(/<title>(.*?)<\/title>/i) || raw.match(/<h1>(.*?)<\/h1>/i);
+    const title = titleMatch ? titleMatch[1].trim() : slug;
+
+    // Extract body content (between <body> and </body>)
+    const bodyMatch = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    const body = bodyMatch ? bodyMatch[1].trim() : raw;
+
+    // Rewrite image src paths to point to /modules/ in public
+    const base = import.meta.env.BASE_URL || '/FastQC/';
+    const content = body.replace(
+      /src="([^"]+\.png)"/g,
+      `src="${base}modules/$1"`
+    );
+
+    // Map slug to canonical path on the Babraham site
+    const canonicalMap: Record<string, string> = {
+      'what-is-fastqc': '1%20Introduction/1.1%20What%20is%20FastQC.html',
+      'opening-a-sequence-file': '2%20Basic%20Operations/2.1%20Opening%20a%20sequence%20file.html',
+      'evaluating-results': '2%20Basic%20Operations/2.2%20Evaluating%20Results.html',
+      'saving-a-report': '2%20Basic%20Operations/2.3%20Saving%20a%20Report.html',
+      'basic-statistics': '3%20Analysis%20Modules/1%20Basic%20Statistics.html',
+      'per-base-sequence-quality': '3%20Analysis%20Modules/2%20Per%20Base%20Sequence%20Quality.html',
+      'per-sequence-quality-scores': '3%20Analysis%20Modules/3%20Per%20Sequence%20Quality%20Scores.html',
+      'per-base-sequence-content': '3%20Analysis%20Modules/4%20Per%20Base%20Sequence%20Content.html',
+      'per-sequence-gc-content': '3%20Analysis%20Modules/5%20Per%20Sequence%20GC%20Content.html',
+      'per-base-n-content': '3%20Analysis%20Modules/6%20Per%20Base%20N%20Content.html',
+      'sequence-length-distribution': '3%20Analysis%20Modules/7%20Sequence%20Length%20Distribution.html',
+      'duplicate-sequences': '3%20Analysis%20Modules/8%20Duplicate%20Sequences.html',
+      'overrepresented-sequences': '3%20Analysis%20Modules/9%20Overrepresented%20Sequences.html',
+      'adapter-content': '3%20Analysis%20Modules/10%20Adapter%20Content.html',
+      'kmer-content': '3%20Analysis%20Modules/11%20Kmer%20Content.html',
+      'per-tile-sequence-quality': '3%20Analysis%20Modules/12%20Per%20Tile%20Sequence%20Quality.html',
+    };
+    const canonicalUrl = canonicalMap[slug]
+      ? `https://www.bioinformatics.babraham.ac.uk/projects/fastqc/Help/${canonicalMap[slug]}`
+      : '';
+
+    return {
+      params: { slug },
+      props: { title, content, canonicalUrl },
+    };
+  });
+}
+
+const { title, content, canonicalUrl } = Astro.props;
+---
+
+<Base title={`${title} - FastQC`}>
+  <nav class="breadcrumb">
+    <a href={`${import.meta.env.BASE_URL}modules/`}>Docs</a>
+    <span class="breadcrumb-sep">/</span>
+    <span>{title}</span>
+  </nav>
+  {canonicalUrl && (
+    <p class="docs-source">
+      This page is from the official FastQC documentation.
+      <a href={canonicalUrl}>View original on bioinformatics.babraham.ac.uk</a>
+    </p>
+  )}
+  <article class="fastqc-docs" set:html={content} />
+</Base>
+
+<style>
+  .breadcrumb {
+    font-size: 0.8125rem;
+    color: var(--ink-faint);
+    margin-bottom: 0.75rem;
+  }
+  .breadcrumb a {
+    color: var(--ink-muted);
+    text-decoration: none;
+  }
+  .breadcrumb a:hover {
+    color: var(--ink);
+  }
+  .breadcrumb-sep {
+    margin: 0 0.375rem;
+    opacity: 0.5;
+  }
+  .docs-source {
+    font-size: 0.85rem;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  .fastqc-docs :global(h1) {
+    margin-bottom: 0.5rem;
+  }
+  .fastqc-docs :global(h2) {
+    margin-top: 2rem;
+  }
+  .fastqc-docs :global(img) {
+    max-width: 100%;
+    border-radius: 4px;
+    margin: 1rem 0;
+  }
+  .fastqc-docs :global(ul),
+  .fastqc-docs :global(ol) {
+    margin: 0.5rem 0;
+  }
+  .fastqc-docs :global(p) {
+    margin: 0.5rem 0;
+  }
+</style>

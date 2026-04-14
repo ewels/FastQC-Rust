@@ -8,6 +8,12 @@
 # Python
 __pycache__/
 
+# AI tool config
+.impeccable.md
+skills-lock.json
+.agents/
+.claude/
+
 # OS files
 .DS_Store
 
@@ -23,3 +29,11 @@ test_output/
 
 # Equivalence test reports (generated, not committed)
 tests/equivalence/reports/
+docs/public/about/equivalence/equivalence_report.html
+docs/public/about/performance/benchmark_report.html
+
+# Docs build output
+docs/dist/
+docs/node_modules/
+node_modules/
+.astro/
