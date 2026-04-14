@@ -1,0 +1,93 @@
+---
+import Base from '../../../layouts/Base.astro';
+import Breadcrumb from '../../../components/Breadcrumb.astro';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const base = import.meta.env.BASE_URL;
+
+const reportPath = path.join(process.cwd(), 'public/about/performance/benchmark_report.html');
+let styles = '';
+let body = '';
+let hasReport = false;
+
+if (fs.existsSync(reportPath)) {
+  hasReport = true;
+  const raw = fs.readFileSync(reportPath, 'utf-8');
+
+  const styleMatch = raw.match(/<style>([\s\S]*?)<\/style>/i);
+  if (styleMatch) {
+    let css = styleMatch[1];
+    if (!css.includes('.bench-report')) {
+      css = css.replace(/^\s*body\s*\{[^}]*\}\s*/m, '');
+    }
+    styles = css;
+  }
+
+  // Extract body — sentinel comment <!-- /bench-report --> marks the wrapper boundary
+  const wrapperMatch = raw.match(/<div class="bench-report">([\s\S]*?)<\/div><!-- \/bench-report -->/);
+  if (wrapperMatch) {
+    body = wrapperMatch[1];
+  } else {
+    const bodyMatch = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (bodyMatch) body = bodyMatch[1];
+  }
+}
+---
+
+<Base title="Benchmark Report - FastQC" wide>
+  <Fragment set:html={`<style>${styles}</style>`} />
+  <Breadcrumb parent={{ href: `${base}about/performance/`, label: 'Performance' }} current="Report" />
+  {hasReport ? (
+    <div class="bench-report" set:html={body} />
+  ) : (
+    <div class="no-report">
+      <h1>Benchmark Report</h1>
+      <p>
+        The benchmark report has not been generated yet.
+        Place the report at <code>docs/public/about/performance/benchmark_report.html</code>
+        and rebuild the docs site.
+      </p>
+    </div>
+  )}
+</Base>
+
+<style>
+  .no-report {
+    padding: 2rem;
+    text-align: center;
+    color: var(--ink-muted);
+  }
+</style>
+
+<style is:global>
+  /* Responsive: allow horizontal scroll on narrow viewports */
+
+  /* Dark mode overrides for benchmark report */
+  html.dark .bench-report { color: var(--ink); }
+  html.dark .bench-report p { color: var(--ink); }
+  html.dark .bench-report li { color: var(--ink-muted); }
+  html.dark .bench-report a { color: var(--brand-navy); }
+  html.dark .bench-report h1 { color: var(--ink); border-bottom-color: var(--border); }
+  html.dark .bench-report h2 { color: var(--ink); }
+  html.dark .bench-report h3 { color: var(--ink); }
+
+  /* Tables */
+  html.dark .bench-report th { background: var(--surface-dim); color: var(--ink); }
+  html.dark .bench-report td { border-bottom-color: var(--border); color: var(--ink-muted); }
+  html.dark .bench-report tr:nth-child(even) { background: var(--surface-dim); }
+  html.dark .bench-report .platform-header { background: var(--surface-dim); color: var(--ink); }
+  html.dark .bench-report .better { color: #3fb950; }
+  html.dark .bench-report .right { color: var(--ink-muted); }
+
+  /* Bars */
+  html.dark .bench-report .bar-java { background: var(--color-java); }
+  html.dark .bench-report .bar-rust { background: #f0825f; }
+  html.dark .bench-report .legend-item { color: var(--ink-muted); }
+
+  /* Callouts and dividers */
+  html.dark .bench-report .note { background: #1a2638; border-left-color: #3b82f6; color: var(--ink-muted); }
+  html.dark .bench-report .note strong { color: var(--ink); }
+  html.dark .bench-report .section-divider { border-top-color: var(--border); }
+  html.dark .bench-report code { background: var(--surface-dim); color: var(--brand-maroon); }
+</style>

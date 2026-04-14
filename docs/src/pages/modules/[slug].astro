@@ -1,5 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -60,11 +61,7 @@ const { title, content, canonicalUrl } = Astro.props;
 ---
 
 <Base title={`${title} - FastQC`}>
-  <nav class="breadcrumb">
-    <a href={`${import.meta.env.BASE_URL}modules/`}>Docs</a>
-    <span class="breadcrumb-sep">/</span>
-    <span>{title}</span>
-  </nav>
+  <Breadcrumb parent={{ href: `${import.meta.env.BASE_URL}modules/`, label: 'Docs' }} current={title} />
   {canonicalUrl && (
     <p class="docs-source">
       This page is from the official FastQC documentation.
@@ -75,22 +72,6 @@ const { title, content, canonicalUrl } = Astro.props;
 </Base>
 
 <style>
-  .breadcrumb {
-    font-size: 0.8125rem;
-    color: var(--ink-faint);
-    margin-bottom: 0.75rem;
-  }
-  .breadcrumb a {
-    color: var(--ink-muted);
-    text-decoration: none;
-  }
-  .breadcrumb a:hover {
-    color: var(--ink);
-  }
-  .breadcrumb-sep {
-    margin: 0 0.375rem;
-    opacity: 0.5;
-  }
   .docs-source {
     font-size: 0.85rem;
     color: var(--ink-faint);

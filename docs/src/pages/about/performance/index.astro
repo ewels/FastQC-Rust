@@ -1,0 +1,146 @@
+---
+import Base from '../../../layouts/Base.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Base title="Performance - FastQC">
+  <p class="label">Benchmarks</p>
+  <h1>Performance</h1>
+  <p style="color: var(--ink-muted); margin-bottom: 1rem">
+    Single-threaded, one file (7.3 GB Illumina WES). Pipelines typically parallelise across files
+    via an external scheduler (Nextflow, Snakemake), so single-file throughput is the relevant metric.
+  </p>
+
+  <div class="grid-2" style="margin-bottom: 2.5rem">
+    <div>
+      <h3 class="bench-title">Wall clock time</h3>
+      <div class="bench-chart">
+        <div class="bench-row">
+          <span class="bench-label">Java</span>
+          <div class="bench-bar bench-bar-java" style="width: 100%"></div>
+          <span class="bench-time">9m 46s</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label">Rust</span>
+          <div class="bench-bar bench-bar-rust" style="width: 33%"></div>
+          <span class="bench-time">3m 13s</span>
+          <span class="bench-speedup">3.0x faster</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3 class="bench-title">Peak memory (RSS)</h3>
+      <div class="bench-chart">
+        <div class="bench-row">
+          <span class="bench-label">Java</span>
+          <div class="bench-bar bench-bar-java" style="width: 100%"></div>
+          <span class="bench-time">444 MB</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label">Rust</span>
+          <div class="bench-bar bench-bar-rust" style="width: 6.3%"></div>
+          <span class="bench-time">28 MB</span>
+          <span class="bench-speedup">16x less</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-bottom: 2.5rem">
+    <a href={`${base}about/performance/report/`} class="btn btn-primary">
+      Full benchmark report
+    </a>
+  </div>
+
+  <section style="margin-bottom: 3rem">
+    <h2>Where the speed comes from</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 1rem">
+      Three specific optimisations, each identified through CPU profiling:
+    </p>
+    <div class="grid-3">
+      <div>
+        <h3 style="font-size: 1rem; margin-top: 0">SIMD adapter search</h3>
+        <p style="font-size: 0.875rem; color: var(--ink-muted)">
+          The <code>memchr</code> crate uses ARM NEON / SSE to compare 16 bytes per cycle.
+          Adapter search drops from 35% to 6% of runtime.
+        </p>
+      </div>
+      <div>
+        <h3 style="font-size: 1rem; margin-top: 0">Lookup-table base counting</h3>
+        <p style="font-size: 0.875rem; color: var(--ink-muted)">
+          A 256-byte compile-time table replaces unpredictable branch chains,
+          halving time spent in per-base modules.
+        </p>
+      </div>
+      <div>
+        <h3 style="font-size: 1rem; margin-top: 0">Zero per-read allocation</h3>
+        <p style="font-size: 0.875rem; color: var(--ink-muted)">
+          In-place uppercase conversion, zero-copy tile parsing, byte-slice tracking.
+          No garbage collection overhead.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-bottom: 3rem">
+    <h2>Test dataset</h2>
+    <p style="color: var(--ink-muted)">
+      119 GB across 11 files: Illumina WES, Element AVITI, ONT PromethION long-read, and BAM.
+      Apple Silicon (aarch64-apple-darwin).
+      The <a href={`${base}about/performance/report/`}>full report</a> has per-file results,
+      memory profiles, a CPU breakdown, and analysis of whether these optimisations could be back-ported to Java.
+    </p>
+  </section>
+</Base>
+
+<style>
+.bench-title {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  margin-top: 0;
+  margin-bottom: 0.625rem;
+}
+.bench-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.bench-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  width: 2.5rem;
+  flex-shrink: 0;
+  color: var(--ink-muted);
+}
+.bench-bar {
+  height: 1.5rem;
+  border-radius: 3px;
+  min-width: 4px;
+}
+.bench-bar-java {
+  background: var(--color-java);
+}
+.bench-bar-rust {
+  background: var(--brand-maroon);
+}
+.bench-time {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.bench-speedup {
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--brand-maroon);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+</style>

@@ -1,5 +1,5 @@
 ---
-import Base from '../../layouts/Base.astro';
+import Base from '../../../layouts/Base.astro';
 const base = import.meta.env.BASE_URL;
 ---
 
@@ -13,7 +13,7 @@ const base = import.meta.env.BASE_URL;
     and side-by-side SVG previews.
   </p>
   <div style="margin-bottom: 2.5rem">
-    <a href={`${base}about/equivalence/equivalence_report.html`} class="btn btn-primary">
+    <a href={`${base}about/equivalence/report/`} class="btn btn-primary">
       View the latest equivalence report
     </a>
   </div>
@@ -41,7 +41,6 @@ const base = import.meta.env.BASE_URL;
         Rust also adds <code>shape-rendering="crispEdges"</code> for sharper PNGs
         and renders titles in bold.</li>
       <li>The HTML report is structurally identical once you strip out the embedded chart images (which differ for the same rendering reasons).</li>
-      <li>The XSL-FO file has minor formatting differences.</li>
     </ul>
     <p style="color: var(--ink-muted); margin-top: 1rem">
       None of this affects analysis results. <code>fastqc_data.txt</code> and <code>summary.txt</code> are byte-identical.

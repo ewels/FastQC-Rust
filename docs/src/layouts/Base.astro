@@ -2,11 +2,12 @@
 interface Props {
   title: string;
   description?: string;
+  wide?: boolean;
 }
 
 import '../styles/global.css';
 
-const { title, description = 'A Rust rewrite of FastQC - quality control for sequencing data' } = Astro.props;
+const { title, description = 'A Rust rewrite of FastQC - quality control for sequencing data', wide = false } = Astro.props;
 const base = import.meta.env.BASE_URL;
 const currentPath = Astro.url.pathname;
 
@@ -94,7 +95,7 @@ const trailingLinks = [
       </div>
     </header>
 
-    <main class="site-main">
+    <main class:list={['site-main', { 'site-main-wide': wide }]}>
       <slot />
     </main>
 

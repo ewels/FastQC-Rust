@@ -250,12 +250,20 @@ _BASE64_PLACEHOLDER = r'\1[BASE64_IMAGE_DATA]'
 
 _TAG_BOUNDARY_RE = re.compile(r'>(\s*)<')
 _BLANK_LINES_RE = re.compile(r'\n{3,}')
+# Matches date in header_filename div, e.g. "Mon 13 Apr 2026<br/>"
+_HEADER_DATE_RE = re.compile(
+    r'(<div id="header_filename">)'
+    r'[A-Z][a-z]{2}\s+\d{1,2}\s+[A-Z][a-z]{2}\s+\d{4}'
+    r'(<br\s*/?>)',
+)
 
 
 def _normalize_html(text: str) -> str:
-    """Normalize HTML for comparison: replace base64 images and pretty-print."""
+    """Normalize HTML for comparison: replace base64 images, mask dates, pretty-print."""
     # Replace base64 image data with placeholder
     text = _BASE64_RE.sub(_BASE64_PLACEHOLDER, text)
+    # Mask the run date in the header so different run dates don't cause diffs
+    text = _HEADER_DATE_RE.sub(r'\1[DATE]\2', text)
     # Simple pretty-print: add newlines after closing tags for readable diffs
     text = _TAG_BOUNDARY_RE.sub('>\n<', text)
     # Collapse multiple blank lines
@@ -488,7 +496,8 @@ def inventory_files(ref_dir: Path, actual_dir: Path, check_identity: bool = True
         if f.is_file():
             actual_files.add(f.relative_to(actual_dir))
 
-    all_files = sorted(ref_files | actual_files)
+    # Sort root-level files first (most interesting), then subdirectory files
+    all_files = sorted(ref_files | actual_files, key=lambda f: (len(f.parts) > 1, f))
     entries = []
 
     for f in all_files:
@@ -662,111 +671,114 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 <meta charset="utf-8">
 <title>FastQC Equivalence Report</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { overflow-x: hidden; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-         background: #f5f5f5; color: #333; padding: 20px; }
-  h1 { margin-bottom: 10px; }
-  .summary { margin: 20px 0; padding: 15px; background: #fff; border-radius: 8px;
+  .eq-report { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         color: #333; }
+  .eq-report *, .eq-report *::before, .eq-report *::after { box-sizing: border-box; }
+  .eq-report h1 { margin-bottom: 10px; }
+  .eq-report .summary { margin: 20px 0; padding: 15px; background: #fff; border-radius: 8px;
              box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-  .summary table { width: 100%; border-collapse: collapse; }
-  .summary th, .summary td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #eee; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px;
+  .eq-report .summary table { width: 100%; border-collapse: collapse; }
+  .eq-report .summary th, .eq-report .summary td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #eee; }
+  .eq-report .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px;
            font-weight: bold; color: #fff; }
-  .pass { background: #28a745; }
-  .fail { background: #dc3545; }
-  .warn { background: #e89a0c; }
-  .case-section { margin: 20px 0; padding: 20px; background: #fff; border-radius: 8px;
+  .eq-report .pass { background: #28a745; }
+  .eq-report .fail { background: #dc3545; }
+  .eq-report .warn { background: #e89a0c; }
+  .eq-report .case-section { margin: 20px 0; padding: 20px; background: #fff; border-radius: 8px;
                   box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-  .case-section h2 { margin-bottom: 5px; }
-  .case-meta { color: #666; font-size: 14px; margin-bottom: 15px; }
-  .error-msg { background: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 4px;
+  .eq-report .case-section h2 { margin-bottom: 5px; }
+  .eq-report .case-meta { color: #666; font-size: 14px; margin-bottom: 15px; }
+  .eq-report .error-msg { background: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 4px;
                margin: 10px 0; }
-  h3 { margin: 15px 0 8px; color: #555; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-  .file-table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 10px 0; }
-  .file-table th, .file-table td { padding: 6px 10px; border: 1px solid #ddd; }
-  .file-table th { background: #f8f9fa; }
-  .diff-table { width: 100%; border-collapse: collapse; font-family: "SF Mono", Monaco, monospace;
+  .eq-report h3 { margin: 15px 0 8px; color: #555; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+  .eq-report .file-table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 10px 0; }
+  .eq-report .file-table th, .eq-report .file-table td { padding: 6px 10px; border: 1px solid #ddd; }
+  .eq-report .file-table th { background: #f8f9fa; }
+  .eq-report .diff-table { width: 100%; border-collapse: collapse; font-family: "SF Mono", Monaco, monospace;
                 font-size: 12px; line-height: 1.4; margin: 8px 0; table-layout: fixed; }
-  .diff-wrap { max-height: 500px; overflow: auto; border: 1px solid #d0d7de; border-radius: 6px; }
-  .diff-table td { padding: 1px 8px; vertical-align: top; }
-  .diff-table .ln { color: #8b949e; text-align: right; user-select: none; width: 1%;
+  .eq-report .diff-wrap { max-height: 500px; overflow: auto; border: 1px solid #d0d7de; border-radius: 6px; }
+  .eq-report .diff-table td { padding: 1px 8px; vertical-align: top; }
+  .eq-report .diff-table .ln { color: #8b949e; text-align: right; user-select: none; width: 1%;
                     white-space: nowrap; padding: 1px 8px; border-right: 1px solid #d0d7de; }
-  .diff-table .code { width: 49%; padding: 0; }
-  .diff-table .code div { white-space: pre; overflow-x: auto; padding: 1px 8px; }
-  .diff-table .sep { width: 1px; background: #d0d7de; padding: 0; }
-  .diff-table tr.equal .code { background: #fff; }
-  .diff-table tr.change .code.left { background: #ffeef0; }
-  .diff-table tr.change .code.right { background: #e6ffec; }
-  .diff-table tr.delete .code.left { background: #ffeef0; }
-  .diff-table tr.delete .code.right { background: #fafbfc; }
-  .diff-table tr.insert .code.left { background: #fafbfc; }
-  .diff-table tr.insert .code.right { background: #e6ffec; }
-  .diff-table tr.hunk td { background: #f1f8ff; color: #57606a; text-align: center;
+  .eq-report .diff-table .code { width: 49%; padding: 0; }
+  .eq-report .diff-table .code div { white-space: pre; overflow-x: auto; padding: 1px 8px; }
+  .eq-report .diff-table .sep { width: 1px; background: #d0d7de; padding: 0; }
+  .eq-report .diff-table tr.equal .code { background: #fff; }
+  .eq-report .diff-table tr.change .code.left { background: #ffeef0; }
+  .eq-report .diff-table tr.change .code.right { background: #e6ffec; }
+  .eq-report .diff-table tr.delete .code.left { background: #ffeef0; }
+  .eq-report .diff-table tr.delete .code.right { background: #fafbfc; }
+  .eq-report .diff-table tr.insert .code.left { background: #fafbfc; }
+  .eq-report .diff-table tr.insert .code.right { background: #e6ffec; }
+  .eq-report .diff-table tr.hunk td { background: #f1f8ff; color: #57606a; text-align: center;
                            font-size: 11px; padding: 4px; }
-  mark.del-word { background: #fdb8c0; border-radius: 2px; padding: 0 1px; }
-  mark.add-word { background: #acf2bd; border-radius: 2px; padding: 0 1px; }
-  .patch-block { background: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace;
+  .eq-report mark.del-word { background: #fdb8c0; border-radius: 2px; padding: 0 1px; }
+  .eq-report mark.add-word { background: #acf2bd; border-radius: 2px; padding: 0 1px; }
+  .eq-report .patch-block { background: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace;
                  font-size: 12px; margin: 8px 0; white-space: pre; overflow-x: auto;
                  border: 1px solid #e1e4e8; line-height: 1.5; }
-  .patch-block .pa { color: #22863a; }
-  .patch-block .pd { color: #cb2431; }
-  .patch-block .ph { color: #0366d6; }
-  .patch-block .pm { color: #6a737d; }
-  .image-stats { font-size: 13px; color: #666; margin: 5px 0; }
-  .identical { color: #28a745; }
-  .differs { color: #dc3545; }
+  .eq-report .patch-block .pa { color: #22863a; }
+  .eq-report .patch-block .pd { color: #cb2431; }
+  .eq-report .patch-block .ph { color: #0366d6; }
+  .eq-report .patch-block .pm { color: #6a737d; }
+  .eq-report .image-stats { font-size: 13px; color: #666; margin: 5px 0; }
+  .eq-report .identical { color: #28a745; }
+  .eq-report .differs { color: #dc3545; }
 
   /* Unified file table with inline expandable details */
-  .file-table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 10px 0; }
-  .file-table th, .file-row td { padding: 6px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
-  .file-table th { background: #f8f9fa; border: 1px solid #ddd; text-align: left; }
-  .file-row { cursor: pointer; }
-  .file-row:hover { background: #f8f9fa; }
-  .file-row.expandable td:first-child::before { content: '▶ '; font-size: 10px; color: #666; }
-  .file-row.expandable.open td:first-child::before { content: '▼ '; }
-  .file-detail-row { display: none; }
-  .file-detail-row.open { display: table-row; }
-  .file-detail-row td { padding: 12px; background: #fafbfc; border-bottom: 1px solid #ddd; }
+  .eq-report .file-table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 10px 0; }
+  .eq-report .file-table th, .eq-report .file-row td { padding: 6px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  .eq-report .file-table th { background: #f8f9fa; border: 1px solid #ddd; text-align: left; }
+  .eq-report .file-row { cursor: pointer; }
+  .eq-report .file-row:hover { background: #f8f9fa; }
+  .eq-report .file-row.expandable td:first-child::before { content: '\25B6 '; font-size: 10px; color: #666; }
+  .eq-report .file-row.expandable.open td:first-child::before { content: '\25BC '; }
+  .eq-report .file-detail-row { display: none; }
+  .eq-report .file-detail-row.open { display: table-row; }
+  .eq-report .file-detail-row td { padding: 12px; background: #fafbfc; border-bottom: 1px solid #ddd; }
 
   /* Image comparison widget */
-  .img-compare { margin: 10px 0; }
-  .img-compare .mode-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
-  .img-compare .mode-tabs button { padding: 4px 12px; border: 1px solid #ddd; background: #f8f9fa;
+  .eq-report .img-compare { margin: 10px 0; }
+  .eq-report .img-compare .mode-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+  .eq-report .img-compare .mode-tabs button { padding: 4px 12px; border: 1px solid #ddd; background: #f8f9fa;
     border-radius: 4px; cursor: pointer; font-size: 12px; }
-  .img-compare .mode-tabs button.active { background: #0366d6; color: #fff; border-color: #0366d6; }
-  .img-compare .viewport { position: relative; display: inline-block; border: 1px solid #ddd;
+  .eq-report .img-compare .mode-tabs button.active { background: #0366d6; color: #fff; border-color: #0366d6; }
+  .eq-report .img-compare .viewport { position: relative; display: inline-block; border: 1px solid #ddd;
     border-radius: 4px; overflow: hidden; background: #eee; }
-  .img-compare .viewport img { display: block; max-width: 100%; }
-  .img-compare .viewport .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-  .img-compare .viewport .overlay img { width: 100%; height: 100%; display: block; }
+  .eq-report .img-compare .viewport img { display: block; max-width: 100%; }
+  .eq-report .img-compare .viewport .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  .eq-report .img-compare .viewport .overlay img { width: 100%; height: 100%; display: block; }
   /* Side-by-side mode */
-  .img-compare .side-by-side { display: flex; gap: 10px; }
-  .img-compare .side-by-side .col { flex: 1; text-align: center; }
-  .img-compare .side-by-side .col img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
-  .img-compare .side-by-side .col .label { font-size: 12px; color: #666; margin-bottom: 4px; }
+  .eq-report .img-compare .side-by-side { display: flex; gap: 10px; }
+  .eq-report .img-compare .side-by-side .col { flex: 1; text-align: center; }
+  .eq-report .img-compare .side-by-side .col img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+  .eq-report .img-compare .side-by-side .col .label { font-size: 12px; color: #666; margin-bottom: 4px; }
 
   /* SVG preview */
-  .svg-preview { display: flex; gap: 10px; margin: 10px 0; }
-  .svg-preview .col { flex: 1; text-align: center; }
-  .svg-preview .col .label { font-size: 12px; color: #666; margin-bottom: 4px; }
-  .svg-preview svg { width: 100%; height: auto; }
+  .eq-report .svg-preview { display: flex; gap: 10px; margin: 10px 0; }
+  .eq-report .svg-preview .col { flex: 1; text-align: center; }
+  .eq-report .svg-preview .col .label { font-size: 12px; color: #666; margin-bottom: 4px; }
+  .eq-report .svg-preview svg { width: 100%; height: auto; }
+
+  /* Standalone mode: style body when not embedded */
+  body.eq-standalone { background: #f5f5f5; padding: 20px; margin: 0; overflow-x: hidden; }
 
   /* Known differences footer */
 </style>
 </head>
-<body>
+<body class="eq-standalone">
+<div class="eq-report">
 <h1>FastQC Equivalence Report</h1>
 <p>Comparing Rust FastQC output against Java FastQC v{{ upstream_version }} reference data.</p>
 
 <div class="summary">
 <table>
-<tr><th>Test Case</th><th>File</th><th>Args</th><th>Text</th><th>Images</th><th>Status</th></tr>
+<tr><th>Test Case</th><th>File</th><th>Args</th><th>Text</th><th>Images</th></tr>
 {% for r in results %}
 <tr>
   <td><a href="#{{ r.name }}">{{ r.name }}</a></td>
-  <td>{{ r.file }}</td>
-  <td>{{ r.args | join(' ') if r.args else '(default)' }}</td>
+  <td><samp>{{ r.file }}</samp></td>
+  <td>{% if r.args %}{% for a in r.args %}<code>{{ a }}</code> {% endfor %}{% else %}(default){% endif %}</td>
   <td>{% if r.error %}-{% else %}
     {% set text_ok = r.text_diffs | selectattr('passed') | list | length == r.text_diffs | length %}
     <span class="badge {{ 'pass' if text_ok else 'fail' }}">{{ r.text_diffs | selectattr('passed') | list | length }}/{{ r.text_diffs | length }}</span>
@@ -775,7 +787,6 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     {% set img_ok = r.image_diffs | selectattr('passed') | list | length == r.image_diffs | length %}
     <span class="badge {{ 'pass' if img_ok else 'fail' }}">{{ r.image_diffs | selectattr('passed') | list | length }}/{{ r.image_diffs | length }}</span>
   {% endif %}</td>
-  <td><span class="badge {{ 'pass' if r.passed else 'fail' }}">{{ 'PASS' if r.passed else 'FAIL' }}</span></td>
 </tr>
 {% endfor %}
 </table>
@@ -785,7 +796,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 {% set lu = diff_lookups[r.name] %}
 <div class="case-section" id="{{ r.name }}">
 <h2>{{ r.name }} <span class="badge {{ 'pass' if r.passed else 'fail' }}">{{ 'PASS' if r.passed else 'FAIL' }}</span></h2>
-<div class="case-meta">Input: {{ r.file }} | Args: {{ r.args | join(' ') if r.args else '(default)' }}</div>
+<div class="case-meta">Input: <samp>{{ r.file }}</samp> | Args: {% if r.args %}{% for a in r.args %}<code>{{ a }}</code> {% endfor %}{% else %}(default){% endif %}</div>
 
 {% if r.error %}
 <div class="error-msg">{{ r.error }}</div>
@@ -797,7 +808,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 {% set td = lu.text.get(f.name) %}
 {% set img = lu.img.get(f.name) %}
 {% set expandable = (td and (td.rows or td.patch_applied or td.normalized or td.ref_svg)) or img %}
-<tr class="file-row {{ 'expandable' if expandable }}" {% if expandable %}onclick="toggleDetail(this)"{% endif %}>
+<tr class="file-row {{ 'expandable' if expandable }}" {% if expandable %}onclick="toggleDetail(this)" role="button" tabindex="0" aria-expanded="false" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleDetail(this)}"{% endif %}>
   <td>{{ f.name }}</td>
   <td style="text-align:center">{{ '✓' if f.in_reference else '✗' }}</td>
   <td style="text-align:center">{{ '✓' if f.in_actual else '✗' }}</td>
@@ -924,11 +935,15 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 <h3 id="known-upstream-pr">Upstream font bundling</h3>
 <p><a href="https://github.com/s-andrews/FastQC/pull/185">s-andrews/FastQC#185</a> (merged) bundles Liberation Sans in Java FastQC, matching the font used by this Rust rewrite. Once the reference data is regenerated from a release that includes this change, many SVG differences caused by font-metric mismatches (x-coordinate positioning, legend box sizing, title centering) should be eliminated or significantly reduced.</p>
 </div>
+</div><!-- /eq-report -->
 
 <script>
 function toggleDetail(row) {
   const d = row.nextElementSibling;
-  if (d && d.classList.contains('file-detail-row')) { d.classList.toggle('open'); row.classList.toggle('open'); }
+  if (d && d.classList.contains('file-detail-row')) {
+    d.classList.toggle('open'); row.classList.toggle('open');
+    row.setAttribute('aria-expanded', row.classList.contains('open'));
+  }
 }
 function setMode(btn, mode) {
   const w = btn.closest('.img-compare');

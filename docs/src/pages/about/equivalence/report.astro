@@ -1,0 +1,156 @@
+---
+import Base from '../../../layouts/Base.astro';
+import Breadcrumb from '../../../components/Breadcrumb.astro';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const base = import.meta.env.BASE_URL;
+
+const reportPath = path.join(process.cwd(), 'public/about/equivalence/equivalence_report.html');
+let styles = '';
+let body = '';
+let script = '';
+let hasReport = false;
+
+if (fs.existsSync(reportPath)) {
+  hasReport = true;
+  const raw = fs.readFileSync(reportPath, 'utf-8');
+
+  const styleMatch = raw.match(/<style>([\s\S]*?)<\/style>/i);
+  if (styleMatch) {
+    let css = styleMatch[1];
+    // Strip global resets that would break the site layout
+    if (!css.includes('.eq-report')) {
+      css = css
+        .replace(/^\s*\*\s*\{[^}]*\}\s*/m, '')
+        .replace(/^\s*html\s*,\s*body\s*\{[^}]*\}\s*/m, '')
+        .replace(/^\s*body\s*\{[^}]*\}\s*/m, '');
+    }
+    styles = css;
+  }
+
+  // Extract body — the sentinel comment <!-- /eq-report --> marks the wrapper boundary.
+  // If the report lacks the wrapper, fall back to <body> extraction.
+  const wrapperMatch = raw.match(/<div class="eq-report">([\s\S]*?)<\/div><!-- \/eq-report -->/);
+  if (wrapperMatch) {
+    body = wrapperMatch[1];
+  } else {
+    const bodyMatch = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (bodyMatch) body = bodyMatch[1];
+  }
+
+  const scriptMatch = raw.match(/<script>([\s\S]*?)<\/script>/i);
+  if (scriptMatch) script = scriptMatch[1];
+}
+---
+
+<Base title="Equivalence Report - FastQC" wide>
+  <Fragment set:html={`<style>${styles}</style>`} />
+  <Breadcrumb parent={{ href: `${base}about/equivalence/`, label: 'Equivalence' }} current="Report" />
+  {hasReport ? (
+    <div class="eq-report" set:html={body} />
+  ) : (
+    <div class="no-report">
+      <h1>Equivalence Report</h1>
+      <p>
+        The report has not been generated yet. Run the equivalence tests to generate it:
+      </p>
+      <pre><code>cargo build --release
+uv run tests/equivalence/compare.py --binary ./target/release/fastqc</code></pre>
+      <p>
+        Then copy the output to <code>docs/public/about/equivalence/equivalence_report.html</code>
+        and rebuild the docs site.
+      </p>
+    </div>
+  )}
+  {script && <Fragment set:html={`<script>${script}</script>`} />}
+</Base>
+
+<style>
+  .no-report {
+    padding: 2rem;
+    text-align: center;
+    color: var(--ink-muted);
+  }
+  .no-report pre {
+    text-align: left;
+    max-width: 40rem;
+    margin: 1rem auto;
+  }
+</style>
+
+<style is:global>
+  /* Responsive: horizontal scroll on narrow viewports */
+  .eq-report .diff-wrap { overflow-x: auto; }
+  .eq-report .img-compare .side-by-side { flex-wrap: wrap; }
+
+  /* Dark mode overrides for equivalence report */
+  html.dark .eq-report { color: var(--ink); }
+  html.dark .eq-report p { color: var(--ink); }
+  html.dark .eq-report .case-meta p { color: var(--ink-muted); }
+  html.dark .eq-report .image-stats p { color: var(--ink-muted); }
+  html.dark .eq-report a { color: var(--brand-navy); }
+  html.dark .eq-report h1,
+  html.dark .eq-report h2 { color: var(--ink); }
+  html.dark .eq-report h3 { color: var(--ink); border-bottom-color: var(--border); }
+
+  /* Summary table */
+  html.dark .eq-report .summary { background: var(--surface-raised); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  html.dark .eq-report .summary th { background: var(--surface-dim); color: var(--ink); }
+  html.dark .eq-report .summary th,
+  html.dark .eq-report .summary td { border-bottom-color: var(--border); }
+
+  /* Badges — softer colors for dark backgrounds */
+  html.dark .eq-report .pass { background: #1a7f37; }
+  html.dark .eq-report .fail { background: #b62324; }
+  html.dark .eq-report .warn { background: #b8860b; }
+  html.dark .eq-report .identical { color: #3fb950; }
+  html.dark .eq-report .differs { color: #f47067; }
+
+  /* Case sections */
+  html.dark .eq-report .case-section { background: var(--surface-raised); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  html.dark .eq-report .case-meta { color: var(--ink-muted); }
+
+  /* File table */
+  html.dark .eq-report .file-table th { background: var(--surface-dim); color: var(--ink); border-color: var(--border); }
+  html.dark .eq-report .file-table td,
+  html.dark .eq-report .file-row td { border-color: var(--border); color: var(--ink-muted); }
+  html.dark .eq-report .file-row:hover { background: var(--surface-dim); }
+  html.dark .eq-report .file-row.expandable td:first-child::before { color: var(--ink-muted); }
+  html.dark .eq-report .file-detail-row td { background: var(--surface-dim); border-color: var(--border); }
+
+  /* Diff table */
+  html.dark .eq-report .diff-wrap { border-color: var(--border); }
+  html.dark .eq-report .diff-table .ln { color: var(--ink-faint); border-right-color: var(--border); }
+  html.dark .eq-report .diff-table .sep { background: var(--border); }
+  html.dark .eq-report .diff-table tr.equal .code { background: var(--surface-raised); color: var(--ink); }
+  html.dark .eq-report .diff-table tr.change .code.left { background: #3d1f23; }
+  html.dark .eq-report .diff-table tr.change .code.right { background: #1f3d2a; }
+  html.dark .eq-report .diff-table tr.delete .code.left { background: #3d1f23; }
+  html.dark .eq-report .diff-table tr.delete .code.right,
+  html.dark .eq-report .diff-table tr.insert .code.left { background: var(--surface-dim); }
+  html.dark .eq-report .diff-table tr.insert .code.right { background: #1f3d2a; }
+  html.dark .eq-report .diff-table tr.hunk td { background: #1a2638; color: var(--ink-muted); }
+  html.dark .eq-report .diff-table .code div { color: var(--ink); }
+  html.dark .eq-report mark.del-word { background: #6e3030; color: #ffa0a0; }
+  html.dark .eq-report mark.add-word { background: #265e3a; color: #a0ffc0; }
+
+  /* Patch block */
+  html.dark .eq-report .patch-block { background: var(--surface-dim); border-color: var(--border); color: var(--ink); }
+  html.dark .eq-report .patch-block .pa { color: #3fb950; }
+  html.dark .eq-report .patch-block .pd { color: #f47067; }
+  html.dark .eq-report .patch-block .ph { color: #58a6ff; }
+  html.dark .eq-report .patch-block .pm { color: var(--ink-faint); }
+
+  /* Image comparison */
+  html.dark .eq-report .image-stats { color: var(--ink-muted); }
+  html.dark .eq-report .img-compare .mode-tabs button { background: var(--surface-dim); border-color: var(--border); color: var(--ink-muted); }
+  html.dark .eq-report .img-compare .mode-tabs button.active { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+  html.dark .eq-report .img-compare .viewport { border-color: var(--border); background: var(--surface-dim); }
+  html.dark .eq-report .img-compare .side-by-side .col img { border-color: var(--border); }
+  html.dark .eq-report .img-compare .side-by-side .col .label,
+  html.dark .eq-report .svg-preview .col .label { color: var(--ink-muted); }
+
+  /* Error / warning messages */
+  html.dark .eq-report .error-msg { background: #3d2e10; border-color: #7a5a1a; color: var(--ink); }
+</style>

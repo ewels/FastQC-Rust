@@ -246,6 +246,9 @@ html.dark .theme-icon-moon { display: none; }
   width: 100%;
   padding: 2.5rem 1.5rem;
 }
+.site-main-wide {
+  max-width: none;
+}
 
 .site-footer {
   border-top: 1px solid var(--border);
