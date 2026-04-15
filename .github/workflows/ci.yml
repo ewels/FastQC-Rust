@@ -41,6 +41,8 @@ jobs:
       - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
       - run: cargo build --release
       - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          enable-cache: false
       - run: uv run tests/equivalence/compare.py --binary ./target/release/fastqc
       - name: Upload equivalence reports
         if: always()
