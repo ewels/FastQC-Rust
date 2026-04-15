@@ -75,7 +75,11 @@ pub fn render_line_graph(params: &LineGraphData) -> String {
         }
         if i < params.x_categories.len() {
             last_x_label_end = layout.render_x_category_label_at(
-                &mut svg, &params.x_categories[i], i, base_width, last_x_label_end,
+                &mut svg,
+                &params.x_categories[i],
+                i,
+                base_width,
+                last_x_label_end,
             );
         }
     }

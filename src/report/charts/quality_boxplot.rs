@@ -120,7 +120,11 @@ pub fn render_quality_boxplot(params: &QualityBoxPlotData) -> String {
         // X-category label for this position (interleaved with zone rects)
         if i < params.x_labels.len() {
             last_x_label_end = layout.render_x_category_label_at(
-                &mut svg, &params.x_labels[i], i, base_width, last_x_label_end,
+                &mut svg,
+                &params.x_labels[i],
+                i,
+                base_width,
+                last_x_label_end,
             );
         }
     }
