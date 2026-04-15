@@ -3,7 +3,7 @@ use std::process;
 
 use clap::Parser;
 
-use fastqc_rust::config::FastQCConfig;
+use fastqc_rust::config::{FastQCConfig, TemplateName};
 use fastqc_rust::runner;
 
 /// FastQC - A high throughput sequence QC analysis tool
@@ -118,6 +118,12 @@ struct Cli {
     #[arg(long)]
     svg: bool,
 
+    /// Select the HTML report template.
+    /// "classic" produces the original FastQC report layout.
+    /// "modern" uses a redesigned layout with responsive sidebar and help text.
+    #[arg(short = 't', long, value_name = "NAME", default_value = "classic")]
+    template: TemplateName,
+
     /// Input files (one or more FastQ, BAM, or SAM files).
     #[arg(required = true)]
     files: Vec<PathBuf>,
@@ -190,6 +196,7 @@ fn main() {
         dup_length: cli.dup_length,
         svg_output: cli.svg,
         temp_dir: cli.dir,
+        template: cli.template,
     };
 
     if let Err(exit_code) = runner::run(&config, &cli.files) {

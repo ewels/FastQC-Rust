@@ -23,15 +23,23 @@ use std::path::Path;
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
+use crate::config::TemplateName;
 use crate::modules::QCModule;
 use crate::report::charts::{strip_crisp_edges, svg_to_png, xml_escape, CHART_HEIGHT, CHART_WIDTH};
 use crate::report::text;
 
 // Embed icon files at compile time, same PNGs as in Templates/Icons/
-const ICON_FASTQC: &[u8] = include_bytes!("../../assets/icons/fastqc_icon.png");
-const ICON_WARNING: &[u8] = include_bytes!("../../assets/icons/warning.png");
-const ICON_ERROR: &[u8] = include_bytes!("../../assets/icons/error.png");
-const ICON_TICK: &[u8] = include_bytes!("../../assets/icons/tick.png");
+const ICON_FASTQC_PNG: &[u8] = include_bytes!("../../assets/icons/fastqc_icon.png");
+const ICON_WARNING_PNG: &[u8] = include_bytes!("../../assets/icons/warning.png");
+const ICON_ERROR_PNG: &[u8] = include_bytes!("../../assets/icons/error.png");
+const ICON_TICK_PNG: &[u8] = include_bytes!("../../assets/icons/tick.png");
+
+// SVG icons for the modern template
+const ICON_FASTQC_SVG: &str =
+    include_str!("../../assets/templates/modern/icons/fastqc_icon.svg");
+const ICON_PASS_SVG: &str = include_str!("../../assets/templates/modern/icons/pass.svg");
+const ICON_WARNING_SVG: &str = include_str!("../../assets/templates/modern/icons/warning.svg");
+const ICON_ERROR_SVG: &str = include_str!("../../assets/templates/modern/icons/error.svg");
 
 /// Create the FastQC zip archive at the given path.
 ///
@@ -55,6 +63,7 @@ pub fn create_zip_archive(
     zip_path: &Path,
     html_content: &str,
     svg_output: bool,
+    template: TemplateName,
 ) -> io::Result<()> {
     let file = fs::File::create(zip_path)?;
     let mut zip = ZipWriter::new(file);
@@ -70,17 +79,36 @@ pub fn create_zip_archive(
     zip.add_directory(format!("{}/Images/", folder), options)
         .map_err(zip_err)?;
 
-    // Icon files are written in this exact order
-    let icons: &[(&str, &[u8])] = &[
-        ("fastqc_icon.png", ICON_FASTQC),
-        ("warning.png", ICON_WARNING),
-        ("error.png", ICON_ERROR),
-        ("tick.png", ICON_TICK),
-    ];
-    for (name, data) in icons {
-        zip.start_file(format!("{}/Icons/{}", folder, name), options)
-            .map_err(zip_err)?;
-        zip.write_all(data)?;
+    // Icon files written to the zip depend on the template
+    match template {
+        TemplateName::Classic => {
+            // PNG icons in this exact order (matching Java)
+            let icons: &[(&str, &[u8])] = &[
+                ("fastqc_icon.png", ICON_FASTQC_PNG),
+                ("warning.png", ICON_WARNING_PNG),
+                ("error.png", ICON_ERROR_PNG),
+                ("tick.png", ICON_TICK_PNG),
+            ];
+            for (name, data) in icons {
+                zip.start_file(format!("{}/Icons/{}", folder, name), options)
+                    .map_err(zip_err)?;
+                zip.write_all(data)?;
+            }
+        }
+        TemplateName::Modern => {
+            // SVG icons for the modern template
+            let icons: &[(&str, &str)] = &[
+                ("fastqc_icon.svg", ICON_FASTQC_SVG),
+                ("pass.svg", ICON_PASS_SVG),
+                ("warning.svg", ICON_WARNING_SVG),
+                ("error.svg", ICON_ERROR_SVG),
+            ];
+            for (name, data) in icons {
+                zip.start_file(format!("{}/Icons/{}", folder, name), options)
+                    .map_err(zip_err)?;
+                zip.write_all(data.as_bytes())?;
+            }
+        }
     }
 
     // summary.txt

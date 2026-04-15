@@ -239,7 +239,8 @@ fn process_group(
     let zip_path = output_dir.join(format!("{}_fastqc.zip", base_name));
 
     // Generate HTML report as a string (used for both standalone file and zip entry)
-    let html_content = report::html::generate_html_report(&modules, &file_display_name)?;
+    let html_content =
+        report::html::generate_html_report(&modules, &file_display_name, config.template)?;
 
     // Write standalone HTML file
     // The Java code writes the HTML via PrintWriter after creating the zip
@@ -253,6 +254,7 @@ fn process_group(
         &zip_path,
         &html_content,
         config.svg_output,
+        config.template,
     )?;
 
     // Handle --extract flag

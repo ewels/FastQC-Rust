@@ -3,6 +3,20 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
+/// Report template selection.
+///
+/// Controls the HTML report layout and styling. The `Classic` template produces
+/// byte-identical output to Java FastQC. The `Modern` template uses a redesigned
+/// layout with responsive sidebar, SVG icons, and help text accordions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, clap::ValueEnum)]
+pub enum TemplateName {
+    /// Original FastQC report layout (Java-compatible)
+    #[default]
+    Classic,
+    /// Modernised report with responsive sidebar and help text
+    Modern,
+}
+
 // Embedded default config files match the Java resource files exactly.
 // These are the same files shipped in the Java FastQC Configuration/ directory.
 const DEFAULT_LIMITS: &str = include_str!("../assets/limits.txt");
@@ -31,6 +45,7 @@ pub struct FastQCConfig {
     pub dup_length: usize,
     pub svg_output: bool,
     pub temp_dir: Option<PathBuf>,
+    pub template: TemplateName,
 }
 
 impl Default for FastQCConfig {
@@ -55,6 +70,7 @@ impl Default for FastQCConfig {
             dup_length: 0,
             svg_output: false,
             temp_dir: None,
+            template: TemplateName::Classic,
         }
     }
 }

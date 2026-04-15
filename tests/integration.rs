@@ -154,8 +154,12 @@ fn test_html_report_generation() {
         module.finalize();
     }
 
-    let html = report::html::generate_html_report(&mods, &file_display_name)
-        .expect("Failed to generate HTML");
+    let html = report::html::generate_html_report(
+        &mods,
+        &file_display_name,
+        fastqc_rust::config::TemplateName::Classic,
+    )
+    .expect("Failed to generate HTML");
 
     // Verify HTML structure
     assert!(
@@ -214,8 +218,12 @@ fn test_zip_archive_structure() {
     std::fs::create_dir_all(&tmp_dir).unwrap();
     let zip_path = tmp_dir.join("complex_fastqc.zip");
 
-    let html_content = report::html::generate_html_report(&mods, &file_display_name)
-        .expect("Failed to generate HTML");
+    let html_content = report::html::generate_html_report(
+        &mods,
+        &file_display_name,
+        fastqc_rust::config::TemplateName::Classic,
+    )
+    .expect("Failed to generate HTML");
     report::archive::create_zip_archive(
         &mods,
         &file_display_name,
@@ -223,6 +231,7 @@ fn test_zip_archive_structure() {
         &zip_path,
         &html_content,
         true,
+        fastqc_rust::config::TemplateName::Classic,
     )
     .expect("Failed to create zip");
 
