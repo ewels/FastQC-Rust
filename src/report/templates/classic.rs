@@ -109,7 +109,7 @@ impl ReportTemplate for ClassicTemplate {
                 alt
             )?;
 
-            write!(w, "<a href=\"#M{}\">" , i)?;
+            write!(w, "<a href=\"#M{}\">", i)?;
             write_escaped(w, module.name())?;
             write!(w, "</a>")?;
             write!(w, "</li>")?;
@@ -127,7 +127,7 @@ impl ReportTemplate for ClassicTemplate {
             }
 
             write!(w, "<div class=\"module\">")?;
-            write!(w, "<h2 id=\"M{}\">" , i)?;
+            write!(w, "<h2 id=\"M{}\">", i)?;
 
             // Module header icons use [OK]/[WARN]/[FAIL] alt text
             let (icon, alt) = match module.status() {

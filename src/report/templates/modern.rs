@@ -10,15 +10,13 @@ use std::sync::LazyLock;
 use chrono::Local;
 
 use crate::modules::{ModuleStatus, QCModule};
-use crate::report::html::format_java_date;
+use crate::report::html::{format_java_date, write_chart_svg, write_default_html_table};
 use crate::report::templates::ReportTemplate;
 use crate::VERSION;
 
 // Template fragments
-const REPORT_TEMPLATE: &str =
-    include_str!("../../../assets/templates/modern/report_template.html");
-const MODULE_WRAPPER: &str =
-    include_str!("../../../assets/templates/modern/module_wrapper.html");
+const REPORT_TEMPLATE: &str = include_str!("../../../assets/templates/modern/report_template.html");
+const MODULE_WRAPPER: &str = include_str!("../../../assets/templates/modern/module_wrapper.html");
 const SIDEBAR_ITEM: &str = include_str!("../../../assets/templates/modern/sidebar_item.html");
 const CSS: &str = include_str!("../../../assets/templates/modern/fastqc.css");
 
@@ -26,8 +24,7 @@ const CSS: &str = include_str!("../../../assets/templates/modern/fastqc.css");
 const ICON_FASTQC_SVG: &str =
     include_str!("../../../assets/templates/modern/icons/fastqc_icon.svg");
 const ICON_PASS_SVG: &str = include_str!("../../../assets/templates/modern/icons/pass.svg");
-const ICON_WARNING_SVG: &str =
-    include_str!("../../../assets/templates/modern/icons/warning.svg");
+const ICON_WARNING_SVG: &str = include_str!("../../../assets/templates/modern/icons/warning.svg");
 const ICON_ERROR_SVG: &str = include_str!("../../../assets/templates/modern/icons/error.svg");
 
 // Help text for each module (embedded at compile time)
@@ -45,8 +42,7 @@ const HELP_N_CONTENT: &str = include_str!("../../../assets/help/per-base-n-conte
 const HELP_SEQ_LENGTH: &str =
     include_str!("../../../assets/help/sequence-length-distribution.html");
 const HELP_DUPLICATION: &str = include_str!("../../../assets/help/duplicate-sequences.html");
-const HELP_OVERREP: &str =
-    include_str!("../../../assets/help/overrepresented-sequences.html");
+const HELP_OVERREP: &str = include_str!("../../../assets/help/overrepresented-sequences.html");
 const HELP_ADAPTER: &str = include_str!("../../../assets/help/adapter-content.html");
 const HELP_KMER: &str = include_str!("../../../assets/help/kmer-content.html");
 
@@ -88,9 +84,17 @@ impl ReportTemplate for ModernTemplate {
                 continue;
             }
 
-            // Capture module HTML output into a buffer
+            // Render module content — use inline SVG for charts instead of PNG
             let mut module_buf = Vec::new();
-            module.write_html_report(&mut module_buf)?;
+            if module.chart_alt_text().is_some() {
+                write_chart_svg(module.as_ref(), &mut module_buf)?;
+            } else {
+                let mut text_buf = Vec::new();
+                module.write_text_report(&mut text_buf)?;
+                let text =
+                    String::from_utf8(text_buf).map_err(|e| io::Error::other(e.to_string()))?;
+                write_default_html_table(&text, &mut module_buf)?;
+            }
             let module_html =
                 String::from_utf8(module_buf).map_err(|e| io::Error::other(e.to_string()))?;
 
@@ -226,11 +230,7 @@ fn strip_help_html(html: &str) -> String {
     // Remove <head>...</head> block (including <style>)
     if let Some(head_start) = content.find("<head") {
         if let Some(head_end) = content.find("</head>") {
-            content = format!(
-                "{}{}",
-                &content[..head_start],
-                &content[head_end + 7..]
-            );
+            content = format!("{}{}", &content[..head_start], &content[head_end + 7..]);
         }
     }
 
@@ -282,11 +282,7 @@ fn strip_help_html(html: &str) -> String {
             if let Some(end) = after_p.find("</p>") {
                 let between = &after_p[..end];
                 if between.trim().is_empty() {
-                    content = format!(
-                        "{}{}",
-                        &trimmed[..start],
-                        &trimmed[start + 3 + end + 4..]
-                    );
+                    content = format!("{}{}", &trimmed[..start], &trimmed[start + 3 + end + 4..]);
                     changed = true;
                 }
             }

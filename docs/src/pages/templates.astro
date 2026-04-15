@@ -1,0 +1,146 @@
+---
+import Base from '../layouts/Base.astro';
+import Breadcrumb from '../components/Breadcrumb.astro';
+const base = import.meta.env.BASE_URL;
+---
+
+<Base title="Report Templates - FastQC">
+  <Breadcrumb parent={{ href: `${base}modules/`, label: 'Docs' }} current="Report Templates" />
+  <p class="rust-only-note">
+    This feature is only available in the Rust rewrite, pending merge upstream.
+  </p>
+  <h1>Report Templates</h1>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Overview</h2>
+    <p style="color: var(--ink-muted)">
+      FastQC supports multiple HTML report templates via the <code>--template</code> / <code>-t</code>
+      CLI flag. This works like MultiQC's template system: the default template produces
+      the familiar FastQC report, while alternative templates can change the layout,
+      styling, and chart format without affecting the analysis.
+    </p>
+    <pre><code>fastqc --template modern sample.fastq.gz</code></pre>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Available templates</h2>
+
+    <h3><code>classic</code> (default)</h3>
+    <p style="color: var(--ink-muted)">
+      The original FastQC report layout. Produces byte-identical HTML to Java FastQC, with
+      PNG charts embedded as base64 data URIs and the same fixed sidebar + main content layout.
+    </p>
+    <p style="color: var(--ink-muted)">
+      This is the default when <code>--template</code> is not specified.
+    </p>
+
+    <h3 style="margin-top: 2rem"><code>modern</code></h3>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      A redesigned report layout ported from
+      <a href="https://github.com/s-andrews/FastQC/pull/161">upstream PR #161</a>,
+      inspired by <a href="https://github.com/barreiro-r/fastqc-viz">fastqc-viz</a>.
+      Key features:
+    </p>
+    <ul style="color: var(--ink-muted); margin-bottom: 1rem">
+      <li><strong>Responsive sidebar</strong> &mdash; sticky sidebar with flexbox layout, mobile-friendly hamburger menu (pure CSS, no JavaScript)</li>
+      <li><strong>Inline SVG charts</strong> &mdash; charts are embedded as optimised inline SVG instead of PNG, giving crisp rendering at any zoom level</li>
+      <li><strong>SVG status icons</strong> &mdash; Material Design pass/warn/fail icons replace the PNG icons, with styled text badges in the sidebar</li>
+      <li><strong>Help text accordions</strong> &mdash; each module has a CSS-only toggle to show/hide its help documentation inline</li>
+      <li><strong>New FastQC logo</strong> &mdash; a refreshed SVG logo used in the sidebar and mobile navigation</li>
+      <li><strong>Print-friendly</strong> &mdash; CSS print styles for PDF export</li>
+    </ul>
+    <p style="color: var(--ink-muted)">
+      Text output (<code>fastqc_data.txt</code>, <code>summary.txt</code>) is identical
+      regardless of which template is used. Only the HTML report and the icons in the zip
+      archive differ.
+    </p>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>SVG optimisations</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      The modern template applies several post-processing optimisations to the inline SVGs
+      to keep file sizes small:
+    </p>
+    <ul style="color: var(--ink-muted)">
+      <li><strong>CSS classes</strong> &mdash; repeated attributes like <code>shape-rendering</code> and <code>font-family</code> are moved to a <code>&lt;style&gt;</code> block</li>
+      <li><strong>Attribute shortening</strong> &mdash; verbose <code>style="fill:rgb(...);stroke:none"</code> replaced with <code>fill="rgb(...)"</code></li>
+      <li><strong>Lines &rarr; polylines</strong> &mdash; consecutive same-colour line segments in data series are merged into single <code>&lt;polyline&gt;</code> elements</li>
+      <li><strong>Rect run-length encoding</strong> &mdash; adjacent same-colour rectangles (e.g. in the per-tile quality heatmap) are merged into wider rectangles</li>
+    </ul>
+    <p style="color: var(--ink-muted)">
+      These optimisations reduce the modern template's file size to roughly 60% of the classic
+      template, and to around <strong>13% of the classic size when gzip-compressed</strong>
+      (SVG text compresses far better than base64-encoded PNGs).
+    </p>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>File size comparison</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      Example on a 27M-read FASTQ file:
+    </p>
+    <table class="size-table">
+      <thead>
+        <tr>
+          <th>Template</th>
+          <th>Raw size</th>
+          <th>Gzipped</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>classic</code> (PNG base64)</td>
+          <td>392 KB</td>
+          <td>254 KB</td>
+        </tr>
+        <tr>
+          <td><code>modern</code> (optimised SVG)</td>
+          <td>249 KB</td>
+          <td>33 KB</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</Base>
+
+<style>
+  .rust-only-note {
+    font-size: 0.85rem;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  pre {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    overflow-x: auto;
+    font-size: 0.875rem;
+  }
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875em;
+  }
+  .size-table {
+    border-collapse: collapse;
+    width: 100%;
+    max-width: 28rem;
+    font-size: 0.875rem;
+  }
+  .size-table th,
+  .size-table td {
+    text-align: left;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .size-table th {
+    color: var(--ink-muted);
+    font-weight: 600;
+  }
+  .size-table td {
+    color: var(--ink-muted);
+  }
+</style>

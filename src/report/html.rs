@@ -56,6 +56,292 @@ pub fn write_chart(
     Ok(())
 }
 
+/// Write a chart as inline SVG for a module that has one.
+///
+/// Unlike `write_chart` which converts SVG→PNG→base64, this embeds the SVG
+/// directly in the HTML for crisper rendering on modern displays.
+/// The SVG is minified to reduce file size.
+pub fn write_chart_svg(
+    module: &(impl crate::modules::QCModule + ?Sized),
+    w: &mut dyn Write,
+) -> io::Result<()> {
+    if let Some(svg) = module.generate_chart_svg() {
+        write!(w, "<p>{}</p>", minify_svg(&svg))?;
+    }
+    Ok(())
+}
+
+/// Minify an SVG string for inline HTML embedding.
+///
+/// The SVG generator produces verbose output optimised for resvg PNG rendering.
+/// This function applies several size reductions for inline HTML display:
+/// - Strip XML declaration and DOCTYPE
+/// - Move repeated attributes (shape-rendering, font-family) to CSS classes
+/// - Shorten fill/stroke style attributes
+/// - Merge consecutive same-colour `<line>` segments into `<polyline>` elements
+/// - Run-length merge consecutive same-colour `<rect>` elements in heatmaps
+fn minify_svg(svg: &str) -> String {
+    let mut out = String::with_capacity(svg.len());
+
+    // Collect non-declaration lines and apply text replacements
+    for line in svg.lines() {
+        let t = line.trim();
+        if t.starts_with("<?xml") || t.starts_with("<!DOCTYPE") {
+            continue;
+        }
+
+        // Inject CSS and max-width into the <svg> tag
+        if t.starts_with("<svg ") {
+            out.push_str(&t.replacen("<svg ", "<svg style=\"max-width:100%\" ", 1));
+            out.push('\n');
+            out.push_str(
+                "<style>\
+                          .ce{shape-rendering:crispEdges}\
+                          text{font-family:'Liberation Sans',Arial,Helvetica,sans-serif}\
+                          </style>\n",
+            );
+            continue;
+        }
+
+        // Collect <line> elements for merging into polylines later
+        if t.starts_with("<line ") {
+            out.push_str(t);
+            out.push('\n');
+            continue;
+        }
+
+        // Apply attribute shortening to other elements
+        let shortened = t
+            .replace(" shape-rendering=\"crispEdges\"", " class=\"ce\"")
+            .replace(
+                " font-family=\"'Liberation Sans', Arial, Helvetica, sans-serif\"",
+                "",
+            );
+        // Filled rects: style="fill:rgb(R,G,B);stroke:none" → fill="rgb(R,G,B)"
+        let shortened = shortened
+            .replace("style=\"fill:rgb(", "fill=\"rgb(")
+            .replace(");stroke:none\"", ")\"");
+        // Stroked rects: style="fill:none;stroke-width:1;stroke:rgb(R,G,B)" → attributes
+        let shortened = shortened.replace(
+            "style=\"fill:none;stroke-width:1;stroke:",
+            "fill=\"none\" stroke=\"",
+        );
+        out.push_str(&shortened);
+        out.push('\n');
+    }
+
+    // Post-process: merge lines into polylines and RLE-merge rects
+    merge_lines_to_polylines(&mut out);
+    rle_merge_rects(&mut out);
+    out
+}
+
+/// Merge consecutive `<line>` elements with the same stroke colour into `<polyline>` elements.
+///
+/// Data series in line graphs are drawn as many individual `<line>` segments.
+/// A polyline with N points is much more compact than N separate line elements.
+/// Gridlines (grey or black) are left as-is since they aren't contiguous series.
+fn merge_lines_to_polylines(svg: &mut String) {
+    struct LineSeg {
+        x1: String,
+        y1: String,
+        x2: String,
+        y2: String,
+    }
+
+    // (start_byte, end_byte, stroke, width, segments)
+    let mut groups: Vec<(usize, usize, String, String, Vec<LineSeg>)> = Vec::new();
+    let mut current_group: Vec<LineSeg> = Vec::new();
+    let mut group_start = 0;
+    let mut group_end = 0;
+    let mut last_stroke = "";
+    let mut last_width = "";
+
+    let mut search_from = 0;
+    while let Some(start) = svg[search_from..].find("<line ") {
+        let abs_start = search_from + start;
+        let Some(end) = svg[abs_start..].find("/>") else {
+            break;
+        };
+        let abs_end = abs_start + end + 2;
+        let tag = &svg[abs_start..abs_end];
+
+        let stroke = extract_attr(tag, "stroke");
+        let width = extract_attr(tag, "stroke-width");
+        let is_grid = stroke == "rgb(180,180,180)" || stroke == "rgb(0,0,0)";
+
+        if !is_grid && stroke == last_stroke && width == last_width {
+            current_group.push(LineSeg {
+                x1: extract_attr(tag, "x1").to_string(),
+                y1: extract_attr(tag, "y1").to_string(),
+                x2: extract_attr(tag, "x2").to_string(),
+                y2: extract_attr(tag, "y2").to_string(),
+            });
+            group_end = abs_end;
+        } else {
+            if current_group.len() > 2 {
+                groups.push((
+                    group_start,
+                    group_end,
+                    last_stroke.to_string(),
+                    last_width.to_string(),
+                    std::mem::take(&mut current_group),
+                ));
+            } else {
+                current_group.clear();
+            }
+            if !is_grid {
+                group_start = abs_start;
+                group_end = abs_end;
+                last_stroke = stroke;
+                last_width = width;
+                current_group.push(LineSeg {
+                    x1: extract_attr(tag, "x1").to_string(),
+                    y1: extract_attr(tag, "y1").to_string(),
+                    x2: extract_attr(tag, "x2").to_string(),
+                    y2: extract_attr(tag, "y2").to_string(),
+                });
+            } else {
+                last_stroke = "";
+                last_width = "";
+            }
+        }
+
+        search_from = skip_trailing_newlines(svg, abs_end);
+    }
+    if current_group.len() > 2 {
+        groups.push((
+            group_start,
+            group_end,
+            last_stroke.to_string(),
+            last_width.to_string(),
+            current_group,
+        ));
+    }
+
+    // Replace groups back-to-front to preserve offsets
+    for (start, end, stroke, width, segs) in groups.into_iter().rev() {
+        let mut points = format!("{},{}", segs[0].x1, segs[0].y1);
+        for seg in &segs {
+            points.push_str(&format!(" {},{}", seg.x2, seg.y2));
+        }
+        let polyline = format!(
+            "<polyline points=\"{}\" stroke=\"{}\" stroke-width=\"{}\" fill=\"none\"/>",
+            points, stroke, width
+        );
+        svg.replace_range(start..skip_trailing_newlines(svg, end), &polyline);
+    }
+}
+
+/// Run-length merge consecutive same-colour `<rect>` elements.
+///
+/// Heatmaps (like per-tile quality) draw thousands of small rects where many
+/// adjacent cells have the same colour. Merging runs of identical-colour rects
+/// on the same row into a single wider rect dramatically reduces element count.
+fn rle_merge_rects(svg: &mut String) {
+    struct RectInfo {
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        fill: String,
+        has_ce_class: bool,
+        start: usize,
+        end: usize,
+    }
+
+    let mut rects: Vec<RectInfo> = Vec::new();
+    let mut search_from = 0;
+    while let Some(start) = svg[search_from..].find("<rect ") {
+        let abs_start = search_from + start;
+        let Some(end) = svg[abs_start..].find("/>") else {
+            break;
+        };
+        let abs_end = abs_start + end + 2;
+        let tag = &svg[abs_start..abs_end];
+
+        let fill = extract_attr(tag, "fill");
+        if fill.starts_with("rgb(") && !tag.contains("stroke") {
+            let w: i32 = extract_attr(tag, "width").parse().unwrap_or(0);
+            let h: i32 = extract_attr(tag, "height").parse().unwrap_or(0);
+            let x: i32 = extract_attr(tag, "x").parse().unwrap_or(0);
+            let y: i32 = extract_attr(tag, "y").parse().unwrap_or(0);
+
+            // Skip large background rects
+            if w <= 100 && h <= 100 {
+                rects.push(RectInfo {
+                    x,
+                    y,
+                    width: w,
+                    height: h,
+                    fill: fill.to_string(),
+                    has_ce_class: tag.contains("class=\"ce\""),
+                    start: abs_start,
+                    end: abs_end,
+                });
+            }
+        }
+
+        search_from = abs_end;
+    }
+
+    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+    let mut i = 0;
+    while i < rects.len() {
+        let mut run_end = i + 1;
+        while run_end < rects.len()
+            && rects[run_end].y == rects[i].y
+            && rects[run_end].height == rects[i].height
+            && rects[run_end].fill == rects[i].fill
+            && rects[run_end].has_ce_class == rects[i].has_ce_class
+            && rects[run_end].x == rects[i].x + rects[i].width * (run_end - i) as i32
+        {
+            run_end += 1;
+        }
+
+        if run_end > i + 1 {
+            let merged_width = rects[i].width * (run_end - i) as i32;
+            let class_attr = if rects[i].has_ce_class {
+                " class=\"ce\""
+            } else {
+                ""
+            };
+            let merged = format!(
+                "<rect width=\"{}\" height=\"{}\" x=\"{}\" y=\"{}\" fill=\"{}\"{}/>",
+                merged_width, rects[i].height, rects[i].x, rects[i].y, rects[i].fill, class_attr
+            );
+            replacements.push((rects[i].start, rects[run_end - 1].end, merged));
+        }
+
+        i = run_end;
+    }
+
+    for (start, end, replacement) in replacements.into_iter().rev() {
+        svg.replace_range(start..skip_trailing_newlines(svg, end), &replacement);
+    }
+}
+
+/// Skip past trailing newline characters from a position in the string.
+fn skip_trailing_newlines(s: &str, pos: usize) -> usize {
+    let mut end = pos;
+    while end < s.len() && s.as_bytes().get(end).is_some_and(|&b| b == b'\n') {
+        end += 1;
+    }
+    end
+}
+
+/// Extract an XML attribute value from a tag string, returning a borrowed slice.
+fn extract_attr<'a>(tag: &'a str, attr: &str) -> &'a str {
+    let pattern = format!("{}=\"", attr);
+    if let Some(start) = tag.find(&pattern) {
+        let val_start = start + pattern.len();
+        if let Some(end) = tag[val_start..].find('"') {
+            return &tag[val_start..val_start + end];
+        }
+    }
+    ""
+}
+
 /// Write an HTML table from tab-delimited text report data.
 ///
 /// This is the default HTML output for modules that use `write_text_report` to

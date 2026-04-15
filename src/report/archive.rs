@@ -35,8 +35,7 @@ const ICON_ERROR_PNG: &[u8] = include_bytes!("../../assets/icons/error.png");
 const ICON_TICK_PNG: &[u8] = include_bytes!("../../assets/icons/tick.png");
 
 // SVG icons for the modern template
-const ICON_FASTQC_SVG: &str =
-    include_str!("../../assets/templates/modern/icons/fastqc_icon.svg");
+const ICON_FASTQC_SVG: &str = include_str!("../../assets/templates/modern/icons/fastqc_icon.svg");
 const ICON_PASS_SVG: &str = include_str!("../../assets/templates/modern/icons/pass.svg");
 const ICON_WARNING_SVG: &str = include_str!("../../assets/templates/modern/icons/warning.svg");
 const ICON_ERROR_SVG: &str = include_str!("../../assets/templates/modern/icons/error.svg");

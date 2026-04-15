@@ -11,28 +11,61 @@ const base = import.meta.env.BASE_URL;
     The Rust rewrite runs the same modules with the same behaviour.
   </p>
 
-  <section style="margin-bottom: 2.5rem">
-    <h2>Introduction</h2>
-    <ul>
-      <li><a href={`${base}modules/what-is-fastqc/`}>What is FastQC</a></li>
-    </ul>
-  </section>
+  <div class="docs-columns">
+    <div class="docs-col-left">
+      <section style="margin-bottom: 2.5rem">
+        <h2>Introduction</h2>
+        <ul>
+          <li><a href={`${base}modules/what-is-fastqc/`}>What is FastQC</a></li>
+        </ul>
+      </section>
 
-  <section style="margin-bottom: 2.5rem">
-    <h2>Analysis modules</h2>
-    <ol style="line-height: 2">
-      <li><a href={`${base}modules/basic-statistics/`}>Basic Statistics</a></li>
-      <li><a href={`${base}modules/per-base-sequence-quality/`}>Per Base Sequence Quality</a></li>
-      <li><a href={`${base}modules/per-sequence-quality-scores/`}>Per Sequence Quality Scores</a></li>
-      <li><a href={`${base}modules/per-base-sequence-content/`}>Per Base Sequence Content</a></li>
-      <li><a href={`${base}modules/per-sequence-gc-content/`}>Per Sequence GC Content</a></li>
-      <li><a href={`${base}modules/per-base-n-content/`}>Per Base N Content</a></li>
-      <li><a href={`${base}modules/sequence-length-distribution/`}>Sequence Length Distribution</a></li>
-      <li><a href={`${base}modules/duplicate-sequences/`}>Duplicate Sequences</a></li>
-      <li><a href={`${base}modules/overrepresented-sequences/`}>Overrepresented Sequences</a></li>
-      <li><a href={`${base}modules/adapter-content/`}>Adapter Content</a></li>
-      <li><a href={`${base}modules/kmer-content/`}>Kmer Content</a></li>
-      <li><a href={`${base}modules/per-tile-sequence-quality/`}>Per Tile Sequence Quality</a></li>
-    </ol>
-  </section>
+      <section style="margin-bottom: 2.5rem">
+        <h2>Analysis modules</h2>
+        <ol style="line-height: 2">
+          <li><a href={`${base}modules/basic-statistics/`}>Basic Statistics</a></li>
+          <li><a href={`${base}modules/per-base-sequence-quality/`}>Per Base Sequence Quality</a></li>
+          <li><a href={`${base}modules/per-sequence-quality-scores/`}>Per Sequence Quality Scores</a></li>
+          <li><a href={`${base}modules/per-base-sequence-content/`}>Per Base Sequence Content</a></li>
+          <li><a href={`${base}modules/per-sequence-gc-content/`}>Per Sequence GC Content</a></li>
+          <li><a href={`${base}modules/per-base-n-content/`}>Per Base N Content</a></li>
+          <li><a href={`${base}modules/sequence-length-distribution/`}>Sequence Length Distribution</a></li>
+          <li><a href={`${base}modules/duplicate-sequences/`}>Duplicate Sequences</a></li>
+          <li><a href={`${base}modules/overrepresented-sequences/`}>Overrepresented Sequences</a></li>
+          <li><a href={`${base}modules/adapter-content/`}>Adapter Content</a></li>
+          <li><a href={`${base}modules/kmer-content/`}>Kmer Content</a></li>
+          <li><a href={`${base}modules/per-tile-sequence-quality/`}>Per Tile Sequence Quality</a></li>
+        </ol>
+      </section>
+    </div>
+
+    <div class="docs-col-right">
+      <section style="margin-bottom: 2.5rem">
+        <h2>Rust-rewrite features</h2>
+        <p style="color: var(--ink-muted); margin-bottom: 1rem">
+          These features are only available in the
+          <a href="https://github.com/ewels/FastQC">Rust rewrite</a>,
+          pending merge into the
+          <a href="https://github.com/s-andrews/FastQC">upstream Java project</a>.
+        </p>
+        <ul>
+          <li><a href={`${base}templates/`}>Report Templates</a> &mdash; alternative HTML report layouts via <code>--template</code></li>
+        </ul>
+      </section>
+    </div>
+  </div>
 </Base>
+
+<style>
+  .docs-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+  }
+  @media (max-width: 768px) {
+    .docs-columns {
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
+  }
+</style>
