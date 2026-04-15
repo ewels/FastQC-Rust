@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [rust]
   pull_request:
-    branches: [main]
+    branches: [rust]
   workflow_dispatch:
 
 concurrency:
