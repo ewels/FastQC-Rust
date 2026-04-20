@@ -10,23 +10,27 @@ const base = import.meta.env.BASE_URL;
     <h1>FastQC, rewritten in Rust</h1>
     <div class="quality-bars"><span class="qb-1"></span><span class="qb-2"></span><span class="qb-3"></span><span class="qb-4"></span><span class="qb-5"></span><span class="qb-6"></span></div>
     <p class="lead">
-      An <strong>unofficial</strong> rewrite of
-      <a href="https://www.bioinformatics.babraham.ac.uk/projects/fastqc/">FastQC</a>,
+      An unofficial rewrite of
+      <a href="https://github.com/s-andrews/FastQC">FastQC</a>,
       the sequencing QC tool by Simon Andrews at the Babraham Institute.
-      Produces <a href={`${base}about/equivalence/`}><strong>identical output</strong></a> to the
-      <a href="https://github.com/s-andrews/FastQC">official Java version</a>.
-      Same analysis, different packaging.
+    </p>
+    <p class="lead">
+      <strong>Running QC on sequencing data? Use the
+      <a href="https://github.com/s-andrews/FastQC">official Java version</a>, not this one.</strong>
     </p>
     <div class="callout">
       <p>
-        <strong>Looking for the official FastQC?</strong>
-        <a href="https://www.bioinformatics.babraham.ac.uk/projects/fastqc/">bioinformatics.babraham.ac.uk/projects/fastqc</a>
+        This rewrite is primarily a development vehicle for
+        <a href={`${base}about/strategy/`}>porting improvements back to the canonical tool</a>
+        and a Rust crate for folks building in that ecosystem.
+        For regular use, you're better off using the official version from
+        <a href="https://www.bioinformatics.babraham.ac.uk/projects/fastqc/">Babraham</a>
         or <a href="https://github.com/s-andrews/FastQC">GitHub</a>.
       </p>
     </div>
     <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 2.5rem">
-      <a href="#install" class="btn btn-primary">Installation</a>
-      <a href={`${base}about/equivalence/`} class="btn btn-outline">Output comparison</a>
+      <a href="https://github.com/s-andrews/FastQC" class="btn btn-primary">Official Java FastQC ↗</a>
+      <a href="#why" class="btn btn-outline">Why does this exist?</a>
     </div>
     <img
       src={`${base}images/fastqc.png`}
@@ -35,31 +39,28 @@ const base = import.meta.env.BASE_URL;
     />
   </section>
 
-  <section style="margin-bottom: 3rem">
-    <h2>Why a Rust rewrite?</h2>
+  <section id="why" style="margin-bottom: 3rem">
+    <h2>OK, but why does this exist?</h2>
     <p style="color: var(--ink-muted); margin-bottom: 1.5rem">
-      The Java version works well. This rewrite packages it as a single static binary
-      with no JVM or font configuration needed, while producing identical output.
+      Valid question..
     </p>
-    <div class="grid-3">
+    <div class="grid-2">
       <div>
-        <h3 style="margin-top: 0">2–3x faster</h3>
+        <h3 style="margin-top: 0">Upstream contributions</h3>
         <p style="font-size: 0.875rem; color: var(--ink-muted)">
-          2.5–3x faster on short-read FASTQ, 7–18x less memory.
-          See the <a href={`${base}about/performance/`}>benchmarks</a>.
+          It started off as a "what if.." and turned into more of a sandbox for
+          prototyping improvements, that will hopefully get
+          <a href={`${base}about/strategy/`}>ported back to the main Java FastQC</a>.
+          The goal is to make the canonical tool better, not to replace it or fragment community usage.
         </p>
       </div>
       <div>
-        <h3 style="margin-top: 0">Single binary</h3>
+        <h3 style="margin-top: 0">Rust crate</h3>
         <p style="font-size: 0.875rem; color: var(--ink-muted)">
-          No JVM or font dependencies. One 4.8 MB file, any platform.
-        </p>
-      </div>
-      <div>
-        <h3 style="margin-top: 0">Truly identical output</h3>
-        <p style="font-size: 0.875rem; color: var(--ink-muted)">
-          <code>fastqc_data.txt</code> and <code>summary.txt</code> are
-          byte-identical. <a href={`${base}about/equivalence/`}>Verified on every commit</a>.
+          Published as <a href="https://crates.io/crates/fastqc-rust"><code>fastqc-rust</code></a>
+          for developers building bioinformatics tooling in the Rust ecosystem.
+          Produces virtually <a href={`${base}about/equivalence/`}>identical output</a>
+          to the Java version.
         </p>
       </div>
     </div>
@@ -67,8 +68,12 @@ const base = import.meta.env.BASE_URL;
 
   <section style="margin-bottom: 3rem">
     <h2>Performance</h2>
-    <p style="color: var(--ink-muted); margin-bottom: 1rem">
+    <p style="color: var(--ink-muted); margin-bottom: 0.5rem">
       Single-threaded, one file (7.3 GB Illumina WES). <a href={`${base}about/performance/`}>Full benchmarks</a>.
+    </p>
+    <p style="color: var(--ink-muted); font-size: 0.875rem; margin-bottom: 1rem">
+      Expect this gap to narrow,
+      <a href={`${base}about/strategy/`}>most of these speedups are being contributed upstream</a>.
     </p>
     <div class="grid-2">
       <div>
