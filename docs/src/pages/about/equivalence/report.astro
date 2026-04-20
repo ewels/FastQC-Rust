@@ -39,6 +39,14 @@ if (fs.existsSync(reportPath)) {
     if (bodyMatch) body = bodyMatch[1];
   }
 
+  // The report's image src paths are relative to equivalence_report.html
+  // (so it works standalone). When embedded at /about/equivalence/report/,
+  // relative paths resolve wrong — rewrite them to absolute public paths.
+  body = body.replace(
+    /src="equivalence_report_images\//g,
+    `src="${base}about/equivalence/equivalence_report_images/`,
+  );
+
   const scriptMatch = raw.match(/<script>([\s\S]*?)<\/script>/i);
   if (scriptMatch) script = scriptMatch[1];
 }
@@ -58,8 +66,8 @@ if (fs.existsSync(reportPath)) {
       <pre><code>cargo build --release
 uv run tests/equivalence/compare.py --binary ./target/release/fastqc</code></pre>
       <p>
-        Then copy the output to <code>docs/public/about/equivalence/equivalence_report.html</code>
-        and rebuild the docs site.
+        Then copy the HTML report and its sibling <code>equivalence_report_images/</code>
+        folder to <code>docs/public/about/equivalence/</code> and rebuild the docs site.
       </p>
     </div>
   )}

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>FastQC Rust vs Java Benchmark Report</title>
+<style>
+.bench-report { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #333; line-height: 1.6; }
+.bench-report h1 { color: #1a1a1a; border-bottom: 2px solid #e1e4e8; padding-bottom: 10px; }
+.bench-report h2 { color: #24292e; margin-top: 40px; }
+.bench-report h3 { color: #586069; }
+.bench-report table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+.bench-report th { background: #24292e; color: white; padding: 10px 15px; text-align: left; }
+.bench-report td { padding: 8px 15px; border-bottom: 1px solid #e1e4e8; }
+.bench-report tr:nth-child(even) { background: #f6f8fa; }
+.bench-report .better { color: #22863a; font-weight: bold; }
+.bench-report .bar { height: 22px; border-radius: 3px; display: inline-block; min-width: 2px; vertical-align: middle; }
+.bench-report .bar-java { background: #5382a1; }
+.bench-report .bar-rust { background: #e45f2b; }
+.bench-report .legend { display: flex; gap: 20px; margin: 10px 0 20px 0; }
+.bench-report .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.95em; }
+.bench-report .legend-swatch { width: 16px; height: 16px; border-radius: 2px; display: inline-block; }
+.bench-report .note { background: #f1f8ff; border-left: 3px solid #0366d6; padding: 10px 15px; margin: 15px 0; }
+.bench-report .chart-row td:first-child { white-space: nowrap; }
+.bench-report code { background: #f6f8fa; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+.bench-report .section-divider { border-top: 1px solid #e1e4e8; margin-top: 40px; padding-top: 10px; }
+.bench-report .right { text-align: right; }
+.bench-report .platform-header { background: #f6f8fa; font-weight: bold; }
+/* Standalone mode */
+body.bench-standalone { max-width: 960px; margin: 40px auto; padding: 0 20px; }
+</style>
+</head>
+<body class="bench-standalone">
+<div class="bench-report">
+<h1>FastQC: Rust vs Java Benchmark Report</h1>
+<p><strong>Date:</strong> 9 April 2026<br>
+<strong>Machine:</strong> Apple Silicon Mac (aarch64-apple-darwin)<br>
+<strong>Implementations:</strong></p>
+<ul>
+<li><strong>Java</strong> &mdash; FastQC 0.12.2.devel, OpenJDK, G1GC, 4GB max heap</li>
+<li><strong>Rust</strong> &mdash; fastqc-rs 0.12.1 with native zlib, LTO, lookup-table base counting</li>
+</ul>
+<p>All runs are single-threaded, one file at a time. This reflects the typical pipeline use case where an external scheduler (Nextflow, Snakemake) handles parallelism across files.</p>
+
+<div class="legend">
+<div class="legend-item"><div class="legend-swatch bar-java"></div> Java</div>
+<div class="legend-item"><div class="legend-swatch bar-rust"></div> Rust</div>
+</div>
+
+<h2>Test Dataset</h2>
+<table>
+<tr><th>File</th><th>Size</th><th>Platform</th><th>Type</th></tr>
+<tr><td>SRR7890918_tumor_1.fastq.gz</td><td>7.3 GB</td><td>Illumina</td><td>WES, short-read</td></tr>
+<tr><td>SRR7890918_tumor_2.fastq.gz</td><td>7.5 GB</td><td>Illumina</td><td>WES, short-read</td></tr>
+<tr><td>SRR7890919_normal_1.fastq.gz</td><td>6.2 GB</td><td>Illumina</td><td>WES, short-read</td></tr>
+<tr><td>SRR7890919_normal_2.fastq.gz</td><td>6.3 GB</td><td>Illumina</td><td>WES, short-read</td></tr>
+<tr><td>ERR16944282_1.fastq.gz</td><td>487 MB</td><td>Element AVITI</td><td>Short-read</td></tr>
+<tr><td>ERR16944282_2.fastq.gz</td><td>630 MB</td><td>Element AVITI</td><td>Short-read</td></tr>
+<tr><td>ERR16944299_1.fastq.gz</td><td>454 MB</td><td>Element AVITI</td><td>Short-read</td></tr>
+<tr><td>ERR16944299_2.fastq.gz</td><td>597 MB</td><td>Element AVITI</td><td>Short-read</td></tr>
+<tr><td>ERR16962265.fastq.gz</td><td>21 GB</td><td>ONT PromethION</td><td>Long-read (wheat WGS)</td></tr>
+<tr><td>SRR37915503.fastq.gz</td><td>58 GB</td><td>ONT PromethION</td><td>Long-read (snake WGS)</td></tr>
+<tr><td>GM12878_REP1.markdup.sorted.bam</td><td>11 GB</td><td>Illumina</td><td>BAM</td></tr>
+<tr><td colspan="2"><strong>Total: 119 GB</strong></td><td colspan="2">11 files across 3 platforms + BAM</td></tr>
+</table>
+
+<h2>Output Correctness</h2>
+<p>All output files (<code>fastqc_data.txt</code>, <code>summary.txt</code>) are byte-identical between Java and Rust for all 11 test files, except for the Sequence Duplication Levels module where floating-point values differ at the 14th-15th decimal place. This is caused by HashMap iteration order affecting accumulation in the statistical correction algorithm and is functionally meaningless.</p>
+
+<h2>Per-File Results</h2>
+
+<h3>Wall Clock Time</h3>
+<table>
+<tr><th>File</th><th>Size</th><th>Java</th><th>Rust</th><th>Speedup</th><th></th></tr>
+<tr class="platform-header"><td colspan="6">Illumina WES (short-read, 150bp)</td></tr>
+<tr class="chart-row">
+<td>tumor_1.fastq.gz</td><td class="right">7.3 GB</td>
+<td class="right">9m 46s</td><td class="right better">3m 13s</td><td class="better">3.0x</td>
+<td><div class="bar bar-java" style="width:220px"></div><br><div class="bar bar-rust" style="width:73px"></div></td>
+</tr>
+<tr class="chart-row">
+<td>tumor_2.fastq.gz</td><td class="right">7.5 GB</td>
+<td class="right">9m 09s</td><td class="right better">3m 18s</td><td class="better">2.8x</td>
+<td><div class="bar bar-java" style="width:206px"></div><br><div class="bar bar-rust" style="width:74px"></div></td>
+</tr>
+<tr class="chart-row">
+<td>normal_1.fastq.gz</td><td class="right">6.2 GB</td>
+<td class="right">7m 08s</td><td class="right better">2m 45s</td><td class="better">2.6x</td>
+<td><div class="bar bar-java" style="width:161px"></div><br><div class="bar bar-rust" style="width:62px"></div></td>
+</tr>
+<tr class="chart-row">
+<td>normal_2.fastq.gz</td><td class="right">6.3 GB</td>
+<td class="right">7m 05s</td><td class="right better">2m 54s</td><td class="better">2.4x</td>
+<td><div class="bar bar-java" style="width:160px"></div><br><div class="bar bar-rust" style="width:65px"></div></td>
+</tr>
+<tr class="platform-header"><td colspan="6">Element AVITI (short-read)</td></tr>
+<tr class="chart-row">
+<td>ERR16944282_1.fastq.gz</td><td class="right">487 MB</td>
+<td class="right">35s</td><td class="right better">14s</td><td class="better">2.5x</td>
+<td><div class="bar bar-java" style="width:70px"></div><br><div class="bar bar-rust" style="width:28px"></div></td>
+</tr>
+<tr class="chart-row">
+<td>ERR16944282_2.fastq.gz</td><td class="right">630 MB</td>
+<td class="right">36s</td><td class="right better">16s</td><td class="better">2.3x</td>
+<td><div class="bar bar-java" style="width:72px"></div><br><div class="bar bar-rust" style="width:32px"></div></td>
+</tr>
+<tr class="chart-row">
+<td>ERR16944299_1.fastq.gz</td><td class="right">454 MB</td>
+<td class="right">35s</td><td class="right better">14s</td><td class="better">2.5x</td>
+<td><div class="bar bar-java" style="width:70px"></div><br><div class="bar bar-rust" style="width:28px"></div></td>
+</tr>
+<tr class="chart-row">
+<td>ERR16944299_2.fastq.gz</td><td class="right">597 MB</td>
+<td class="right">41s</td><td class="right better">15s</td><td class="better">2.7x</td>
+<td><div class="bar bar-java" style="width:82px"></div><br><div class="bar bar-rust" style="width:30px"></div></td>
+</tr>
+<tr class="platform-header"><td colspan="6">ONT PromethION (long-read)</td></tr>
+<tr class="chart-row">
+<td>ERR16962265.fastq.gz</td><td class="right">21 GB</td>
+<td class="right">20m 28s</td><td class="right better">10m 16s</td><td class="better">2.0x</td>
+<td><div class="bar bar-java" style="width:300px"></div><br><div class="bar bar-rust" style="width:150px"></div></td>
+</tr>
+<tr class="chart-row">
+<td>SRR37915503.fastq.gz</td><td class="right">58 GB</td>
+<td class="right">49m 37s</td><td class="right better">30m 21s</td><td class="better">1.6x</td>
+<td><div class="bar bar-java" style="width:360px"></div><br><div class="bar bar-rust" style="width:220px"></div></td>
+</tr>
+<tr class="platform-header"><td colspan="6">BAM</td></tr>
+<tr class="chart-row">
+<td>GM12878.bam</td><td class="right">11 GB</td>
+<td class="right">8m 00s</td><td class="right better">4m 51s</td><td class="better">1.6x</td>
+<td><div class="bar bar-java" style="width:180px"></div><br><div class="bar bar-rust" style="width:109px"></div></td>
+</tr>
+</table>
+
+<h3>Peak Memory (RSS)</h3>
+<table>
+<tr><th>File</th><th>Java</th><th>Rust</th><th>Ratio</th></tr>
+<tr class="platform-header"><td colspan="4">Illumina WES (short-read)</td></tr>
+<tr><td>tumor_1.fastq.gz</td><td class="right">444 MB</td><td class="right better">28 MB</td><td class="better">15.9x less</td></tr>
+<tr><td>tumor_2.fastq.gz</td><td class="right">438 MB</td><td class="right better">29 MB</td><td class="better">15.1x less</td></tr>
+<tr><td>normal_1.fastq.gz</td><td class="right">439 MB</td><td class="right better">25 MB</td><td class="better">17.6x less</td></tr>
+<tr><td>normal_2.fastq.gz</td><td class="right">405 MB</td><td class="right better">28 MB</td><td class="better">14.5x less</td></tr>
+<tr class="platform-header"><td colspan="4">Element AVITI (short-read)</td></tr>
+<tr><td>ERR16944282_1.fastq.gz</td><td class="right">412 MB</td><td class="right better">53 MB</td><td class="better">7.8x less</td></tr>
+<tr><td>ERR16944282_2.fastq.gz</td><td class="right">483 MB</td><td class="right better">54 MB</td><td class="better">8.9x less</td></tr>
+<tr><td>ERR16944299_1.fastq.gz</td><td class="right">388 MB</td><td class="right better">55 MB</td><td class="better">7.1x less</td></tr>
+<tr><td>ERR16944299_2.fastq.gz</td><td class="right">361 MB</td><td class="right better">54 MB</td><td class="better">6.7x less</td></tr>
+<tr class="platform-header"><td colspan="4">ONT PromethION (long-read)</td></tr>
+<tr><td>ERR16962265.fastq.gz</td><td class="right">1550 MB</td><td class="right better">1170 MB</td><td>1.3x less</td></tr>
+<tr><td>SRR37915503.fastq.gz</td><td class="right">2209 MB</td><td class="right better">1028 MB</td><td class="better">2.1x less</td></tr>
+<tr class="platform-header"><td colspan="4">BAM</td></tr>
+<tr><td>GM12878.bam</td><td class="right">543 MB</td><td class="right better">30 MB</td><td class="better">18.1x less</td></tr>
+</table>
+
+<div class="note">
+<strong>Memory and long reads:</strong> ONT PromethION data uses significantly more memory in both implementations because reads can be tens of thousands of bases long, requiring proportionally larger per-position arrays. For short-read data (Illumina, AVITI), Rust uses 7-18x less memory. For long-read data the ratio narrows to 1.3-2.1x because the per-position arrays dominate in both.
+</div>
+
+<div class="section-divider"></div>
+
+<h2>Speedup by Platform</h2>
+<table>
+<tr><th>Platform</th><th>Read Type</th><th>Avg Speedup</th><th>Java Throughput</th><th>Rust Throughput</th></tr>
+<tr><td>Illumina</td><td>Short-read (150bp)</td><td class="better">2.7x</td><td>14 MB/s</td><td class="better">38 MB/s</td></tr>
+<tr><td>Element AVITI</td><td>Short-read</td><td class="better">2.5x</td><td>15 MB/s</td><td class="better">37 MB/s</td></tr>
+<tr><td>ONT PromethION</td><td>Long-read (1-20kb)</td><td class="better">1.8x</td><td>19 MB/s</td><td class="better">34 MB/s</td></tr>
+<tr><td>BAM</td><td>Mapped reads</td><td class="better">1.6x</td><td>23 MB/s</td><td class="better">39 MB/s</td></tr>
+</table>
+<p style="font-size:0.85em; color:#586069;">Throughput = compressed file size / wall-clock time, single-threaded.</p>
+
+<p>Short-read FASTQ benefits most (2.5-3.0x) because the three optimisations (SIMD adapter search, lookup-table base counting, zero allocation) all target the per-read processing loop, which dominates for short reads. Long-read data shows a smaller improvement (1.6-2.0x) because gzip decompression and per-base processing of very long sequences become the dominant costs, diluting the relative impact of the adapter and allocation optimisations.</p>
+
+<div class="section-divider"></div>
+
+<h2>Why is BAM Slower than FASTQ?</h2>
+<p>The BAM speedup (1.6x) is lower than short-read FASTQ (2.5-3.0x) because of the record parsing overhead. Java uses htsjdk, a mature and heavily optimised C-backed BAM library. Rust uses noodles, a pure Rust implementation. BAM requires BGZF decompression, CIGAR parsing, flag decoding, and reverse-complement reconstruction for every record. noodles does all of this in pure Rust, which is solid but cannot match htsjdk's years of C-level optimisation. This narrows the gap that the other optimisations create.</p>
+
+<div class="section-divider"></div>
+
+<h2>Where the Time Goes (Rust)</h2>
+<p>CPU profile of the Rust implementation processing 2M short reads (macOS <code>sample</code> tool, 3,300 active samples). This shows where the Rust rewrite spends its time:</p>
+
+<table>
+<tr><th>Component</th><th>%</th><th></th></tr>
+<tr><td>Gzip decompression (native libz)</td><td class="right">25%</td><td><div class="bar bar-rust" style="width:250px"></div></td></tr>
+<tr><td>Adapter search (memchr SIMD)</td><td class="right">18%</td><td><div class="bar bar-rust" style="width:180px"></div></td></tr>
+<tr><td>PerBaseSequenceContent</td><td class="right">12%</td><td><div class="bar bar-rust" style="width:120px"></div></td></tr>
+<tr><td>NContent</td><td class="right">11%</td><td><div class="bar bar-rust" style="width:110px"></div></td></tr>
+<tr><td>BasicStats</td><td class="right">9%</td><td><div class="bar bar-rust" style="width:90px"></div></td></tr>
+<tr><td>FASTQ I/O + parsing</td><td class="right">8%</td><td><div class="bar bar-rust" style="width:80px"></div></td></tr>
+<tr><td>PerBaseQuality + PerTileQuality</td><td class="right">6%</td><td><div class="bar bar-rust" style="width:60px"></div></td></tr>
+<tr><td>PerSequenceQuality + GCContent</td><td class="right">3%</td><td><div class="bar bar-rust" style="width:30px"></div></td></tr>
+<tr><td>Memory, hashing, CRC, other</td><td class="right">8%</td><td><div class="bar bar-rust" style="width:80px"></div></td></tr>
+</table>
+
+<p>A quarter of the time is spent in gzip decompression (native C libz, shared with Java). The remaining 75% is application code where the three optimisations described below have their effect. An equivalent profile of Java is not available because Java Flight Recorder cannot sample native C code or JVM intrinsics, making a direct side-by-side comparison misleading.</p>
+
+<div class="section-divider"></div>
+
+<h2>What Makes the Rust Version Faster</h2>
+
+<p>The speed improvement comes from three specific optimisations, not from Rust being inherently faster than Java. Each was identified through CPU profiling and contributes a measurable share of the overall gain.</p>
+
+<h3>1. SIMD-accelerated adapter search (biggest single factor)</h3>
+<p>FastQC searches every read for 6 adapter sequences. In Java, <code>String.indexOf()</code> compares one character at a time. The Rust version uses the <code>memchr</code> crate, which employs ARM NEON SIMD instructions to compare 16 bytes per CPU cycle. The adapter search patterns are also pre-compiled once at startup rather than being reconstructed on every call. This single change reduces adapter searching from 35% of total runtime to 6%.</p>
+
+<h3>2. Lookup-table base counting (halves module processing time)</h3>
+<p>Three QC modules (BasicStats, PerBaseSequenceContent, NContent) independently iterate over every byte of every read to classify bases as A, C, G, T, or N. In Java, each module uses a multi-way <code>switch</code> or <code>if/else</code> chain. With random DNA data, the CPU branch predictor can only guess correctly 25% of the time, causing pipeline stalls on every misprediction.</p>
+<p>The Rust version replaces these branches with a 256-byte compile-time lookup table that maps each ASCII byte directly to a base index. This turns an unpredictable branch into a single indexed memory load. Combined with storing per-position counts in a contiguous <code>[u64; 4]</code> array (instead of 4 separate arrays), this halves the time spent in module processing.</p>
+
+<h3>3. Zero per-read allocation</h3>
+<p>Java creates several new objects for every read: a <code>Sequence</code> object, a new <code>String</code> from <code>toUpperCase()</code>, <code>String[]</code> arrays from <code>split(":")</code> for tile parsing, and <code>substring()</code> calls for overrepresented sequence tracking. Each allocation contributes to heap pressure and eventually triggers garbage collection. Over a typical run, the JVM performs tens of thousands of GC events.</p>
+<p>The Rust version avoids all of this. Sequences are uppercase-converted in place (a single pass over the existing byte buffer, no new allocation). Tile IDs are parsed by scanning for colons without splitting. Overrepresented sequences are tracked using byte slices that reference the existing data. With no garbage collector, there are no GC pauses and no stop-the-world events.</p>
+
+<h3>Could these improvements be back-ported to Java?</h3>
+
+<p>We tested each optimisation in Java to see whether the same gains could be achieved without a full rewrite.</p>
+
+<p><strong>SIMD adapter search: No.</strong> Java has no way to invoke NEON or SSE intrinsics for substring matching. <code>String.indexOf()</code> already uses HotSpot's best internal intrinsic. We tested replacing it with a manual <code>char[]</code> loop and it was actually slower (16.0s vs 12.9s) because HotSpot's built-in implementation is more optimised than hand-written Java. The JVM Vector API (JEP 338) exists in preview but does not support substring search patterns.</p>
+
+<p><strong>Lookup-table base counting: Marginal.</strong> Java's JIT compiler already converts small <code>switch</code> statements on byte values into jump tables internally. Replacing the switch with an explicit array lookup in Java measured only ~3% improvement. The remaining gap is that Rust's compile-time constant lookup table with a register-allocated local accumulator compiles to tighter machine code than what HotSpot generates at runtime.</p>
+
+<p><strong>Zero-allocation processing: Structurally limited.</strong> Java's <code>String</code> is immutable and heap-allocated by design. <code>toUpperCase()</code> must return a new String. <code>split(":")</code> must allocate a <code>String[]</code>. We tested workarounds (check-before-uppercase, manual colon scanning, HashMap to array conversion) and measured negligible improvement in each case. HotSpot's escape analysis and generational GC already handle short-lived allocations efficiently, but not for free: the JVM still recorded tens of thousands of GC events per run, each causing brief pauses.</p>
+
+<p>The Java version is already close to its performance ceiling. HotSpot's JIT does a good job with the patterns that exist in the codebase, and the remaining gap comes from structural properties of the JVM: heap-allocated immutable strings, no SIMD substring search, and garbage collection overhead that cannot be fully eliminated.</p>
+
+<div class="section-divider"></div>
+
+<h2>Build Variants</h2>
+<p>The Rust binary defaults to native zlib for gzip decompression (available on all Linux/macOS). A fully static pure-Rust build is available for WASM, Windows, or environments without libz:</p>
+<table>
+<tr><th>Build</th><th>Command</th><th>Dependencies</th></tr>
+<tr><td>Default (native zlib)</td><td><code>cargo build --release</code></td><td>libz (system)</td></tr>
+<tr><td>Pure Rust</td><td><code>cargo build --release --no-default-features</code></td><td>None</td></tr>
+</table>
+
+<div class="section-divider"></div>
+
+<h2>Overall Summary</h2>
+
+<table>
+<tr><th>Metric</th><th>Java</th><th>Rust</th></tr>
+<tr><td>Short-read speed (avg)</td><td>14 MB/s</td><td class="better">38 MB/s (2.7x faster)</td></tr>
+<tr><td>Long-read speed (avg)</td><td>19 MB/s</td><td class="better">34 MB/s (1.8x faster)</td></tr>
+<tr><td>BAM speed</td><td>23 MB/s</td><td class="better">39 MB/s (1.6x faster)</td></tr>
+<tr><td>Peak memory (short-read)</td><td>361-483 MB</td><td class="better">25-55 MB (7-18x less)</td></tr>
+<tr><td>Peak memory (long-read)</td><td>1.5-2.2 GB</td><td class="better">1.0-1.2 GB (1.3-2.1x less)</td></tr>
+<tr><td>Binary size</td><td>~100 MB (JRE + Perl)</td><td class="better">4.8 MB</td></tr>
+<tr><td>Runtime dependencies</td><td>JRE + Perl</td><td>libz only (or none for pure build)</td></tr>
+</table>
+
+<div class="section-divider"></div>
+
+<h2>Real-World Impact</h2>
+
+<p>To put these performance gains in context, we analysed FastQC task execution data from the <a href="https://seqera.io">Seqera Platform</a> Cloud, which runs Nextflow pipelines at scale for bioinformatics teams worldwide.</p>
+
+<h3>Scale of FastQC usage (Seqera Platform Cloud only)</h3>
+<table>
+<tr><th>Metric</th><th>Value</th></tr>
+<tr><td>Period analysed</td><td>Jan 2025 - Mar 2026 (15 months)</td></tr>
+<tr><td>Total FastQC tasks</td><td>3.6 million</td></tr>
+<tr><td>Total CPU hours consumed</td><td>1.1 million hours</td></tr>
+<tr><td>Average per month</td><td>~242,000 tasks / ~73,000 CPU hours</td></tr>
+<tr><td>Annualised</td><td>~2.9 million tasks / ~877,000 CPU hours</td></tr>
+</table>
+
+<h3>Projected savings with the Rust rewrite</h3>
+<p>With a 2.7x average short-read speedup (the dominant use case), each CPU hour of FastQC work would complete in 22 minutes instead of 60. Applied to the annualised Seqera Cloud usage alone:</p>
+
+<table>
+<tr><th>Metric</th><th>Current (Java)</th><th>Projected (Rust)</th><th>Saved</th></tr>
+<tr><td>Annual CPU hours</td><td>877,000</td><td>325,000</td><td class="better">552,000 hours</td></tr>
+<tr><td>Annual cloud compute cost*</td><td>$26,300</td><td>$9,700</td><td class="better">$16,600</td></tr>
+<tr><td>Annual CO2 emissions**</td><td>61 tonnes</td><td>23 tonnes</td><td class="better">39 tonnes</td></tr>
+</table>
+
+<p style="font-size:0.85em; color:#586069;">
+* Estimated at $0.03/CPU-hour (typical cloud spot pricing for compute-optimised instances).<br>
+** Estimated using global average grid carbon intensity (0.35 kgCO2/kWh) and ~200W per CPU core. 39 tonnes of CO2 is roughly equivalent to what 1,600 mature trees absorb in a year.
+</p>
+
+<h3>Beyond Seqera Platform</h3>
+<p>These figures represent a single cloud platform. FastQC is one of the most widely used bioinformatics tools in the world, running in university clusters, hospital genomics labs, national sequencing centres, and cloud pipelines globally. The total compute spent on FastQC across all platforms is likely orders of magnitude larger.</p>
+
+<p>The memory reduction also has practical consequences: cloud instances can be significantly downsized (a 512 MB task becomes a 30 MB task for short reads), reducing the minimum instance size required and improving bin-packing efficiency in schedulers like Kubernetes and AWS Batch.</p>
+
+</div><!-- /bench-report -->
+</body>
+</html>

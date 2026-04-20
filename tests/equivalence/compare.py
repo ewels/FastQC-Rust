@@ -24,7 +24,6 @@ Usage:
 """
 
 import argparse
-import base64
 import difflib
 import html as html_mod
 import io
@@ -54,10 +53,13 @@ class ImageDiff:
     differing_pixels: int
     max_channel_diff: int
     diff_percent: float
-    ref_b64: str  # base64-encoded PNG
-    actual_b64: str
-    diff_b64: str  # highlighted diff image
+    ref_png: bytes  # raw PNG bytes, written to disk by generate_report()
+    actual_png: bytes
+    diff_png: bytes  # highlighted diff image
     passed: bool
+    ref_src: str = ""  # relative URL populated by generate_report()
+    actual_src: str = ""
+    diff_src: str = ""
 
 
 @dataclass
@@ -155,8 +157,8 @@ def compare_images(
     ref_img = Image.open(ref_path).convert("RGBA")
     actual_img = Image.open(actual_path).convert("RGBA")
 
-    ref_b64 = _img_to_b64(ref_img)
-    actual_b64 = _img_to_b64(actual_img)
+    ref_png = _img_to_png_bytes(ref_img)
+    actual_png = _img_to_png_bytes(actual_img)
 
     if ref_img.size != actual_img.size:
         # Different dimensions — create a blank diff and fail
@@ -167,9 +169,9 @@ def compare_images(
             differing_pixels=ref_img.width * ref_img.height,
             max_channel_diff=255,
             diff_percent=100.0,
-            ref_b64=ref_b64,
-            actual_b64=actual_b64,
-            diff_b64=_img_to_b64(diff_img),
+            ref_png=ref_png,
+            actual_png=actual_png,
+            diff_png=_img_to_png_bytes(diff_img),
             passed=False,
         )
 
@@ -224,17 +226,17 @@ def compare_images(
         differing_pixels=differing,
         max_channel_diff=max_ch_diff,
         diff_percent=pct,
-        ref_b64=ref_b64,
-        actual_b64=actual_b64,
-        diff_b64=_img_to_b64(diff_img),
+        ref_png=ref_png,
+        actual_png=actual_png,
+        diff_png=_img_to_png_bytes(diff_img),
         passed=True,  # caller sets threshold
     )
 
 
-def _img_to_b64(img: Image.Image) -> str:
+def _img_to_png_bytes(img: Image.Image) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode("ascii")
+    return buf.getvalue()
 
 
 # ---------------------------------------------------------------------------
@@ -872,21 +874,21 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     <button onclick="setMode(this,'highlight')">Highlight</button>
   </div>
   <div class="view view-side-by-side"><div class="side-by-side">
-    <div class="col"><div class="label">Java</div>{% if img.ref_b64 %}<img src="data:image/png;base64,{{ img.ref_b64 }}" alt="Java">{% endif %}</div>
-    <div class="col"><div class="label">Rust</div>{% if img.actual_b64 %}<img src="data:image/png;base64,{{ img.actual_b64 }}" alt="Rust">{% endif %}</div>
-    <div class="col"><div class="label">Pixel Diff</div>{% if img.diff_b64 %}<img src="data:image/png;base64,{{ img.diff_b64 }}" alt="Diff">{% endif %}</div>
+    <div class="col"><div class="label">Java</div>{% if img.ref_src %}<img src="{{ img.ref_src }}" alt="Java" loading="lazy">{% endif %}</div>
+    <div class="col"><div class="label">Rust</div>{% if img.actual_src %}<img src="{{ img.actual_src }}" alt="Rust" loading="lazy">{% endif %}</div>
+    <div class="col"><div class="label">Pixel Diff</div>{% if img.diff_src %}<img src="{{ img.diff_src }}" alt="Diff" loading="lazy">{% endif %}</div>
   </div></div>
   <div class="view view-slider" style="display:none"><div class="viewport drag-compare" style="position:relative;cursor:col-resize" onmousedown="startDrag(event,'slider')" >
-    {% if img.ref_b64 %}<img src="data:image/png;base64,{{ img.ref_b64 }}" style="display:block;max-width:100%" draggable="false">{% endif %}
-    <div class="overlay" style="position:absolute;top:0;left:0;height:100%;overflow:hidden;width:50%">{% if img.actual_b64 %}<img src="data:image/png;base64,{{ img.actual_b64 }}" style="display:block;max-width:none" draggable="false">{% endif %}</div>
+    {% if img.ref_src %}<img src="{{ img.ref_src }}" style="display:block;max-width:100%" draggable="false" loading="lazy">{% endif %}
+    <div class="overlay" style="position:absolute;top:0;left:0;height:100%;overflow:hidden;width:50%">{% if img.actual_src %}<img src="{{ img.actual_src }}" style="display:block;max-width:none" draggable="false" loading="lazy">{% endif %}</div>
     <div class="drag-line" style="position:absolute;top:0;width:2px;height:100%;background:rgba(255,0,0,0.8);left:50%;pointer-events:none;z-index:2"></div>
     <div class="drag-handle" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:28px;height:28px;background:rgba(255,255,255,0.9);border:2px solid rgba(255,0,0,0.8);border-radius:50%;pointer-events:none;z-index:3;display:flex;align-items:center;justify-content:center"><span style="color:#c00;font-size:14px;font-weight:bold;letter-spacing:-2px">◀▶</span></div>
     <div style="position:absolute;top:4px;left:6px;font-size:10px;color:rgba(0,0,0,0.5);pointer-events:none">Rust</div>
     <div style="position:absolute;top:4px;right:6px;font-size:10px;color:rgba(0,0,0,0.5);pointer-events:none">Java</div>
   </div></div>
   <div class="view view-fade" style="display:none"><div class="viewport drag-compare" style="position:relative;cursor:ew-resize" onmousedown="startDrag(event,'fade')" >
-    {% if img.ref_b64 %}<img src="data:image/png;base64,{{ img.ref_b64 }}" style="display:block;max-width:100%" draggable="false">{% endif %}
-    <div class="overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0.5">{% if img.actual_b64 %}<img src="data:image/png;base64,{{ img.actual_b64 }}" style="width:100%;height:100%" draggable="false">{% endif %}</div>
+    {% if img.ref_src %}<img src="{{ img.ref_src }}" style="display:block;max-width:100%" draggable="false" loading="lazy">{% endif %}
+    <div class="overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0.5">{% if img.actual_src %}<img src="{{ img.actual_src }}" style="width:100%;height:100%" draggable="false" loading="lazy">{% endif %}</div>
     <div class="fade-track" style="position:absolute;bottom:12px;left:10%;right:10%;height:6px;background:rgba(0,0,0,0.3);border-radius:3px;pointer-events:none;z-index:2">
       <div class="fade-thumb" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:20px;height:20px;background:rgba(255,255,255,0.9);border:2px solid rgba(0,0,0,0.5);border-radius:50%"></div>
     </div>
@@ -894,7 +896,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     <div style="position:absolute;top:4px;right:6px;font-size:10px;color:rgba(0,0,0,0.5);pointer-events:none">Java</div>
   </div></div>
   <div class="view view-highlight" style="display:none"><div class="viewport">
-    {% if img.diff_b64 %}<img src="data:image/png;base64,{{ img.diff_b64 }}" style="display:block;max-width:100%">{% endif %}
+    {% if img.diff_src %}<img src="{{ img.diff_src }}" style="display:block;max-width:100%" loading="lazy">{% endif %}
   </div><p style="font-size:12px;color:#666;margin-top:4px"><span style="color:#c00">Red</span> = only in Java, <span style="color:#0a0">Green</span> = only in Rust.</p></div>
 </div>
 {% endif %}
@@ -988,6 +990,27 @@ window.addEventListener('load', function() {
 
 
 def generate_report(results: list[TestCaseResult], output_path: Path, upstream_version: str) -> None:
+    # Write PNGs to a sibling folder so the HTML stays small enough for
+    # browsers to render smoothly. The report references them via relative
+    # URLs — this works both standalone (HTML and folder side-by-side) and
+    # when extracted from a CI artifact zip.
+    img_dir = output_path.parent / f"{output_path.stem}_images"
+    shutil.rmtree(img_dir, ignore_errors=True)
+    img_dir.mkdir(parents=True)
+
+    for r in results:
+        for img in r.image_diffs:
+            src = Path(img.name)
+            stem = src.stem
+            case_dir = img_dir / r.name / src.parent
+            case_dir.mkdir(parents=True, exist_ok=True)
+            for side, png in (("java", img.ref_png), ("rust", img.actual_png), ("diff", img.diff_png)):
+                (case_dir / f"{stem}_{side}.png").write_bytes(png)
+            rel_dir = case_dir.relative_to(output_path.parent).as_posix()
+            img.ref_src = f"{rel_dir}/{stem}_java.png"
+            img.actual_src = f"{rel_dir}/{stem}_rust.png"
+            img.diff_src = f"{rel_dir}/{stem}_diff.png"
+
     # Build per-result lookup dicts so the template can find diffs by filename
     diff_lookups = {}
     for r in results:

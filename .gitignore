@@ -27,10 +27,9 @@ skills-lock.json
 # Test output
 test_output/
 
-# Equivalence test reports (generated, not committed)
+# Equivalence test reports working dir (generated, not committed — the
+# copy under docs/public/ is committed so the docs site always has a report)
 tests/equivalence/reports/
-docs/public/about/equivalence/equivalence_report.html
-docs/public/about/performance/benchmark_report.html
 
 # Docs build output
 docs/dist/
