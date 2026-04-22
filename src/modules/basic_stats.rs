@@ -246,11 +246,7 @@ impl QCModule for BasicStats {
         // Row 7: %GC
         // JAVA COMPAT: Integer division: ((gCount+cCount)*100)/(aCount+tCount+gCount+cCount)
         let total = self.a_count + self.t_count + self.g_count + self.c_count;
-        let gc = if total > 0 {
-            ((self.g_count + self.c_count) * 100) / total
-        } else {
-            0
-        };
+        let gc = ((self.g_count + self.c_count) * 100).checked_div(total).unwrap_or(0);
         writeln!(writer, "%GC\t{}", gc)?;
 
         Ok(())
