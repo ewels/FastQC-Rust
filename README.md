@@ -1,10 +1,21 @@
 # FastQC (Rust)
 
-A Rust rewrite of [FastQC](https://github.com/s-andrews/FastQC), a quality control tool for high-throughput sequencing data.
+An **unofficial** Rust rewrite of [FastQC](https://github.com/s-andrews/FastQC), the sequencing QC tool by Simon Andrews at the Babraham Institute.
+
+> [!WARNING]
+>
+> **You should probably use the [official Java version](https://github.com/s-andrews/FastQC), not this one.**
+>
+> This rewrite is primarily a development vehicle for [porting improvements back to the canonical tool](https://ewels.github.io/FastQC-Rust/about/strategy/), as well as being a Rust crate for folks building in that ecosystem - not a FastQC replacement. For regular use, install the official version from [Babraham](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) or [GitHub](https://github.com/s-andrews/FastQC).
 
 ![FastQC Screenshot](docs/public/images/fastqc.png)
 
-This is a complete rewrite of the original Java FastQC application in Rust. It produces **byte-identical text output** (`fastqc_data.txt`, `summary.txt`) to the Java version, while being significantly faster and distributed as a single static binary.
+## Why does this exist?
+
+Two reasons, both secondary to the original tool:
+
+- **Upstream contributions** — a sandbox for prototyping improvements (performance, bug fixes, UI) that get [ported back to Java FastQC as PRs](https://ewels.github.io/FastQC-Rust/about/strategy/). The goal is to make the canonical tool better, not replace it.
+- **Rust crate** — published as [`fastqc-rust`](https://crates.io/crates/fastqc-rust) for developers building bioinformatics tooling in the Rust ecosystem. `fastqc_data.txt` and `summary.txt` are byte-identical to the Java version — see the [equivalence report](https://ewels.github.io/FastQC-Rust/about/equivalence/).
 
 Currently tracking upstream Java FastQC version — see [`UPSTREAM.toml`](UPSTREAM.toml) for details.
 
@@ -18,13 +29,13 @@ cargo install fastqc-rust
 
 ### From a release binary
 
-Download prebuilt binaries from the [Releases](https://github.com/ewels/FastQC/releases) page.
+Download prebuilt binaries from the [Releases](https://github.com/ewels/FastQC-Rust/releases) page.
 
 ### Building from source
 
 ```bash
-git clone https://github.com/ewels/FastQC.git
-cd FastQC
+git clone https://github.com/ewels/FastQC-Rust.git
+cd FastQC-Rust
 cargo build --release
 # Binary at ./target/release/fastqc
 ```

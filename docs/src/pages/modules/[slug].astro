@@ -21,7 +21,7 @@ export function getStaticPaths() {
     const body = bodyMatch ? bodyMatch[1].trim() : raw;
 
     // Rewrite image src paths to point to /modules/ in public
-    const base = import.meta.env.BASE_URL || '/FastQC/';
+    const base = import.meta.env.BASE_URL || '/FastQC-Rust/';
     const content = body.replace(
       /src="([^"]+\.png)"/g,
       `src="${base}modules/$1"`
