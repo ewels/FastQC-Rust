@@ -6,7 +6,9 @@ An **unofficial** Rust rewrite of [FastQC](https://github.com/s-andrews/FastQC),
 >
 > **You should probably use the [official Java version](https://github.com/s-andrews/FastQC), not this one.**
 >
-> This rewrite is primarily a development vehicle for [porting improvements back to the canonical tool](https://ewels.github.io/FastQC-Rust/about/strategy/), as well as being a Rust crate for folks building in that ecosystem - not a FastQC replacement. For regular use, install the official version from [Babraham](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) or [GitHub](https://github.com/s-andrews/FastQC).
+> This project is to be a faithful rewrite of FastQC, with as-close-to identical outputs as possible. The hope is to [port improvements back upstream](https://ewels.github.io/FastQC-Rust/about/strategy/) until the rewrite provides no additional functionality or speed. It's basically a development fork in a different language, albeit with a Rust crate for folks building in that ecosystem.
+>
+> For regular use, it's probably best to stick with the official Java version from [Babraham](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) or [GitHub](https://github.com/s-andrews/FastQC).
 
 ![FastQC Screenshot](docs/public/images/fastqc.png)
 
@@ -17,27 +19,46 @@ Two reasons, both secondary to the original tool:
 - **Upstream contributions** — a sandbox for prototyping improvements (performance, bug fixes, UI) that get [ported back to Java FastQC as PRs](https://ewels.github.io/FastQC-Rust/about/strategy/). The goal is to make the canonical tool better, not replace it.
 - **Rust crate** — published as [`fastqc-rust`](https://crates.io/crates/fastqc-rust) for developers building bioinformatics tooling in the Rust ecosystem. `fastqc_data.txt` and `summary.txt` are byte-identical to the Java version — see the [equivalence report](https://ewels.github.io/FastQC-Rust/about/equivalence/).
 
-Currently tracking upstream Java FastQC version — see [`UPSTREAM.toml`](UPSTREAM.toml) for details.
+Currently tracking upstream Java FastQC version `0.12.1`. See [`UPSTREAM.toml`](UPSTREAM.toml) for details.
 
-## Installation
-
-### From source
-
-```bash
-cargo install fastqc-rust
-```
+## Installation + Usage
 
 ### From a release binary
 
 Download prebuilt binaries from the [Releases](https://github.com/ewels/FastQC-Rust/releases) page.
 
+```bash
+# Install (Linux x86_64 example -- see docs for all platforms)
+curl -fsSL https://github.com/ewels/FastQC-Rust/releases/download/v0.12.1/fastqc-linux-x86_64.tar.gz | tar xz --strip-components=1
+sudo mv ./fastqc /usr/local/bin/
+
+# Run
+fastqc sample.fastq.gz
+```
+
+### Using Docker
+
+```bash
+docker run ghcr.io/ewels/fastqc-rust:dev fastqc sample.fastq.gz
+```
+
+### With Cargo
+
+```bash
+cargo install fastqc-rust
+fastqc sample.fastq.gz
+```
+
 ### Building from source
 
 ```bash
+# Clone + build
 git clone https://github.com/ewels/FastQC-Rust.git
 cd FastQC-Rust
 cargo build --release
-# Binary at ./target/release/fastqc
+
+# Run
+./target/release/fastqc sample.fastq.gz
 ```
 
 ## Usage
@@ -46,33 +67,9 @@ cargo build --release
 # Analyze a FASTQ file
 fastqc sample.fastq.gz
 
-# Specify output directory
-fastqc -o results/ sample.fastq.gz
-
-# Analyze multiple files in parallel
-fastqc -t 4 *.fastq.gz
-
-# BAM input
-fastqc --format bam aligned.bam
-
 # See all options
 fastqc --help
 ```
-
-### Key options
-
-| Flag | Description |
-|------|-------------|
-| `-o, --outdir DIR` | Output directory (must exist) |
-| `-f, --format FORMAT` | Force format: `bam`, `sam`, `bam_mapped`, `sam_mapped`, `fastq` |
-| `-t, --threads N` | Number of parallel file processing threads |
-| `--casava` | CASAVA 1.8+ mode (exclude filtered reads) |
-| `--nano` | Nanopore Fast5 mode |
-| `--nogroup` | Disable base grouping for reads > 50bp |
-| `--expgroup` | Use exponential base groups |
-| `-k, --kmers N` | Kmer size 2-10 (default: 7) |
-| `--min_length N` | Minimum sequence length to report |
-| `--extract` | Unzip output after creation |
 
 ## Equivalence testing
 
@@ -96,4 +93,6 @@ GPL-3.0 — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-FastQC was originally written by Simon Andrews at the [Babraham Institute](https://www.bioinformatics.babraham.ac.uk/). This Rust rewrite aims to be a faithful, high-performance reimplementation.
+FastQC was originally written by Simon Andrews at the [Babraham Institute](https://www.bioinformatics.babraham.ac.uk/).
+
+Please cite that tool when using outputs from this FastQC-Rust rewrite.

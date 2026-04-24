@@ -15,15 +15,19 @@ const base = import.meta.env.BASE_URL;
       the sequencing QC tool by Simon Andrews at the Babraham Institute.
     </p>
     <p class="lead">
-      <strong>Running QC on sequencing data? Use the
+      <strong>You should probably use the
       <a href="https://github.com/s-andrews/FastQC">official Java version</a>, not this one.</strong>
     </p>
     <div class="callout">
       <p>
-        This rewrite is primarily a development vehicle for
-        <a href={`${base}about/strategy/`}>porting improvements back to the canonical tool</a>
-        and a Rust crate for folks building in that ecosystem.
-        For regular use, you're better off using the official version from
+        This project is to be a faithful rewrite of FastQC, with as-close-to identical outputs as possible.
+        The hope is to
+        <a href={`${base}about/strategy/`}>port improvements back upstream</a>
+        until the rewrite provides no additional functionality or speed.
+        It's basically a development fork in a different language, albeit with a Rust crate for folks building in that ecosystem.
+      </p>
+      <p>
+        For regular use, it's probably best to stick with the official Java version from
         <a href="https://www.bioinformatics.babraham.ac.uk/projects/fastqc/">Babraham</a>
         or <a href="https://github.com/s-andrews/FastQC">GitHub</a>.
       </p>
@@ -115,6 +119,16 @@ const base = import.meta.env.BASE_URL;
     <h2>Install</h2>
     <div class="grid-2" style="margin-top: 0.5rem">
       <div>
+        <h3 style="font-family: var(--font-body); font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); margin-top: 0">With binary</h3>
+        <pre><code><span style="color: var(--ink-muted);"># Linux x86_64 example -- see docs for all platforms)</span>
+curl -fsSL https://github.com/ewels/FastQC-Rust/releases/download/v0.12.1/fastqc-linux-x86_64.tar.gz | tar xz --strip-components=1
+sudo mv ./fastqc /usr/local/bin/</code></pre>
+      </div>
+      <div>
+        <h3 style="font-family: var(--font-body); font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); margin-top: 0">With Docker</h3>
+        <pre><code>docker run ghcr.io/ewels/fastqc-rust:dev fastqc sample.fastq.gz</code></pre>
+      </div>
+      <div>
         <h3 style="font-family: var(--font-body); font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); margin-top: 0">From crates.io</h3>
         <pre><code>cargo install fastqc-rust</code></pre>
       </div>
@@ -128,9 +142,9 @@ cd FastQC-Rust && cargo build --release</code></pre>
 
   <section style="margin-bottom: 3rem">
     <h2>Usage</h2>
-    <pre><code>fastqc sample.fastq.gz                    # single file
-fastqc -o results/ *.fastq.gz             # batch with output dir
-fastqc -t 4 --format bam aligned.bam      # parallel, BAM input</code></pre>
+    <pre><code>fastqc sample.fastq.gz                    <span style="color: var(--ink-muted);"># single file</span>
+fastqc -o results/ *.fastq.gz             <span style="color: var(--ink-muted);"># batch with output dir</span>
+fastqc -t 4 --format bam aligned.bam      <span style="color: var(--ink-muted);"># parallel, BAM input</span></code></pre>
     <p style="margin-top: 0.75rem; color: var(--ink-muted)">
       The CLI matches the original. See <code>fastqc --help</code> for all options.
     </p>

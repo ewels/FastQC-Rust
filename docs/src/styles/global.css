@@ -437,7 +437,7 @@ html.dark .screenshot {
   gap: 1.5rem;
 }
 @media (min-width: 640px) {
-  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
 .grid-3 {
@@ -446,7 +446,7 @@ html.dark .screenshot {
   gap: 2rem;
 }
 @media (min-width: 640px) {
-  .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .grid-3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); }
 }
 
 .btn {
