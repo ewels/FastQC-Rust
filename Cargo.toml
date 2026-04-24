@@ -1,6 +1,6 @@
 [package]
 name = "fastqc-rust"
-version = "0.12.1"
+version = "0.12.1-0dev"
 edition = "2021"
 rust-version = "1.88.0"
 description = "A Rust rewrite of FastQC - a quality control tool for high throughput sequence data"
