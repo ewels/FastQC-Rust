@@ -2,7 +2,8 @@
 
 ## v1.0.0
 
-- Tracking: FastQC [v0.12.1](https://github.com/s-andrews/FastQC/releases/tag/v0.12.1)
+> [!NOTE]
+> Tracking: FastQC [v0.12.1](https://github.com/s-andrews/FastQC/releases/tag/v0.12.1)
 
 Initial Rust rewrite.
 
