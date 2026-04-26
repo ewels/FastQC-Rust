@@ -13,6 +13,7 @@ Initial Rust rewrite.
 - **PNG charts** rendered via [resvg](https://github.com/linebender/resvg) + [tiny-skia](https://github.com/linebender/tiny-skia) instead of Java2D. Antialiasing differs, producing ~1–2% pixel differences.
 - **SVG charts** use bundled Liberation Sans instead of system Arial, so text positions shift by a few pixels.
 - **HTML report** is identical once embedded chart images are stripped.
+- No "interactive mode" (upstream launched an interactive Java GUI if run without any arguments)
 
 See the [equivalence test suite](https://ewels.github.io/FastQC-Rust/about/equivalence/) for details.
 

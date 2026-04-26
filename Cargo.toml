@@ -4,11 +4,21 @@ version = "1.0.0"
 edition = "2021"
 rust-version = "1.88.0"
 description = "A Rust rewrite of FastQC - a quality control tool for high throughput sequence data"
-license = "GPL-3.0"
+license = "GPL-3.0-only"
 repository = "https://github.com/ewels/FastQC-Rust"
-homepage = "https://www.bioinformatics.babraham.ac.uk/projects/fastqc/"
+homepage = "https://ewels.github.io/FastQC-Rust/"
+readme = "README.md"
 keywords = ["bioinformatics", "fastq", "quality-control", "sequencing"]
 categories = ["science", "command-line-utilities"]
+exclude = [
+    "/docs",
+    "/tests/equivalence",
+    "/.github",
+    "/Dockerfile",
+    "/CLAUDE.md",
+    "/UPSTREAM.toml",
+    "/.gitattributes",
+]
 
 [[bin]]
 name = "fastqc"
