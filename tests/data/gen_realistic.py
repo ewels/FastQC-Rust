@@ -6,7 +6,12 @@ overrepresented sequences at non-round percentages. Background reads are
 pseudo-random (fixed seed) and below the 0.1% overrepresented threshold.
 
 Designed to expose the percentage-precision bug fixed by ewels/FastQC-Rust#2.
+
+Output is written gzipped (~20 KB vs ~120 KB plain) to keep the repo lean.
+The gzip stream uses mtime=0 and the deterministic content above so byte-
+identical regeneration is possible across machines.
 """
+import gzip
 import random
 import sys
 
@@ -67,9 +72,11 @@ order_rng.shuffle(reads)
 assert len(reads) == TOTAL
 
 out_path = sys.argv[1]
-with open(out_path, "w", newline="\n") as f:
+# mtime=0 makes the gzip header deterministic so re-running the generator
+# produces byte-identical output on any machine.
+with gzip.GzipFile(filename=out_path, mode="wb", mtime=0) as f:
     for header, seq in reads:
-        f.write(f"@{header}\n{seq}\n+\n{QUAL}\n")
+        f.write(f"@{header}\n{seq}\n+\n{QUAL}\n".encode("ascii"))
 
 print(f"wrote {out_path}: {TOTAL} reads, {LEN}bp, {len(OVERREP)} overrepresented sequences", file=sys.stderr)
 for label, count in OVERREP:

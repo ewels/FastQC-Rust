@@ -1,10 +1,10 @@
-PASS	Basic Statistics	realistic.fastq
-FAIL	Per base sequence quality	realistic.fastq
-FAIL	Per sequence quality scores	realistic.fastq
-WARN	Per base sequence content	realistic.fastq
-FAIL	Per sequence GC content	realistic.fastq
-PASS	Per base N content	realistic.fastq
-PASS	Sequence Length Distribution	realistic.fastq
-PASS	Sequence Duplication Levels	realistic.fastq
-FAIL	Overrepresented sequences	realistic.fastq
-PASS	Adapter Content	realistic.fastq
+PASS	Basic Statistics	realistic.fastq.gz
+FAIL	Per base sequence quality	realistic.fastq.gz
+FAIL	Per sequence quality scores	realistic.fastq.gz
+WARN	Per base sequence content	realistic.fastq.gz
+FAIL	Per sequence GC content	realistic.fastq.gz
+PASS	Per base N content	realistic.fastq.gz
+PASS	Sequence Length Distribution	realistic.fastq.gz
+PASS	Sequence Duplication Levels	realistic.fastq.gz
+FAIL	Overrepresented sequences	realistic.fastq.gz
+PASS	Adapter Content	realistic.fastq.gz

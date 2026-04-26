@@ -85,5 +85,5 @@
 # pollute the section. Generated deterministically; see header comment in
 # tests/data/realistic.fastq.
 - name: realistic_default
-  file: realistic.fastq
+  file: realistic.fastq.gz
   args: []

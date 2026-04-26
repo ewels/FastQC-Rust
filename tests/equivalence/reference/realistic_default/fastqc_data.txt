@@ -1,7 +1,7 @@
 ##FastQC	0.12.1
 >>Basic Statistics	pass
 #Measure	Value
-Filename	realistic.fastq
+Filename	realistic.fastq.gz
 File type	Conventional base calls
 Encoding	Illumina 1.5
 Total Sequences	1009
