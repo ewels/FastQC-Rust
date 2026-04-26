@@ -158,6 +158,42 @@ jobs:
           retention-days: 1
 
   # ------------------------------------------------------------------
+  # 1b. Build the equivalence report (always, to catch breakage)
+  # ------------------------------------------------------------------
+  equivalence-report:
+    name: Equivalence report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6.0.2
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # ratchet:dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # ratchet:Swatinem/rust-cache@v2.9.1
+
+      - name: Build
+        run: cargo build --release
+
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # ratchet:astral-sh/setup-uv@v8.0.0
+        with:
+          enable-cache: false
+
+      - name: Run equivalence comparison
+        run: uv run tests/equivalence/compare.py --binary ./target/release/fastqc
+
+      - name: Package report
+        run: |
+          cd tests/equivalence
+          tar czf "$GITHUB_WORKSPACE/equivalence-report.tar.gz" reports/
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # ratchet:actions/upload-artifact@v7.0.0
+        with:
+          name: equivalence-report
+          path: equivalence-report.tar.gz
+          retention-days: 1
+
+  # ------------------------------------------------------------------
   # 2. Build per-platform Docker images on native runners
   # ------------------------------------------------------------------
   docker-build:
@@ -264,7 +300,7 @@ jobs:
   create-tag-and-release:
     name: Create tag and release
     if: needs.check-release.outputs.is_release == 'true'
-    needs: [check-release, build-binaries, docker-merge]
+    needs: [check-release, build-binaries, equivalence-report, docker-merge]
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ needs.check-release.outputs.version }}
@@ -308,12 +344,12 @@ jobs:
             --generate-notes
 
   # ------------------------------------------------------------------
-  # 4. Upload binaries to the release
+  # 4. Upload binaries and equivalence report to the release
   # ------------------------------------------------------------------
   upload-binaries:
     name: Upload binaries
     if: needs.check-release.outputs.is_release == 'true'
-    needs: [check-release, create-tag-and-release, build-binaries]
+    needs: [check-release, create-tag-and-release, build-binaries, equivalence-report]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6.0.2
@@ -325,13 +361,20 @@ jobs:
           path: /tmp/binaries
           merge-multiple: true
 
+      - name: Download equivalence report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # ratchet:actions/download-artifact@v8.0.1
+        with:
+          name: equivalence-report
+          path: /tmp/equivalence
+
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "${{ needs.create-tag-and-release.outputs.tag }}" \
             /tmp/binaries/*.tar.gz \
-            /tmp/binaries/*.sha256
+            /tmp/binaries/*.sha256 \
+            /tmp/equivalence/equivalence-report.tar.gz
 
   # ------------------------------------------------------------------
   # 5. Publish to crates.io (release only, last step)

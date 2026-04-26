@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.0.1
+
+> [!NOTE]
+> Tracking: FastQC [v0.12.1](https://github.com/s-andrews/FastQC/releases/tag/v0.12.1)
+
+### Bug fixes
+
+- Emit unrounded percentage in Overrepresented sequences for Java byte-identical output ([#2](https://github.com/ewels/FastQC-Rust/pull/2))
+
+### Other
+
+- Added docs for the Rust library
+- New, slightly less minimal, test FastQ file
+- Equivalence reports should now be attached to releases as an asset
+
 ## v1.0.0
 
 > [!NOTE]
