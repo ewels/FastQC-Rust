@@ -416,17 +416,18 @@ impl QCModule for OverRepresentedSeqs {
                 Some(hit) => hit.to_string(),
                 None => "No Hit".to_string(),
             };
-            // The Java ResultsTable.getValueAt() for percentage does
-            // JAVA COMPAT: Math.round(percentage * 100.0) / 100.0, rounding to 2 decimal places.
-            // The text report then calls String.valueOf() on the Double, producing
-            // Java's Double.toString() format.
-            let rounded_pct = (s.percentage * 100.0).round() / 100.0;
+            // JAVA COMPAT: Java's OverRepresentedSeqs.OverrepresentedSeq stores
+            // the raw double percentage without rounding (see OverRepresentedSeqs.java:253),
+            // and AbstractQCModule.writeTable serializes it via String.valueOf(getValueAt(...))
+            // (AbstractQCModule.java:159), which returns Java's Double.toString() of the
+            // unrounded value (e.g. "7.160449112640348"). Pass the raw percentage to the
+            // formatter; do not round to 2 decimals.
             writeln!(
                 writer,
                 "{}\t{}\t{}\t{}",
                 s.seq,
                 s.count,
-                java_format_double(rounded_pct),
+                java_format_double(s.percentage),
                 source
             )?;
         }
