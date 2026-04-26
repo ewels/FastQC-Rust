@@ -1,2 +1,15 @@
 # Force LF line endings on all platforms so tests pass on Windows
 * text=auto eol=lf
+
+# Documentation site
+docs/** linguist-documentation
+
+# Generated — equivalence report committed for the docs site
+docs/public/about/equivalence/** linguist-generated
+
+# Vendored — upstream Java FastQC assets and reference data
+assets/help/** linguist-vendored
+assets/fonts/** linguist-vendored
+tests/data/** linguist-vendored
+tests/approved/** linguist-vendored
+tests/equivalence/reference/** linguist-vendored
