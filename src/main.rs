@@ -8,7 +8,7 @@ use fastqc_rust::runner;
 
 /// FastQC - A high throughput sequence QC analysis tool
 #[derive(Parser, Debug)]
-#[command(name = "fastqc", version = fastqc_rust::VERSION, about)]
+#[command(name = "fastqc", version = fastqc_rust::VERSION_BANNER, about)]
 struct Cli {
     /// Create report files in the specified output directory.
     /// The directory must already exist.
