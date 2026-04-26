@@ -1,6 +1,7 @@
 [package]
 name = "fastqc-rust"
 version = "1.0.0"
+authors = ["Phil Ewels <phil.ewels@seqera.io>"]
 edition = "2021"
 rust-version = "1.88.0"
 description = "A Rust rewrite of FastQC - a quality control tool for high throughput sequence data"
