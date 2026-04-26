@@ -335,18 +335,10 @@ jobs:
 
   # ------------------------------------------------------------------
   # 5. Publish to crates.io (release only, last step)
-  #
-  # TODO: `fastqc-rust` has not been published to crates.io yet. The
-  # crates-io-auth-action uses OIDC trusted publishers, which requires the
-  # crate to already exist with a trusted-publisher config. Bootstrap path:
-  #   1. First publish manually from a local checkout: `cargo publish`
-  #   2. Configure crates.io trusted publisher for this repo + workflow
-  #   3. Flip `if: false` below to `needs.check-release.outputs.is_release
-  #      == 'true'`
   # ------------------------------------------------------------------
   publish-crate:
     name: Publish to crates.io
-    if: false
+    if: needs.check-release.outputs.is_release == 'true'
     needs: [check-release, upload-binaries]
     runs-on: ubuntu-latest
     permissions:
