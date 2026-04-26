@@ -1,6 +1,24 @@
 ---
 import Base from '../layouts/Base.astro';
+import { Code } from 'astro:components';
 const base = import.meta.env.BASE_URL;
+
+const themes = { light: 'github-light', dark: 'github-dark' };
+
+const installBinary = `# Linux x86_64 example -- see docs for all platforms
+curl -fsSL https://github.com/ewels/FastQC-Rust/releases/download/v0.12.1/fastqc-linux-x86_64.tar.gz | tar xz --strip-components=1
+sudo mv ./fastqc /usr/local/bin/`;
+
+const installDocker = `docker run ghcr.io/ewels/fastqc-rust:dev fastqc sample.fastq.gz`;
+
+const installCargo = `cargo install fastqc-rust`;
+
+const installSource = `git clone https://github.com/ewels/FastQC-Rust.git
+cd FastQC-Rust && cargo build --release`;
+
+const usageExample = `fastqc sample.fastq.gz                    # single file
+fastqc -o results/ *.fastq.gz             # batch with output dir
+fastqc -t 4 --format bam aligned.bam      # parallel, BAM input`;
 ---
 
 <Base title="FastQC (Rust)">
@@ -64,7 +82,8 @@ const base = import.meta.env.BASE_URL;
           Published as <a href="https://crates.io/crates/fastqc-rust"><code>fastqc-rust</code></a>
           for developers building bioinformatics tooling in the Rust ecosystem.
           Produces virtually <a href={`${base}about/equivalence/`}>identical output</a>
-          to the Java version.
+          to the Java version. See the <a href={`${base}library/`}>library guide</a>
+          for usage from another Rust program.
         </p>
       </div>
     </div>
@@ -120,31 +139,26 @@ const base = import.meta.env.BASE_URL;
     <div class="grid-2" style="margin-top: 0.5rem">
       <div>
         <h3 style="font-family: var(--font-body); font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); margin-top: 0">With binary</h3>
-        <pre><code><span style="color: var(--ink-muted);"># Linux x86_64 example -- see docs for all platforms)</span>
-curl -fsSL https://github.com/ewels/FastQC-Rust/releases/download/v0.12.1/fastqc-linux-x86_64.tar.gz | tar xz --strip-components=1
-sudo mv ./fastqc /usr/local/bin/</code></pre>
+        <Code code={installBinary} lang="bash" themes={themes} defaultColor={false} />
       </div>
       <div>
         <h3 style="font-family: var(--font-body); font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); margin-top: 0">With Docker</h3>
-        <pre><code>docker run ghcr.io/ewels/fastqc-rust:dev fastqc sample.fastq.gz</code></pre>
+        <Code code={installDocker} lang="bash" themes={themes} defaultColor={false} />
       </div>
       <div>
         <h3 style="font-family: var(--font-body); font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); margin-top: 0">From crates.io</h3>
-        <pre><code>cargo install fastqc-rust</code></pre>
+        <Code code={installCargo} lang="bash" themes={themes} defaultColor={false} />
       </div>
       <div>
         <h3 style="font-family: var(--font-body); font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); margin-top: 0">From source</h3>
-        <pre><code>git clone https://github.com/ewels/FastQC-Rust.git
-cd FastQC-Rust && cargo build --release</code></pre>
+        <Code code={installSource} lang="bash" themes={themes} defaultColor={false} />
       </div>
     </div>
   </section>
 
   <section style="margin-bottom: 3rem">
     <h2>Usage</h2>
-    <pre><code>fastqc sample.fastq.gz                    <span style="color: var(--ink-muted);"># single file</span>
-fastqc -o results/ *.fastq.gz             <span style="color: var(--ink-muted);"># batch with output dir</span>
-fastqc -t 4 --format bam aligned.bam      <span style="color: var(--ink-muted);"># parallel, BAM input</span></code></pre>
+    <Code code={usageExample} lang="bash" themes={themes} defaultColor={false} />
     <p style="margin-top: 0.75rem; color: var(--ink-muted)">
       The CLI matches the original. See <code>fastqc --help</code> for all options.
     </p>

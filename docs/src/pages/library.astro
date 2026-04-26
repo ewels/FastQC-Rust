@@ -1,0 +1,258 @@
+---
+import Base from '../layouts/Base.astro';
+import { Code } from 'astro:components';
+
+const themes = { light: 'github-light', dark: 'github-dark' };
+
+const runExample = `use std::fs::File;
+use std::path::Path;
+use fastqc_rust::config::FastQCConfig;
+use fastqc_rust::modules::create_modules;
+use fastqc_rust::report;
+use fastqc_rust::sequence::open_sequence_file;
+
+fn main() -> std::io::Result<()> {
+    // Default config matches the CLI; override fields for non-default flags.
+    let config = FastQCConfig::default();
+    // Pass/warn/fail thresholds from the embedded limits.txt.
+    let limits = config.load_limits()?;
+
+    // Input file. Relative paths resolve against the process's current
+    // working directory; absolute paths also work.
+    // Format is detected from the extension: FASTQ/BAM/SAM/Fast5,
+    // plus .gz and .bz2 transparently.
+    let path = Path::new("sample.fastq.gz");
+    let mut seq_file = open_sequence_file(&config, path)?;
+
+    // The standard QC modules in the order they appear in the report.
+    let mut modules = create_modules(&config, &limits);
+
+    // Stream every record through every module.
+    while let Some(seq) = seq_file.next() {
+        let seq = seq?;
+        for module in modules.iter_mut() {
+            module.process_sequence(&seq);
+        }
+    }
+    // Each module computes its results once the stream is done.
+    for module in modules.iter_mut() {
+        module.finalize();
+    }
+
+    // The display name shown inside the reports (usually the file name).
+    let name = "sample.fastq.gz";
+
+    // Generate the output files
+    // fastqc_data.txt — full per-module data tables.
+    let mut data = File::create("sample_fastqc_data.txt")?;
+    report::text::write_fastqc_data(&modules, &mut data)?;
+
+    // summary.txt — one PASS/WARN/FAIL line per module.
+    let mut summary = File::create("sample_summary.txt")?;
+    report::text::write_summary(&modules, name, &mut summary)?;
+
+    // Standalone HTML report with charts embedded as base64 PNG.
+    // Reused below so the zip writer doesn't re-render the charts.
+    let html = report::html::generate_html_report(&modules, name, config.template)?;
+    std::fs::write("sample_fastqc.html", &html)?;
+
+    // _fastqc.zip — bundles the HTML, text outputs, and chart images
+    // (the format MultiQC and other downstream tools expect).
+    report::archive::create_zip_archive(
+        &modules,
+        name,
+        "sample",
+        Path::new("sample_fastqc.zip"),
+        &html,
+        config.svg_output,
+        config.template,
+    )?;
+
+    Ok(())
+}`;
+
+const streamExample = `use std::path::Path;
+use fastqc_rust::config::FastQCConfig;
+use fastqc_rust::modules::create_modules;
+use fastqc_rust::sequence::open_sequence_file;
+
+fn analyse(path: &Path) -> std::io::Result<()> {
+    let config = FastQCConfig::default();
+    let limits = config.load_limits()?;
+    let mut seq_file = open_sequence_file(&config, path)?;
+    let mut modules = create_modules(&config, &limits);
+
+    while let Some(seq) = seq_file.next() {
+        let seq = seq?;
+        for module in modules.iter_mut() {
+            if seq.is_filtered && module.ignore_filtered_sequences() {
+                continue;
+            }
+            module.process_sequence(&seq);
+        }
+    }
+
+    for module in modules.iter_mut() {
+        module.finalize();
+    }
+
+    for module in &modules {
+        println!("{}: {}", module.name(), module.status());
+    }
+    Ok(())
+}`;
+
+const readExample = `use std::path::Path;
+use fastqc_rust::config::FastQCConfig;
+use fastqc_rust::sequence::open_sequence_file;
+
+let config = FastQCConfig::default();
+let mut reader = open_sequence_file(&config, Path::new("sample.bam"))?;
+
+while let Some(seq) = reader.next() {
+    let seq = seq?;
+    println!("{}\\t{} bp", seq.id, seq.len());
+}`;
+
+const moduleExample = `use std::io::{self, Write};
+use fastqc_rust::modules::{QCModule, ModuleStatus};
+use fastqc_rust::sequence::Sequence;
+
+struct GcCounter {
+    gc: u64,
+    total: u64,
+}
+
+impl QCModule for GcCounter {
+    fn process_sequence(&mut self, seq: &Sequence) {
+        for &b in &seq.sequence {
+            if b == b'G' || b == b'C' { self.gc += 1; }
+            self.total += 1;
+        }
+    }
+    fn name(&self) -> &str { "Custom GC" }
+    fn description(&self) -> &str { "GC fraction across all bases" }
+    fn reset(&mut self) { self.gc = 0; self.total = 0; }
+    fn raises_error(&self) -> bool { false }
+    fn raises_warning(&self) -> bool { false }
+    fn ignore_filtered_sequences(&self) -> bool { true }
+    fn ignore_in_report(&self) -> bool { false }
+    fn write_text_report(&self, w: &mut dyn Write) -> io::Result<()> {
+        writeln!(w, "#GC fraction\\t{:.4}", self.gc as f64 / self.total as f64)
+    }
+}`;
+---
+
+<Base title="Library Usage - FastQC">
+  <p class="label">Rust crate</p>
+  <h1>Using FastQC as a library</h1>
+
+  <p style="color: var(--ink-muted)">
+    The <code>fastqc-rust</code> crate exposes the same code that powers the
+    <code>fastqc</code> binary, so you can run a full QC analysis from another
+    Rust program, stream sequences through individual modules, or plug your own
+    sequence reader into the existing pipeline.
+  </p>
+
+  <div class="callout">
+    <p>
+      Full API docs are on
+      <a href="https://docs.rs/fastqc-rust">docs.rs/fastqc-rust</a>.
+    </p>
+  </div>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Add the dependency</h2>
+    <Code code="cargo add fastqc-rust" lang="bash" themes={themes} defaultColor={false} />
+    <p style="color: var(--ink-muted); margin-top: 0.75rem">
+      The crate name is <code>fastqc-rust</code>. The library target is exported as
+      <code>fastqc_rust</code> (Rust converts the hyphen to an underscore for
+      <code>use</code> statements).
+    </p>
+    <p style="color: var(--ink-muted)">
+      The <code>native-zlib</code> feature is on by default and links system zlib
+      for faster gzip decompression. To produce a fully static, pure-Rust
+      build, disable default features:
+    </p>
+    <Code code="cargo add fastqc-rust --no-default-features" lang="bash" themes={themes} defaultColor={false} />
+  </section>
+
+  <h2>Basic usage</h2>
+
+  <section style="margin-bottom: 2.5rem">
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      Open a sequence file, run every module over each record, then write the
+      standard FastQC outputs. This is the same pipeline the binary follows
+      for each input.
+    </p>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      For the one-liner equivalent that also handles multiple files, threading,
+      and CASAVA grouping, call
+      <code>runner::run(&amp;config, &amp;files)</code> directly.
+      <code>FastQCConfig</code> mirrors the CLI flags one-to-one; see the
+      <a href="https://docs.rs/fastqc-rust/latest/fastqc_rust/config/struct.FastQCConfig.html">struct
+      docs</a> for every field.
+    </p>
+    <Code code={runExample} lang="rust" themes={themes} defaultColor={false} />
+  </section>
+
+  <h2>Advanced</h2>
+
+  <section style="margin-bottom: 2.5rem">
+    <h3>Stream sequences through the modules</h3>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      For programmatic access to module results without writing report files,
+      drive the pipeline yourself. <code>create_modules</code> returns the
+      standard set in report order, then you feed each <code>Sequence</code>
+      to every module and call <code>finalize</code> when done.
+    </p>
+    <Code code={streamExample} lang="rust" themes={themes} defaultColor={false} />
+    <p style="color: var(--ink-muted); margin-top: 0.75rem">
+      Each <code>QCModule</code> exposes <code>status()</code>,
+      <code>raises_warning()</code>, <code>raises_error()</code>, and
+      <code>write_text_report()</code> on the finalised module. The full
+      <code>fastqc_data.txt</code> body is produced by
+      <code>report::text::write_fastqc_data(&amp;modules, writer)</code>.
+    </p>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h3>Read sequences without running modules</h3>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      <code>open_sequence_file</code> returns a
+      <code>Box&lt;dyn SequenceFile&gt;</code> that handles FASTQ (plain, gzip,
+      bzip2), BAM/SAM, and Fast5 with the same iteration interface. Use it
+      directly if you only need parsing.
+    </p>
+    <Code code={readExample} lang="rust" themes={themes} defaultColor={false} />
+    <p style="color: var(--ink-muted); margin-top: 0.75rem">
+      Format detection follows the same rules as the CLI: file extension by
+      default, overridden by <code>config.sequence_format</code>
+      (<code>"fastq"</code>, <code>"bam"</code>, <code>"sam"</code>,
+      <code>"bam_mapped"</code>, <code>"sam_mapped"</code>).
+    </p>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h3>Implement your own module</h3>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      Any type implementing the <code>QCModule</code> trait can be fed
+      sequences alongside the built-in modules. The trait has one required
+      input method (<code>process_sequence</code>) and a handful of metadata
+      and reporting methods.
+    </p>
+    <Code code={moduleExample} lang="rust" themes={themes} defaultColor={false} />
+    <p style="color: var(--ink-muted); margin-top: 0.75rem">
+      Modules with charts override <code>chart_alt_text</code> and
+      <code>generate_chart_svg</code>; see the built-in modules in
+      <code>src/modules/</code> for examples.
+    </p>
+  </section>
+</Base>
+
+<style>
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875em;
+  }
+</style>

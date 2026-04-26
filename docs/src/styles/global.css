@@ -364,6 +364,29 @@ pre code {
   word-break: normal;
 }
 
+/* ---- Shiki syntax highlighting (Astro <Code> component) ---- */
+pre.astro-code {
+  background-color: var(--shiki-light-bg);
+  color: var(--shiki-light);
+  border: 1px solid var(--border);
+}
+pre.astro-code span {
+  color: var(--shiki-light);
+  font-style: var(--shiki-light-font-style);
+  font-weight: var(--shiki-light-font-weight);
+  text-decoration: var(--shiki-light-text-decoration);
+}
+html.dark pre.astro-code {
+  background-color: var(--shiki-dark-bg);
+  color: var(--shiki-dark);
+}
+html.dark pre.astro-code span {
+  color: var(--shiki-dark);
+  font-style: var(--shiki-dark-font-style);
+  font-weight: var(--shiki-dark-font-weight);
+  text-decoration: var(--shiki-dark-text-decoration);
+}
+
 /* ---- Utility classes ---- */
 .label {
   font-family: var(--font-body);
