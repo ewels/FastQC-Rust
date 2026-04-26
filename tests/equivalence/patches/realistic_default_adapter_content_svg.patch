@@ -1,0 +1,11 @@
+--- java/Images/adapter_content.svg
++++ rust/Images/adapter_content.svg
+@@ -17,7 +17,7 @@
+ <text x="380" y="30" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">% Adapter</text>
+ <line x1="30" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+ <line x1="30" y1="560" x2="30" y2="40" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+-<text x="340" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Position in read (bp)</text>
++<text x="350" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Position in read (bp)</text>
+ <text x="30" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">1</text>
+ <rect width="20" height="520" x="50" y="40" style="fill:rgb(230,230,230);stroke:none"/>
+ <text x="50" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">2</text>
