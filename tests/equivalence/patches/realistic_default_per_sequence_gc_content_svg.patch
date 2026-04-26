@@ -1,0 +1,22 @@
+--- java/Images/per_sequence_gc_content.svg
++++ rust/Images/per_sequence_gc_content.svg
+@@ -15,7 +15,7 @@
+ <text x="310" y="30" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">GC distribution over all sequences</text>
+ <line x1="30" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+ <line x1="30" y1="560" x2="30" y2="40" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+-<text x="340" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Mean GC content (%)</text>
++<text x="350" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Mean GC content (%)</text>
+ <text x="30" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">0</text>
+ <rect width="10" height="520" x="40" y="40" style="fill:rgb(230,230,230);stroke:none"/>
+ <text x="40" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">2</text>
+@@ -303,8 +303,8 @@
+ <line x1="710" y1="560" x2="720" y2="560" stroke="rgb(51,34,136)" stroke-width="[SW]"/>
+ <line x1="720" y1="560" x2="720" y2="560" stroke="rgb(51,34,136)" stroke-width="[SW]"/>
+ <line x1="720" y1="560" x2="730" y2="560" stroke="rgb(51,34,136)" stroke-width="[SW]"/>
+-<rect width="160" height="43" x="640" y="40" style="fill:rgb(255,255,255);stroke:none"/>
+-<rect width="160" height="43" x="640" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
++<rect width="150" height="43" x="640" y="40" style="fill:rgb(255,255,255);stroke:none"/>
++<rect width="150" height="43" x="640" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
+ <text x="640" y="55" fill="rgb(136,34,85)" font-family="[FONT]" font-size="12">GC count per read</text>
+ <text x="640" y="75" fill="rgb(51,34,136)" font-family="[FONT]" font-size="12">Theoretical Distribution</text>
+ </svg>

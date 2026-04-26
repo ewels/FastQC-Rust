@@ -76,3 +76,14 @@
 - name: complex_dup_length_10
   file: complex.fastq
   args: [--dup_length, "10"]
+
+# Realistic mid-size input designed to exercise non-round overrepresented
+# percentages. 1009 reads (prime), 50bp uniform, 5 deliberately-overrepresented
+# sequences at counts (73, 37, 11, 5, 2) producing percentages with full
+# Double.toString() precision (e.g. 7.234886025768088). Background reads are
+# pseudo-random and below the 0.1% overrepresented threshold so they don't
+# pollute the section. Generated deterministically; see header comment in
+# tests/data/realistic.fastq.
+- name: realistic_default
+  file: realistic.fastq.gz
+  args: []
