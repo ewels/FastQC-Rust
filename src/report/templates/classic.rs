@@ -1,7 +1,8 @@
 // Classic HTML report template — produces byte-identical output to Java FastQC.
 //
-// This is a mechanical extraction of the original html::write_html_report() body.
-// No logic changes — the output must remain identical to the pre-refactor version.
+// Static HTML/CSS fragments live under assets/templates/classic/ for easier editing.
+// Assembly uses `{{PLACEHOLDER}}` replacement; output must remain identical to the
+// pre-refactor version (compact XMLStreamWriter-style HTML with no extra whitespace).
 
 use std::io::{self, Write};
 
@@ -9,7 +10,7 @@ use chrono::Local;
 
 use crate::modules::{ModuleStatus, QCModule};
 use crate::report::charts::png_to_data_uri;
-use crate::report::html::{format_java_date, write_escaped};
+use crate::report::html::{escape_xml, format_java_date};
 use crate::report::templates::ReportTemplate;
 use crate::VERSION;
 
@@ -19,8 +20,12 @@ const ICON_TICK: &[u8] = include_bytes!("../../../assets/icons/tick.png");
 const ICON_WARNING: &[u8] = include_bytes!("../../../assets/icons/warning.png");
 const ICON_ERROR: &[u8] = include_bytes!("../../../assets/icons/error.png");
 
-// CSS is embedded from header_template.html, read at compile time.
-const CSS: &str = include_str!("../../../assets/header_template.html");
+const REPORT_TEMPLATE: &str =
+    include_str!("../../../assets/templates/classic/report_template.html");
+const MODULE_WRAPPER: &str =
+    include_str!("../../../assets/templates/classic/module_wrapper.html");
+const SIDEBAR_ITEM: &str = include_str!("../../../assets/templates/classic/sidebar_item.html");
+const CSS: &str = include_str!("../../../assets/templates/classic/fastqc.css");
 
 pub struct ClassicTemplate;
 
@@ -31,145 +36,73 @@ impl ReportTemplate for ClassicTemplate {
         filename: &str,
         w: &mut dyn Write,
     ) -> io::Result<()> {
-        // XMLStreamWriter.writeDTD() outputs the DTD literally, then
-        // writeStartElement("html") follows immediately with no whitespace.
-        write!(w, "<!DOCTYPE html>")?;
-        write!(w, "<html>")?;
-
-        // <head>
-        write!(w, "<head>")?;
-        write!(w, "<title>")?;
-        write_escaped(w, filename)?;
-        write!(w, " FastQC Report")?;
-        write!(w, "</title>")?;
-
-        // Inline CSS
-        // The Java code reads header_template.html as raw bytes and writes
-        // them via writeCharacters(), which entity-escapes the content. Since the CSS
-        // doesn't contain &, <, >, or " characters that need escaping, the result is
-        // identical to writing it raw.
-        write!(w, "<style type=\"text/css\">")?;
-        write_escaped(w, CSS)?;
-        write!(w, "</style>")?;
-
-        write!(w, "</head>")?;
-
-        // <body>
-        write!(w, "<body>")?;
-
-        // Header
-        write!(w, "<div class=\"header\">")?;
-        write!(w, "<div id=\"header_title\">")?;
-        // writeEmptyElement("img") produces a self-closing <img ... />
-        write!(
-            w,
-            "<img src=\"{}\" alt=\"FastQC\"/>",
-            png_to_data_uri(ICON_FASTQC)
-        )?;
-        write!(w, "FastQC Report")?;
-        write!(w, "</div>")?;
-
-        // Date and filename
-        write!(w, "<div id=\"header_filename\">")?;
-        // SimpleDateFormat("EEE d MMM yyyy") e.g. "Sun 5 Apr 2026"
         let now = Local::now();
         let date_str = format_java_date(&now);
-        write_escaped(w, &date_str)?;
-        // writeEmptyElement("br") produces <br />
-        write!(w, "<br/>")?;
-        write_escaped(w, filename)?;
-        write!(w, "</div>")?;
-        write!(w, "</div>")?;
+        let fastqc_icon_uri = png_to_data_uri(ICON_FASTQC);
 
-        // Summary sidebar
-        write!(w, "<div class=\"summary\">")?;
-        write!(w, "<h2>")?;
-        write!(w, "Summary")?;
-        write!(w, "</h2>")?;
-        write!(w, "<ul>")?;
-
+        // Build sidebar items
+        let mut summary_items = String::new();
         for (i, module) in modules.iter().enumerate() {
             if module.ignore_in_report() {
                 continue;
             }
-            write!(w, "<li>")?;
-
-            // Summary icons use different alt text than module header icons.
-            // Summary: [PASS], [WARNING], [FAIL]
-            // Module headers: [OK], [WARN], [FAIL]
             let (icon, alt) = match module.status() {
                 ModuleStatus::Pass => (ICON_TICK, "[PASS]"),
                 ModuleStatus::Warn => (ICON_WARNING, "[WARNING]"),
                 ModuleStatus::Fail => (ICON_ERROR, "[FAIL]"),
             };
-            write!(
-                w,
-                "<img src=\"{}\" alt=\"{}\"/>",
-                png_to_data_uri(icon),
-                alt
-            )?;
-
-            write!(w, "<a href=\"#M{}\">", i)?;
-            write_escaped(w, module.name())?;
-            write!(w, "</a>")?;
-            write!(w, "</li>")?;
+            let item = SIDEBAR_ITEM
+                .trim_end()
+                .replace("{{MODULE_INDEX}}", &i.to_string())
+                .replace("{{ICON_URI}}", &png_to_data_uri(icon))
+                .replace("{{ALT_TEXT}}", alt)
+                .replace("{{MODULE_NAME}}", &escape_xml(module.name()));
+            summary_items.push_str(&item);
         }
 
-        write!(w, "</ul>")?;
-        write!(w, "</div>")?;
-
-        // Main content
-        write!(w, "<div class=\"main\">")?;
-
+        // Build module content
+        let mut module_content = String::new();
         for (i, module) in modules.iter().enumerate() {
             if module.ignore_in_report() {
                 continue;
             }
 
-            write!(w, "<div class=\"module\">")?;
-            write!(w, "<h2 id=\"M{}\">", i)?;
-
-            // Module header icons use [OK]/[WARN]/[FAIL] alt text
             let (icon, alt) = match module.status() {
                 ModuleStatus::Pass => (ICON_TICK, "[OK]"),
                 ModuleStatus::Warn => (ICON_WARNING, "[WARN]"),
                 ModuleStatus::Fail => (ICON_ERROR, "[FAIL]"),
             };
-            write!(
-                w,
-                "<img src=\"{}\" alt=\"{}\"/>",
-                png_to_data_uri(icon),
-                alt
-            )?;
 
-            write_escaped(w, module.name())?;
-            write!(w, "</h2>")?;
+            let mut module_buf = Vec::new();
+            module.write_html_report(&mut module_buf)?;
+            let module_html =
+                String::from_utf8(module_buf).map_err(|e| io::Error::other(e.to_string()))?;
 
-            // Module content (table or chart)
-            module.write_html_report(w)?;
-
-            write!(w, "</div>")?;
+            let wrapped = MODULE_WRAPPER
+                .trim_end()
+                .replace("{{MODULE_INDEX}}", &i.to_string())
+                .replace("{{ICON_URI}}", &png_to_data_uri(icon))
+                .replace("{{ALT_TEXT}}", alt)
+                .replace("{{MODULE_NAME}}", &escape_xml(module.name()))
+                .replace("{{MODULE_CONTENT}}", &module_html);
+            module_content.push_str(&wrapped);
         }
 
-        write!(w, "</div>")?;
+        // CSS is entity-escaped like Java XMLStreamWriter.writeCharacters()
+        let css_escaped = escape_xml(CSS);
 
-        // Footer
-        // Two spaces before "(version" matches the Java concatenation:
-        // "  (version "+FastQCApplication.VERSION+")"
-        write!(w, "<div class=\"footer\">")?;
-        write!(w, "Produced by ")?;
-        write!(
-            w,
-            "<a href=\"http://www.bioinformatics.babraham.ac.uk/projects/fastqc/\">"
-        )?;
-        write!(w, "FastQC")?;
-        write!(w, "</a>")?;
-        write!(w, "  (version {})", VERSION)?;
-        write!(w, "</div>")?;
+        let html = REPORT_TEMPLATE
+            .trim_end()
+            .replace("{{TITLE}}", &escape_xml(filename))
+            .replace("{{CSS_CONTENT}}", &css_escaped)
+            .replace("{{FASTQC_ICON_URI}}", &fastqc_icon_uri)
+            .replace("{{DATE}}", &escape_xml(&date_str))
+            .replace("{{FILENAME}}", &escape_xml(filename))
+            .replace("{{SUMMARY_ITEMS}}", &summary_items)
+            .replace("{{MODULE_CONTENT}}", &module_content)
+            .replace("{{VERSION}}", VERSION);
 
-        write!(w, "</body>")?;
-        write!(w, "</html>")?;
-
+        w.write_all(html.as_bytes())?;
         Ok(())
     }
 }

@@ -395,16 +395,21 @@ pub fn write_default_html_table(text_report: &str, w: &mut dyn Write) -> io::Res
 /// Escape special XML/HTML characters, matching Java XMLStreamWriter.writeCharacters().
 ///
 /// XMLStreamWriter escapes &, <, > in character data.
-pub fn write_escaped(w: &mut dyn Write, s: &str) -> io::Result<()> {
+pub fn escape_xml(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
         match ch {
-            '&' => write!(w, "&amp;")?,
-            '<' => write!(w, "&lt;")?,
-            '>' => write!(w, "&gt;")?,
-            _ => write!(w, "{}", ch)?,
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            _ => out.push(ch),
         }
     }
-    Ok(())
+    out
+}
+
+pub fn write_escaped(w: &mut dyn Write, s: &str) -> io::Result<()> {
+    write!(w, "{}", escape_xml(s))
 }
 
 /// Format a date matching Java's `SimpleDateFormat("EEE d MMM yyyy")`.

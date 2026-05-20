@@ -100,4 +100,5 @@ Embedded at compile time from `assets/` via `include_str!`/`include_bytes!`:
 - `adapter_list.txt`, `contaminant_list.txt` — sequence lists
 - `icons/` — PNG icons for reports
 - `fonts/LiberationSans-{Regular,Bold}.ttf` — bundled font for chart rendering
-- `header_template.html` — CSS for HTML reports
+- `templates/classic/fastqc.css` — CSS for classic HTML reports
+- `templates/classic/*.html` — classic HTML report template fragments
