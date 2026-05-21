@@ -122,7 +122,7 @@ public class KmerContent extends AbstractQCModule {
 	 * seen at each position within the run.  We can use this later on to calculate
 	 * the enrichment of the Kmers we actually count.
 	 * 
-	 * We take in the Kmer sequence even though this isn't used in the total counts
+	 * We take in the hasN flag even though this isn't used in the total counts
 	 * we do this because we don't want to count Kmers with Ns in them, but we do
 	 * need to ensure that the data structure is expanded to the right size, and if
 	 * we have libraries where later positions are Ns in all sequences then our
@@ -131,7 +131,7 @@ public class KmerContent extends AbstractQCModule {
 	 * @param position Position within the read.  0 indexed
 	 * @param kmerLength Actual length of the Kmer analysed
 	 */
-	private void addKmerCount (int position,int kmerLength, String kmer) {
+	private void addKmerCount (int position,int kmerLength, boolean hasN) {
 	
 		
 		if (position >= totalKmerCounts.length) {
@@ -147,7 +147,7 @@ public class KmerContent extends AbstractQCModule {
 			totalKmerCounts = newCounts;
 		}
 		
-		if (kmer.indexOf("N") >=0) return;
+		if (hasN) return;
 
 		++totalKmerCounts[position][kmerLength-1];
 		
@@ -342,21 +342,25 @@ public class KmerContent extends AbstractQCModule {
 						
 		// Now we go through all of the Kmers to count these
 		for (int kmerSize=MIN_KMER_SIZE;kmerSize<=MAX_KMER_SIZE;kmerSize++) {
+			int nCountInWindow = 0;
+			for (int j=0;j<kmerSize && j<seq.length();j++) {
+				if (seq.charAt(j) == 'N') nCountInWindow++;
+			}
 			for (int i=0;i<=seq.length()-kmerSize;i++) {
-				
-				String kmer = seq.substring(i, i+kmerSize);
-				
-				if (kmer.length() != kmerSize) {
-					throw new IllegalStateException("String length "+kmer.length()+" wasn't the same as the kmer length "+kmerSize);
+				if (i > 0) {
+					if (seq.charAt(i-1) == 'N') nCountInWindow--;
+					if (seq.charAt(i+kmerSize-1) == 'N') nCountInWindow++;
 				}
+				boolean hasN = nCountInWindow > 0;
 				
 				// Add to the counts before skipping Kmers containing Ns (see
 				// explanation in addKmerCount for the reasoning).
-				addKmerCount(i, kmerSize, kmer);
+				addKmerCount(i, kmerSize, hasN);
 				
 				// Skip Kmers containing N
-				if (kmer.indexOf("N") >=0) continue;
+				if (hasN) continue;
 
+				String kmer = seq.substring(i, i+kmerSize);
 				if (kmers.containsKey(kmer)) {
 					kmers.get(kmer).incrementCount(i);
 				}
