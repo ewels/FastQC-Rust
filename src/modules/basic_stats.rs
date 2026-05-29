@@ -15,6 +15,10 @@ pub struct BasicStats {
     filtered_count: u64,
     min_length: usize,
     max_length: usize,
+    /// Histogram of read lengths (over non-filtered sequences), indexed by
+    /// length. Used to compute the median read length. Not present in Java
+    /// FastQC; added for the mean/median read length feature (issue #203).
+    length_counts: Vec<u64>,
     total_bases: u64,
     g_count: u64,
     c_count: u64,
@@ -35,6 +39,7 @@ impl BasicStats {
             filtered_count: 0,
             min_length: 0,
             max_length: 0,
+            length_counts: Vec::new(),
             total_bases: 0,
             g_count: 0,
             c_count: 0,
@@ -103,6 +108,46 @@ impl BasicStats {
         let truncated: String = chars[..=last_index].iter().collect();
         format!("{}{}", truncated, unit)
     }
+
+    /// Mean read length over all non-filtered sequences. Returns 0.0 for an
+    /// empty file.
+    fn mean_length(&self) -> f64 {
+        if self.actual_count == 0 {
+            return 0.0;
+        }
+        self.total_bases as f64 / self.actual_count as f64
+    }
+
+    /// Median read length over all non-filtered sequences. For an even number
+    /// of sequences this is the mean of the two central values, rounded up.
+    /// Returns 0 for an empty file.
+    fn median_length(&self) -> u64 {
+        let n = self.actual_count;
+        if n == 0 {
+            return 0;
+        }
+        if n % 2 == 1 {
+            self.length_at_rank(n / 2)
+        } else {
+            let lo = self.length_at_rank(n / 2 - 1);
+            let hi = self.length_at_rank(n / 2);
+            // Integer ceiling division: rounds a halfway average (e.g. 15.5) up.
+            (lo + hi).div_ceil(2)
+        }
+    }
+
+    /// Return the read length at the given zero-based rank in ascending order
+    /// of length (i.e. as if all read lengths were sorted).
+    fn length_at_rank(&self, rank: u64) -> u64 {
+        let mut cumulative = 0u64;
+        for (length, &count) in self.length_counts.iter().enumerate() {
+            cumulative += count;
+            if cumulative > rank {
+                return length as u64;
+            }
+        }
+        0
+    }
 }
 
 impl QCModule for BasicStats {
@@ -133,6 +178,12 @@ impl QCModule for BasicStats {
             self.min_length = self.min_length.min(len);
             self.max_length = self.max_length.max(len);
         }
+
+        // Record the length in the histogram (used for the median).
+        if len + 1 > self.length_counts.len() {
+            self.length_counts.resize(len + 1, 0);
+        }
+        self.length_counts[len] += 1;
 
         // Use lookup table to avoid branch misprediction on random DNA data
         let mut counts = [0u64; 6];
@@ -167,6 +218,7 @@ impl QCModule for BasicStats {
     fn reset(&mut self) {
         self.min_length = 0;
         self.max_length = 0;
+        self.length_counts.clear();
         self.g_count = 0;
         self.c_count = 0;
         self.a_count = 0;
@@ -243,6 +295,11 @@ impl QCModule for BasicStats {
             )?;
         }
 
+        // Mean / median sequence length (issue #203): a deliberate addition
+        // over the Java output, which only reports the length range.
+        writeln!(writer, "Mean sequence length\t{:.2}", self.mean_length())?;
+        writeln!(writer, "Median sequence length\t{}", self.median_length())?;
+
         // Row 7: %GC
         // JAVA COMPAT: Integer division: ((gCount+cCount)*100)/(aCount+tCount+gCount+cCount)
         let total = self.a_count + self.t_count + self.g_count + self.c_count;
@@ -282,5 +339,90 @@ mod tests {
     #[test]
     fn test_format_length_gbp() {
         assert_eq!(BasicStats::format_length(1_000_000_000), "1 Gbp");
+    }
+
+    fn limits() -> Limits {
+        Limits::new()
+    }
+
+    fn seq(len: usize) -> Sequence {
+        Sequence::new("test".to_string(), vec![b'A'; len], vec![b'I'; len])
+    }
+
+    fn process(lengths: &[usize]) -> BasicStats {
+        let mut stats = BasicStats::new(&limits());
+        for &len in lengths {
+            stats.process_sequence(&seq(len));
+        }
+        stats
+    }
+
+    #[test]
+    fn test_mean_length_empty() {
+        let stats = process(&[]);
+        assert_eq!(stats.mean_length(), 0.0);
+        assert_eq!(stats.median_length(), 0);
+    }
+
+    #[test]
+    fn test_mean_length() {
+        // (10 + 20 + 30) / 3 = 20.0
+        let stats = process(&[10, 20, 30]);
+        assert_eq!(stats.mean_length(), 20.0);
+        // (10 + 20 + 30 + 50) / 4 = 27.5
+        let stats = process(&[10, 20, 30, 50]);
+        assert_eq!(stats.mean_length(), 27.5);
+    }
+
+    #[test]
+    fn test_median_length_odd() {
+        // sorted: 10, 20, 30 -> middle is 20
+        let stats = process(&[30, 10, 20]);
+        assert_eq!(stats.median_length(), 20);
+    }
+
+    #[test]
+    fn test_median_length_even() {
+        // sorted: 10, 20, 30, 50 -> mean of 20 and 30 = 25
+        let stats = process(&[50, 10, 30, 20]);
+        assert_eq!(stats.median_length(), 25);
+        // sorted: 10, 20, 30, 40 -> mean of 20 and 30 = 25
+        let stats = process(&[10, 20, 30, 40]);
+        assert_eq!(stats.median_length(), 25);
+        // sorted: 10, 21 -> mean of 10 and 21 = 15.5 -> rounds up to 16
+        let stats = process(&[10, 21]);
+        assert_eq!(stats.median_length(), 16);
+    }
+
+    #[test]
+    fn test_median_uniform() {
+        let stats = process(&[16, 16, 16, 16, 16]);
+        assert_eq!(stats.mean_length(), 16.0);
+        assert_eq!(stats.median_length(), 16);
+    }
+
+    #[test]
+    fn test_length_stats_ignore_filtered() {
+        // Filtered sequences must not contribute to mean/median.
+        let mut stats = BasicStats::new(&limits());
+        stats.process_sequence(&seq(10));
+        let mut filtered = seq(1000);
+        filtered.is_filtered = true;
+        stats.process_sequence(&filtered);
+        stats.process_sequence(&seq(30));
+        assert_eq!(stats.actual_count, 2);
+        assert_eq!(stats.mean_length(), 20.0);
+        assert_eq!(stats.median_length(), 20);
+    }
+
+    #[test]
+    fn test_report_includes_mean_median() {
+        let stats = process(&[10, 20, 30, 40]);
+        let mut buf = Vec::new();
+        stats.write_text_report(&mut buf).unwrap();
+        let text = String::from_utf8(buf).unwrap();
+        assert!(text.contains("Sequence length\t10-40"));
+        assert!(text.contains("Mean sequence length\t25.00"));
+        assert!(text.contains("Median sequence length\t25"));
     }
 }

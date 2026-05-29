@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### New features
+
+- Report mean and median sequence length in Basic Statistics ([s-andrews/FastQC#203](https://github.com/s-andrews/FastQC/issues/203)). This is a deliberate addition over the Java output, which only reports the length range. Equivalence tests will pass once the feature lands upstream and reference data is regenerated.
+
 ## v1.0.1
 
 > [!NOTE]
