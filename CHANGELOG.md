@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Additional features
+
+- **Optional parallel gzip decompression** via the `rapidgzip` build feature
+  (off by default), backed by [rapidgzip-rust](https://github.com/COMBINE-lab/rapidgzip-rust).
+  Decompresses `.fastq.gz` on background threads and overlaps it with analysis,
+  giving a meaningful end-to-end speedup on large gzipped inputs while producing
+  byte-identical output. Pure Rust (zlib-rs), so it also works in the
+  fully-static `--no-default-features` build. New `--decompress-threads N`
+  option; backend selectable at runtime via `FASTQC_GZIP_BACKEND`.
+
 ## v1.0.1
 
 > [!NOTE]

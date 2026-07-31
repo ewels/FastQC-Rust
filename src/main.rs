@@ -77,6 +77,13 @@ struct Cli {
     #[arg(short, long, value_name = "N", default_value = "1")]
     threads: usize,
 
+    /// Worker budget for the parallel gzip (rapidgzip) backend, per file.
+    /// 0 (default) auto-derives from available CPUs and the number of files
+    /// processed concurrently. Only affects .fastq.gz inputs when the binary
+    /// was built with the `rapidgzip` feature and that backend is selected.
+    #[arg(long = "decompress-threads", value_name = "N", default_value = "0")]
+    decompress_threads: usize,
+
     /// Specifies the length of Kmer to look for in the Kmer content module.
     /// Specified Kmer length must be between 2 and 10. Default length is 7.
     #[arg(short, long, value_name = "N", default_value = "7")]
@@ -197,6 +204,7 @@ fn main() {
         svg_output: cli.svg,
         temp_dir: cli.dir,
         template: cli.template,
+        decompress_threads: cli.decompress_threads,
     };
 
     if let Err(exit_code) = runner::run(&config, &cli.files) {

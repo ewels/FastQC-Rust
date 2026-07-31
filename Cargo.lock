@@ -368,9 +368,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-deque"
-version = "0.8.6"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9dd111b7b7f7d55b72c0a6ae361660ee5853c9af73f70c3c2ef6858b950e2e51"
+checksum = "5181e0de7b61eb03a81e347d6dd8797bae9da5146707b51077e2d71a54ec0ceb"
 dependencies = [
  "crossbeam-epoch",
  "crossbeam-utils",
@@ -489,6 +489,7 @@ dependencies = [
  "memchr",
  "noodles",
  "png",
+ "rapidgzip-core",
  "rayon",
  "resvg",
  "statrs",
@@ -791,6 +792,15 @@ name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
+
+[[package]]
+name = "libz-rs-sys"
+version = "0.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50474818739ccab820cd57bca432d6b02d090b47f9e85501d963cd05851f82eb"
+dependencies = [
+ "zlib-rs",
+]
 
 [[package]]
 name = "libz-sys"
@@ -1152,6 +1162,15 @@ checksum = "32cb0b9bc82b0a0876c2dd994a7e7a2683d3e7390ca40e6886785ef0c7e3ee31"
 dependencies = [
  "num-traits",
  "rand",
+]
+
+[[package]]
+name = "rapidgzip-core"
+version = "0.1.0"
+source = "git+https://github.com/COMBINE-lab/rapidgzip-rust?rev=9b21b9d10afa69933c871342e0dfb1a8d0887a36#9b21b9d10afa69933c871342e0dfb1a8d0887a36"
+dependencies = [
+ "crossbeam-deque",
+ "libz-rs-sys",
 ]
 
 [[package]]
@@ -1820,6 +1839,12 @@ dependencies = [
  "zopfli",
  "zstd",
 ]
+
+[[package]]
+name = "zlib-rs"
+version = "0.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b142a20ec14a91d5bc708c1dc21b080c550113d8aa77afa29635673a65dd02c5"
 
 [[package]]
 name = "zopfli"

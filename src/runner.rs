@@ -68,6 +68,27 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
     // Java's OfflineRunner.java lines 103-117 handles this branching.
     let file_groups = build_file_groups(config, &valid_files);
 
+    // Normalise the parallel-gzip (rapidgzip) worker budget. When left on
+    // "auto" (0), spread the machine's parallelism across the files processed
+    // concurrently so we don't oversubscribe the CPU: a single large .fastq.gz
+    // gets every core for decompression, while N files sharing the pool get a
+    // fair slice each. An explicit --decompress-threads value is used verbatim.
+    // This only matters when the `rapidgzip` feature is compiled in, but the
+    // arithmetic is harmless (and free) otherwise.
+    let owned_config;
+    let config = if config.decompress_threads == 0 {
+        let budget = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
+        let concurrency = file_groups.len().max(1).min(config.threads.max(1));
+        let mut c = config.clone();
+        c.decompress_threads = (budget / concurrency).max(1);
+        owned_config = c;
+        &owned_config
+    } else {
+        config
+    };
+
     // Build rayon thread pool matching --threads
     // Java's AnalysisQueue uses a fixed thread pool of size --threads
     let pool = rayon::ThreadPoolBuilder::new()

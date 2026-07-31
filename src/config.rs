@@ -46,6 +46,13 @@ pub struct FastQCConfig {
     pub svg_output: bool,
     pub temp_dir: Option<PathBuf>,
     pub template: TemplateName,
+    /// Per-file worker budget for the parallel gzip (rapidgzip) backend.
+    ///
+    /// `0` means "auto": the runner derives a value from the available
+    /// parallelism and the number of file groups processed concurrently.
+    /// Only has an effect when the `rapidgzip` feature is compiled in and the
+    /// rapidgzip backend is selected for a `.gz` input.
+    pub decompress_threads: usize,
 }
 
 impl Default for FastQCConfig {
@@ -71,6 +78,7 @@ impl Default for FastQCConfig {
             svg_output: false,
             temp_dir: None,
             template: TemplateName::Classic,
+            decompress_threads: 0,
         }
     }
 }
