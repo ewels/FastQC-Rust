@@ -36,3 +36,6 @@ docs/dist/
 docs/node_modules/
 node_modules/
 .astro/
+
+# Benchmark working data (large FASTQ downloads / generated files, not committed)
+bench_data/
