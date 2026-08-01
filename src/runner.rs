@@ -15,13 +15,25 @@ use crate::sequence::casava;
 use crate::sequence::open_sequence_file;
 use crate::sequence::{Sequence, SequenceFile, SequenceFileGroup};
 
-/// Per-file processor threads in the parallel analysis pipeline. Each processor
-/// runs a disjoint subset of the QC modules over every sequence, so the analysis
-/// stays single-threaded per module (no in-module locking, byte-identical output)
-/// while the work is spread across cores. Past ~3 processors the reader thread
-/// that decodes and parses records becomes the bottleneck, so gains plateau; this
-/// matches the cap in the upstream Java pipeline (AnalysisQueue.MAX_PROCESSORS_PER_FILE).
-const MAX_PROCESSORS_PER_FILE: usize = 3;
+/// Upper bound on per-file processor threads in the parallel analysis pipeline.
+/// Each processor runs a disjoint subset of the QC modules over every sequence,
+/// so the analysis stays single-threaded per module (no in-module locking,
+/// byte-identical output) while the work is spread across cores.
+///
+/// Because the work is split by module, more processors than modules cannot help
+/// (the effective count is capped by the number of active modules in
+/// `process_group`), and the wall-clock is ultimately bounded by the single
+/// heaviest module — for the default set that is Adapter Content at ~24% of the
+/// analysis, i.e. a ceiling of roughly 4x however many cores are available. The
+/// reader thread only reads and parses records (cheap relative to the analysis,
+/// and it overlaps with parallel gzip decompression), so it is not the
+/// bottleneck the upstream Java cap assumed; we therefore let a single large file
+/// spread across as many workers as there are modules. Beyond this a single file
+/// cannot go faster without splitting a module's work, which the order-/float-
+/// sensitive modules (overrepresented sequences, per-sequence GC) cannot do while
+/// staying byte-identical; extra cores are instead used to analyse more files
+/// concurrently.
+const MAX_PROCESSORS_PER_FILE: usize = 12;
 
 /// Number of sequences the reader batches before publishing to the processors.
 /// Matches the Java pipeline's batch size. Large enough to amortise channel and
@@ -92,28 +104,32 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
 
     // Split the total thread budget (-t/--threads) between outer concurrency
     // (file groups analysed in parallel) and inner concurrency (the per-file
-    // reader + processor pipeline), mirroring the upstream Java AnalysisQueue:
+    // reader + processor pipeline).
     //
-    //   processors_per_file = min(MAX_PROCESSORS_PER_FILE, total - 1)
-    //   outer_slots         = max(1, total / (1 + processors_per_file))
+    // Files are the cheapest axis to parallelise across — each one scales
+    // linearly and needs no coordination — so spread the budget over the files
+    // first, then hand whatever is left to each file's internal pipeline:
     //
-    // A budget of 1 disables the pipeline: every file is analysed on a single
-    // thread, byte-identical to the original unbatched runner. A single large
-    // file then gets the full per-file pipeline, while many files scale out
-    // across the outer slots. This is what lets a lone .fastq.gz benefit from
+    //   outer_slots         = min(files, total)          // files run at once
+    //   threads_per_file    = max(1, total / outer_slots)
+    //   processors_per_file = min(MAX_PROCESSORS_PER_FILE, threads_per_file - 1)
+    //
+    // So a lone large file gets the whole budget as an internal pipeline (reader
+    // + up to MAX workers), while a run with many files mostly scales out across
+    // them and only builds a pipeline per file if threads are left over. A budget
+    // of 1 (or one thread per file) disables the pipeline entirely: each file is
+    // analysed on a single thread, byte-identical to the original unbatched
+    // runner. Going wide on one file is what lets a single .fastq.gz benefit from
     // extra threads now that parallel decompression has removed the gzip floor.
     let total_threads = config.threads.max(1);
-    let processors_per_file = if total_threads <= 1 {
+    let n_files = file_groups.len().max(1);
+    let outer_slots = n_files.min(total_threads);
+    let threads_per_file = (total_threads / outer_slots).max(1);
+    let processors_per_file = if threads_per_file <= 1 {
         0
     } else {
-        MAX_PROCESSORS_PER_FILE.min(total_threads - 1)
+        MAX_PROCESSORS_PER_FILE.min(threads_per_file - 1)
     };
-    let threads_per_file = if processors_per_file == 0 {
-        1
-    } else {
-        1 + processors_per_file
-    };
-    let outer_slots = (total_threads / threads_per_file).max(1);
 
     // Normalise the parallel-gzip (rapidgzip) worker budget. When left on
     // "auto" (0), give each concurrently-decompressed file the cores left over
@@ -250,11 +266,15 @@ fn process_group(
     // Feed every sequence through all modules. With a budget of one thread we
     // take the original single-threaded path (byte-identical, no pipeline
     // overhead); otherwise a reader thread batches records and hands them to
-    // `processors_per_file` worker threads that each own a disjoint subset of
-    // the modules. Either way each module sees every sequence exactly once, in
-    // file order, on a single thread, so the accumulated state -- and the
-    // resulting report -- is identical regardless of the thread budget.
-    if processors_per_file == 0 {
+    // worker threads that each own a disjoint subset of the modules. Either way
+    // each module sees every sequence exactly once, in file order, on a single
+    // thread, so the accumulated state -- and the resulting report -- is
+    // identical regardless of the thread budget.
+    //
+    // There is no point in more workers than there are modules, so cap the
+    // worker count by the number of active modules.
+    let num_processors = processors_per_file.min(modules.len());
+    if num_processors == 0 {
         process_sequences_sequential(
             seq_file.as_mut(),
             &mut modules,
@@ -265,7 +285,7 @@ fn process_group(
         modules = process_sequences_parallel(
             seq_file.as_mut(),
             modules,
-            processors_per_file,
+            num_processors,
             config.quiet,
             &file_display_name,
         )?;

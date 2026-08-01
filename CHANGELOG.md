@@ -5,15 +5,20 @@
 ### Additional features
 
 - **Parallel analysis pipeline** for a single file. `-t/--threads` is now a total
-  thread budget split between processing files concurrently and a per-file
-  reader + worker pipeline: a reader batches records while up to three worker
-  threads each run a disjoint subset of the QC modules over every sequence. Work
-  is split by module rather than by data, so each module still sees the whole
-  stream in file order on one thread and the output stays **byte-identical** to
-  the single-threaded runner (`-t 1` is unchanged). Combined with parallel gzip
-  decompression, a single large `.fastq.gz` now benefits from extra threads
-  instead of being pinned to one core. Ports the upstream Java three-stage
-  pipeline ([s-andrews/FastQC#197](https://github.com/s-andrews/FastQC/pull/197)).
+  thread budget spread across files first and then within each file: a reader
+  batches records while worker threads each run a disjoint subset of the QC
+  modules over every sequence. Work is split by module rather than by data, so
+  each module still sees the whole stream in file order on one thread and the
+  output stays **byte-identical** to the single-threaded runner (`-t 1` is
+  unchanged). Modules are balanced across workers by estimated cost so the few
+  expensive ones don't cluster. Combined with parallel gzip decompression, a
+  single large `.fastq.gz` now benefits from extra threads instead of being
+  pinned to one core. Builds on the upstream Java three-stage pipeline
+  ([s-andrews/FastQC#197](https://github.com/s-andrews/FastQC/pull/197)).
+  A single file scales until the heaviest single module dominates (~4x for the
+  default modules); the order-dependent modules (overrepresented sequences,
+  per-sequence GC) can't be split without changing output, so beyond that extra
+  cores are best spent on more files at once, which scales linearly.
 - **Optional parallel gzip decompression** via the `rapidgzip` build feature
   (off by default), backed by [rapidgzip-rust](https://github.com/COMBINE-lab/rapidgzip-rust).
   Decompresses `.fastq.gz` on background threads and overlaps it with analysis,
