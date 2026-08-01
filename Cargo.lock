@@ -1167,7 +1167,8 @@ dependencies = [
 [[package]]
 name = "rapidgzip-core"
 version = "0.1.0"
-source = "git+https://github.com/COMBINE-lab/rapidgzip-rust?rev=9b21b9d10afa69933c871342e0dfb1a8d0887a36#9b21b9d10afa69933c871342e0dfb1a8d0887a36"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c8915419d173342f3f9f104024f8f67a378944fdef494958d2ebdd756fe4e8a"
 dependencies = [
  "crossbeam-deque",
  "libz-rs-sys",

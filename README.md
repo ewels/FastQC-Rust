@@ -87,9 +87,9 @@ byte-identical to the flate2 backend. Two knobs control it:
   (useful for A/B comparison).
 
 > [!NOTE]
-> `rapidgzip-core` is not yet published on crates.io, so this feature currently
-> pulls it as a pinned git dependency and is therefore off by default. Once it
-> is released to crates.io the dependency becomes a normal versioned crate.
+> The feature is off by default so standard builds stay lean and byte-for-byte
+> unchanged; enable it explicitly with `--features rapidgzip`. It pulls in the
+> [`rapidgzip-core`](https://crates.io/crates/rapidgzip-core) crate (pure Rust).
 
 ## Usage
 

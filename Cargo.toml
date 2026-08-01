@@ -46,10 +46,8 @@ tiny-skia = "0.12"
 png = "0.18"
 
 # Optional: parallel, multi-member gzip decompression (COMBINE-lab/rapidgzip-rust).
-# Pure Rust (zlib-rs backend, no C toolchain). Not yet on crates.io, so pinned to a
-# git revision. The `version` key lets fastqc-rust publish unchanged once
-# rapidgzip-core 0.1.0 is released to crates.io (the git source is stripped on publish).
-rapidgzip-core = { git = "https://github.com/COMBINE-lab/rapidgzip-rust", rev = "9b21b9d10afa69933c871342e0dfb1a8d0887a36", version = "0.1.0", optional = true }
+# Pure Rust (zlib-rs backend, no C toolchain).
+rapidgzip-core = { version = "0.1.0", optional = true }
 
 [features]
 default = ["native-zlib"]
