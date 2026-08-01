@@ -1,15 +1,37 @@
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::sync_channel;
+use std::sync::Arc;
+use std::thread;
 
 use rayon::prelude::*;
 
 use crate::config::FastQCConfig;
 use crate::modules;
+use crate::modules::QCModule;
 use crate::report;
 use crate::sequence::casava;
 use crate::sequence::open_sequence_file;
-use crate::sequence::{SequenceFile, SequenceFileGroup};
+use crate::sequence::{Sequence, SequenceFile, SequenceFileGroup};
+
+/// Per-file processor threads in the parallel analysis pipeline. Each processor
+/// runs a disjoint subset of the QC modules over every sequence, so the analysis
+/// stays single-threaded per module (no in-module locking, byte-identical output)
+/// while the work is spread across cores. Past ~3 processors the reader thread
+/// that decodes and parses records becomes the bottleneck, so gains plateau; this
+/// matches the cap in the upstream Java pipeline (AnalysisQueue.MAX_PROCESSORS_PER_FILE).
+const MAX_PROCESSORS_PER_FILE: usize = 3;
+
+/// Number of sequences the reader batches before publishing to the processors.
+/// Matches the Java pipeline's batch size. Large enough to amortise channel and
+/// Arc overhead, small enough to keep the processors fed and memory bounded.
+const BATCH_SIZE: usize = 1024;
+
+/// Bounded capacity of each processor's batch queue. Provides backpressure so the
+/// reader can run at most this many batches ahead of the slowest processor,
+/// keeping peak memory bounded. Matches the Java pipeline's queue capacity.
+const QUEUE_CAPACITY: usize = 32;
 
 /// A unit of work: one logical sample to process through all QC modules.
 /// Contains a display name and the list of file paths that constitute it.
@@ -68,31 +90,60 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
     // Java's OfflineRunner.java lines 103-117 handles this branching.
     let file_groups = build_file_groups(config, &valid_files);
 
+    // Split the total thread budget (-t/--threads) between outer concurrency
+    // (file groups analysed in parallel) and inner concurrency (the per-file
+    // reader + processor pipeline), mirroring the upstream Java AnalysisQueue:
+    //
+    //   processors_per_file = min(MAX_PROCESSORS_PER_FILE, total - 1)
+    //   outer_slots         = max(1, total / (1 + processors_per_file))
+    //
+    // A budget of 1 disables the pipeline: every file is analysed on a single
+    // thread, byte-identical to the original unbatched runner. A single large
+    // file then gets the full per-file pipeline, while many files scale out
+    // across the outer slots. This is what lets a lone .fastq.gz benefit from
+    // extra threads now that parallel decompression has removed the gzip floor.
+    let total_threads = config.threads.max(1);
+    let processors_per_file = if total_threads <= 1 {
+        0
+    } else {
+        MAX_PROCESSORS_PER_FILE.min(total_threads - 1)
+    };
+    let threads_per_file = if processors_per_file == 0 {
+        1
+    } else {
+        1 + processors_per_file
+    };
+    let outer_slots = (total_threads / threads_per_file).max(1);
+
     // Normalise the parallel-gzip (rapidgzip) worker budget. When left on
-    // "auto" (0), spread the machine's parallelism across the files processed
-    // concurrently so we don't oversubscribe the CPU: a single large .fastq.gz
-    // gets every core for decompression, while N files sharing the pool get a
-    // fair slice each. An explicit --decompress-threads value is used verbatim.
-    // This only matters when the `rapidgzip` feature is compiled in, but the
-    // arithmetic is harmless (and free) otherwise.
+    // "auto" (0), give each concurrently-decompressed file the cores left over
+    // after its analysis pipeline (reader + processors) has taken its share, so
+    // decompression and analysis overlap without gross CPU oversubscription.
+    // zlib-rs decode is fast per-thread, so a small budget keeps the reader fed
+    // once analysis (not gzip) is the bottleneck. An explicit
+    // --decompress-threads value is used verbatim. This only matters when the
+    // `rapidgzip` feature is compiled in, but the arithmetic is free otherwise.
     let owned_config;
     let config = if config.decompress_threads == 0 {
         let budget = std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(1);
-        let concurrency = file_groups.len().max(1).min(config.threads.max(1));
+        let concurrency = outer_slots.min(file_groups.len().max(1)).max(1);
+        let per_file = budget / concurrency;
         let mut c = config.clone();
-        c.decompress_threads = (budget / concurrency).max(1);
+        c.decompress_threads = per_file.saturating_sub(processors_per_file).max(1);
         owned_config = c;
         &owned_config
     } else {
         config
     };
 
-    // Build rayon thread pool matching --threads
-    // Java's AnalysisQueue uses a fixed thread pool of size --threads
+    // Build the outer rayon pool: one slot per file group analysed in parallel.
+    // Each slot drives a per-file pipeline (a reader plus `processors_per_file`
+    // std::thread workers), so the total live thread count stays near the -t
+    // budget rather than outer_slots alone.
     let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(config.threads)
+        .num_threads(outer_slots)
         .build()
         .map_err(|e| {
             eprintln!("Failed to create thread pool: {}", e);
@@ -107,7 +158,7 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
                 eprintln!("Started analysis of {}", group.name);
             }
 
-            match process_group(config, &limits, group) {
+            match process_group(config, &limits, group, processors_per_file) {
                 Ok(()) => {
                     if !config.quiet {
                         eprintln!("Analysis complete for {}", group.name);
@@ -169,6 +220,7 @@ fn process_group(
     config: &FastQCConfig,
     limits: &crate::config::Limits,
     group: &FileGroup,
+    processors_per_file: usize,
 ) -> io::Result<()> {
     // Open the sequence file(s)
     let mut seq_file: Box<dyn SequenceFile> = if group.files.len() == 1 {
@@ -195,38 +247,28 @@ fn process_group(
         module.set_filename(&file_display_name);
     }
 
-    // Process all sequences through all modules
-    // Matches AnalysisRunner.java:64-126
-    let mut sequence_count: u64 = 0;
-    let mut last_percent: i32 = -1;
-
-    loop {
-        match seq_file.next() {
-            Some(Ok(seq)) => {
-                sequence_count += 1;
-
-                for module in modules.iter_mut() {
-                    // Skip filtered sequences for modules that request it
-                    if seq.is_filtered && module.ignore_filtered_sequences() {
-                        continue;
-                    }
-                    module.process_sequence(&seq);
-                }
-
-                // Progress reporting every 5%
-                if !config.quiet && sequence_count.is_multiple_of(1000) {
-                    let percent = seq_file.percent_complete() as i32;
-                    if percent != last_percent && percent % 5 == 0 {
-                        eprintln!("Approx {}% complete for {}", percent, file_display_name);
-                        last_percent = percent;
-                    }
-                }
-            }
-            Some(Err(e)) => {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, e));
-            }
-            None => break, // EOF
-        }
+    // Feed every sequence through all modules. With a budget of one thread we
+    // take the original single-threaded path (byte-identical, no pipeline
+    // overhead); otherwise a reader thread batches records and hands them to
+    // `processors_per_file` worker threads that each own a disjoint subset of
+    // the modules. Either way each module sees every sequence exactly once, in
+    // file order, on a single thread, so the accumulated state -- and the
+    // resulting report -- is identical regardless of the thread budget.
+    if processors_per_file == 0 {
+        process_sequences_sequential(
+            seq_file.as_mut(),
+            &mut modules,
+            config.quiet,
+            &file_display_name,
+        )?;
+    } else {
+        modules = process_sequences_parallel(
+            seq_file.as_mut(),
+            modules,
+            processors_per_file,
+            config.quiet,
+            &file_display_name,
+        )?;
     }
 
     // Finalize all modules (lazy computation)
@@ -294,6 +336,214 @@ fn process_group(
     Ok(())
 }
 
+/// Single-threaded analysis path: read each sequence and feed it to every module
+/// in order. Used when the thread budget is 1, and byte-identical to the original
+/// unbatched runner (AnalysisRunner.runSequential in the Java pipeline).
+fn process_sequences_sequential(
+    seq_file: &mut dyn SequenceFile,
+    modules: &mut [Box<dyn QCModule>],
+    quiet: bool,
+    display_name: &str,
+) -> io::Result<()> {
+    let mut sequence_count: u64 = 0;
+    let mut last_percent: i32 = -1;
+
+    loop {
+        match seq_file.next() {
+            Some(Ok(seq)) => {
+                sequence_count += 1;
+
+                for module in modules.iter_mut() {
+                    // Skip filtered sequences for modules that request it
+                    if seq.is_filtered && module.ignore_filtered_sequences() {
+                        continue;
+                    }
+                    module.process_sequence(&seq);
+                }
+
+                // Progress reporting every 5%
+                if !quiet && sequence_count.is_multiple_of(1000) {
+                    let percent = seq_file.percent_complete() as i32;
+                    if percent != last_percent && percent % 5 == 0 {
+                        eprintln!("Approx {}% complete for {}", percent, display_name);
+                        last_percent = percent;
+                    }
+                }
+            }
+            Some(Err(e)) => {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, e));
+            }
+            None => break, // EOF
+        }
+    }
+
+    Ok(())
+}
+
+/// Multi-threaded analysis path: a reader on the calling thread batches sequences
+/// and publishes each batch to `num_processors` worker threads, each of which owns
+/// a disjoint subset of the modules and runs them over every sequence.
+///
+/// This is a Rust port of the upstream Java three-stage pipeline
+/// (AnalysisRunner.runParallel). The key property is that the work is split *by
+/// module*, not by data: every module still sees the entire sequence stream, in
+/// file order, on a single thread, so no module needs merge logic and the output
+/// is byte-identical to the sequential path. The parallelism comes from running
+/// different modules concurrently, and from overlapping analysis with the reader
+/// (which drives decompression and record parsing).
+///
+/// Modules are assigned to workers round-robin rather than in contiguous blocks so
+/// the few expensive modules (overrepresented sequences, adapter and k-mer content)
+/// tend to land on different workers, giving a more even load balance. Ownership of
+/// each module is returned to the caller in the original order for finalisation and
+/// reporting.
+fn process_sequences_parallel(
+    seq_file: &mut dyn SequenceFile,
+    modules: Vec<Box<dyn QCModule>>,
+    num_processors: usize,
+    quiet: bool,
+    display_name: &str,
+) -> io::Result<Vec<Box<dyn QCModule>>> {
+    let n_modules = modules.len();
+
+    // Partition the modules across the workers to balance their estimated cost,
+    // using the classic longest-processing-time (LPT) greedy: consider modules
+    // heaviest-first and drop each onto the currently-lightest worker. This keeps
+    // the few expensive modules (adapter, GC, per-base quality, ...) on separate
+    // workers rather than letting a naive split pile two of them together, which
+    // is what bounds the makespan of the pipeline. Modules are tagged with their
+    // original index so report order can be restored afterwards; the assignment
+    // never changes results, only how evenly the work is spread.
+    let mut order: Vec<(usize, Box<dyn QCModule>)> = modules.into_iter().enumerate().collect();
+    order.sort_by(|a, b| b.1.cost_hint().cmp(&a.1.cost_hint()));
+
+    let mut groups: Vec<Vec<(usize, Box<dyn QCModule>)>> =
+        (0..num_processors).map(|_| Vec::new()).collect();
+    let mut loads = vec![0u64; num_processors];
+    for (idx, module) in order {
+        // Pick the lightest worker; ties break to the lowest index for
+        // deterministic assignment.
+        let target = loads
+            .iter()
+            .enumerate()
+            .min_by_key(|&(_, &load)| load)
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        loads[target] += module.cost_hint() as u64;
+        groups[target].push((idx, module));
+    }
+
+    // One bounded queue per worker. The reader publishes the same Arc-shared
+    // batch to every queue; workers only read from the sequences, never mutate
+    // them, so sharing is safe. Bounded capacity gives backpressure so the
+    // reader runs at most QUEUE_CAPACITY batches ahead of the slowest worker.
+    let mut senders = Vec::with_capacity(num_processors);
+    let mut receivers = Vec::with_capacity(num_processors);
+    for _ in 0..num_processors {
+        let (tx, rx) = sync_channel::<Arc<Vec<Sequence>>>(QUEUE_CAPACITY);
+        senders.push(tx);
+        receivers.push(rx);
+    }
+
+    let mut reader_error: Option<io::Error> = None;
+
+    // thread::scope lets the workers borrow from this stack frame and guarantees
+    // they are all joined before the scope returns.
+    let processed: Vec<Vec<(usize, Box<dyn QCModule>)>> = thread::scope(|scope| {
+        let handles: Vec<_> = groups
+            .into_iter()
+            .zip(receivers)
+            .map(|(mut group, rx)| {
+                scope.spawn(move || {
+                    // Drain batches until the reader drops its senders (EOF) or
+                    // an error closes the channel.
+                    while let Ok(batch) = rx.recv() {
+                        for seq in batch.iter() {
+                            for (_, module) in group.iter_mut() {
+                                if seq.is_filtered && module.ignore_filtered_sequences() {
+                                    continue;
+                                }
+                                module.process_sequence(seq);
+                            }
+                        }
+                    }
+                    group
+                })
+            })
+            .collect();
+
+        // Reader loop runs on the calling thread: pull records, fill a batch,
+        // and publish it to every worker queue.
+        let mut batch: Vec<Sequence> = Vec::with_capacity(BATCH_SIZE);
+        let mut last_percent: i32 = -1;
+        'read: loop {
+            match seq_file.next() {
+                Some(Ok(seq)) => {
+                    batch.push(seq);
+                    if batch.len() == BATCH_SIZE {
+                        let full = std::mem::replace(&mut batch, Vec::with_capacity(BATCH_SIZE));
+                        let shared = Arc::new(full);
+                        for tx in &senders {
+                            // A send error means a worker panicked and dropped
+                            // its receiver; stop reading so we don't deadlock on
+                            // a full queue, and surface the panic via join below.
+                            if tx.send(Arc::clone(&shared)).is_err() {
+                                break 'read;
+                            }
+                        }
+
+                        if !quiet {
+                            let percent = seq_file.percent_complete() as i32;
+                            if percent != last_percent && percent % 5 == 0 {
+                                eprintln!("Approx {}% complete for {}", percent, display_name);
+                                last_percent = percent;
+                            }
+                        }
+                    }
+                }
+                Some(Err(e)) => {
+                    reader_error = Some(io::Error::new(io::ErrorKind::InvalidData, e));
+                    break;
+                }
+                None => break, // EOF
+            }
+        }
+
+        // Publish the final partial batch (unless a read error aborted the run).
+        if reader_error.is_none() && !batch.is_empty() {
+            let shared = Arc::new(batch);
+            for tx in &senders {
+                let _ = tx.send(Arc::clone(&shared));
+            }
+        }
+
+        // Dropping the senders signals EOF; workers exit their recv loop and
+        // return their (now fully-processed) module group.
+        drop(senders);
+
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("analysis worker thread panicked"))
+            .collect()
+    });
+
+    if let Some(e) = reader_error {
+        return Err(e);
+    }
+
+    // Reassemble the modules in their original order for finalisation/reporting.
+    let mut rebuilt: Vec<Option<Box<dyn QCModule>>> = (0..n_modules).map(|_| None).collect();
+    for group in processed {
+        for (idx, module) in group {
+            rebuilt[idx] = Some(module);
+        }
+    }
+    Ok(rebuilt
+        .into_iter()
+        .map(|m| m.expect("module slot filled"))
+        .collect())
+}
+
 /// Strip known sequencing file extensions from a filename.
 ///
 /// Matches the exact chain of replaceAll calls in OfflineRunner.java:181
@@ -340,6 +590,150 @@ fn find_fast5_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> io::Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::modules::ModuleStatus;
+
+    /// An in-memory SequenceFile that replays a fixed list of sequences, so the
+    /// analysis paths can be exercised without touching the filesystem.
+    struct MockSeqFile {
+        seqs: Vec<Sequence>,
+        pos: usize,
+    }
+
+    impl SequenceFile for MockSeqFile {
+        fn next(&mut self) -> Option<io::Result<Sequence>> {
+            if self.pos < self.seqs.len() {
+                let s = self.seqs[self.pos].clone();
+                self.pos += 1;
+                Some(Ok(s))
+            } else {
+                None
+            }
+        }
+        fn name(&self) -> &str {
+            "mock.fastq"
+        }
+        fn is_colorspace(&self) -> bool {
+            false
+        }
+        fn percent_complete(&self) -> f64 {
+            if self.seqs.is_empty() {
+                100.0
+            } else {
+                (self.pos as f64 / self.seqs.len() as f64) * 100.0
+            }
+        }
+    }
+
+    /// Build a deterministic but varied set of sequences: a rotating base
+    /// pattern, a recurring adapter-like motif, and a handful of exact
+    /// duplicates, so the quality, content, adapter, overrepresented and
+    /// duplication modules all have something non-trivial to accumulate.
+    fn make_test_sequences(count: usize, len: usize) -> Vec<Sequence> {
+        let alphabet = b"ACGTACGTGGCCATN";
+        let adapter = b"AGATCGGAAGAGC";
+        let mut seqs = Vec::with_capacity(count);
+        for i in 0..count {
+            let mut bases = vec![0u8; len];
+            for (p, b) in bases.iter_mut().enumerate() {
+                *b = alphabet[(i * 7 + p * 3) % alphabet.len()];
+            }
+            // Splice an adapter motif near the 3' end of every 12th read.
+            if i % 12 == 0 && len > adapter.len() + 5 {
+                let start = len - adapter.len() - (i % 5);
+                bases[start..start + adapter.len()].copy_from_slice(adapter);
+            }
+            // Force some exact duplicates for the overrepresented/duplication path.
+            if i % 50 == 0 {
+                for (p, b) in bases.iter_mut().enumerate() {
+                    *b = b"ACGT"[p % 4];
+                }
+            }
+            // Quality declines toward the 3' end, clamped to a valid range.
+            let quality: Vec<u8> = (0..len)
+                .map(|p| {
+                    let q = 40i32 - (18 * p as i32) / len as i32;
+                    33 + q.clamp(2, 40) as u8
+                })
+                .collect();
+            seqs.push(Sequence::new(format!("READ{}", i), bases, quality));
+        }
+        seqs
+    }
+
+    /// The parallel analysis pipeline must produce output that is byte-identical
+    /// to the single-threaded path for every module, across a range of processor
+    /// counts (which change how modules are distributed across worker threads).
+    #[test]
+    fn test_parallel_matches_sequential() {
+        let config = FastQCConfig::default();
+        let limits = config.load_limits().expect("load limits");
+        let seqs = make_test_sequences(4000, 100);
+
+        // Reference: single-threaded path.
+        let mut mods_seq = modules::create_modules(&config, &limits);
+        for m in mods_seq.iter_mut() {
+            m.set_filename("mock.fastq");
+        }
+        let mut seq_file = MockSeqFile {
+            seqs: seqs.clone(),
+            pos: 0,
+        };
+        process_sequences_sequential(&mut seq_file, &mut mods_seq, true, "mock.fastq")
+            .expect("sequential run");
+        for m in mods_seq.iter_mut() {
+            m.finalize();
+        }
+        let reference: Vec<(String, Vec<u8>, ModuleStatus)> = mods_seq
+            .iter()
+            .map(|m| {
+                let mut buf = Vec::new();
+                m.write_text_report(&mut buf).expect("text report");
+                (m.name().to_string(), buf, m.status())
+            })
+            .collect();
+
+        for num_processors in 1..=MAX_PROCESSORS_PER_FILE {
+            let mut mods_par = modules::create_modules(&config, &limits);
+            for m in mods_par.iter_mut() {
+                m.set_filename("mock.fastq");
+            }
+            let mut seq_file = MockSeqFile {
+                seqs: seqs.clone(),
+                pos: 0,
+            };
+            let mut mods_par = process_sequences_parallel(
+                &mut seq_file,
+                mods_par,
+                num_processors,
+                true,
+                "mock.fastq",
+            )
+            .expect("parallel run");
+            for m in mods_par.iter_mut() {
+                m.finalize();
+            }
+
+            assert_eq!(mods_par.len(), reference.len());
+            for (module, (name, ref_text, ref_status)) in mods_par.iter().zip(&reference) {
+                // Module order must be preserved after the round-robin split.
+                assert_eq!(module.name(), name, "module order changed");
+                let mut buf = Vec::new();
+                module.write_text_report(&mut buf).expect("text report");
+                assert_eq!(
+                    &buf, ref_text,
+                    "module `{}` text report differs with {} processor(s)",
+                    name, num_processors
+                );
+                assert_eq!(
+                    module.status(),
+                    *ref_status,
+                    "module `{}` status differs with {} processor(s)",
+                    name,
+                    num_processors
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_strip_extensions() {

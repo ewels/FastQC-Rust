@@ -200,6 +200,11 @@ impl DuplicationLevel {
 }
 
 impl QCModule for DuplicationLevel {
+    fn cost_hint(&self) -> u32 {
+        // No per-sequence work; results come from OverRepresentedSeqs' shared data.
+        1
+    }
+
     fn process_sequence(&mut self, _sequence: &Sequence) {
         // DuplicationLevel doesn't process sequences itself;
         // it uses the shared data from OverRepresentedSeqs.

@@ -114,6 +114,10 @@ impl PerBaseSequenceContent {
 }
 
 impl QCModule for PerBaseSequenceContent {
+    fn cost_hint(&self) -> u32 {
+        5
+    }
+
     fn process_sequence(&mut self, sequence: &Sequence) {
         let seq = &sequence.sequence;
 

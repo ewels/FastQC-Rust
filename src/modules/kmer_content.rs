@@ -349,6 +349,12 @@ impl KmerContent {
 }
 
 impl QCModule for KmerContent {
+    fn cost_hint(&self) -> u32 {
+        // Only enabled when explicitly requested; when on it is among the
+        // heaviest modules (per-position k-mer counting over the whole read).
+        12
+    }
+
     fn process_sequence(&mut self, sequence: &Sequence) {
         self.computed = None;
 
