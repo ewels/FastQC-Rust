@@ -10,6 +10,7 @@ use rayon::prelude::*;
 use crate::config::FastQCConfig;
 use crate::modules;
 use crate::modules::QCModule;
+use crate::progress::{self, FileProgress};
 use crate::report;
 use crate::sequence::casava;
 use crate::sequence::open_sequence_file;
@@ -168,25 +169,33 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
 
     let failed = AtomicBool::new(something_failed);
 
-    pool.install(|| {
-        file_groups.par_iter().for_each(|group| {
-            if !config.quiet {
-                eprintln!("Started analysis of {}", group.name);
-            }
+    // The live terminal display: a progress bar per file (or one bar counting
+    // files when there are many), plus a live statistics table for small runs.
+    // It is inert under --quiet and degrades to plain start/finish lines when
+    // stderr is not a terminal.
+    let names: Vec<String> = file_groups.iter().map(|g| g.name.clone()).collect();
+    let progress = progress::ProgressReporter::new(&names, config.quiet);
 
-            match process_group(config, &limits, group, processors_per_file) {
-                Ok(()) => {
-                    if !config.quiet {
-                        eprintln!("Analysis complete for {}", group.name);
+    pool.install(|| {
+        file_groups
+            .par_iter()
+            .enumerate()
+            .for_each(|(index, group)| {
+                let file_progress = progress.file(index);
+                file_progress.start(&group.name);
+
+                match process_group(config, &limits, group, processors_per_file, file_progress) {
+                    Ok(reads) => file_progress.finish(&group.name, reads),
+                    Err(e) => {
+                        file_progress.fail();
+                        progress.error(&format!("Failed to process {}: {}", group.name, e));
+                        failed.store(true, Ordering::Relaxed);
                     }
                 }
-                Err(e) => {
-                    eprintln!("Failed to process {}: {}", group.name, e);
-                    failed.store(true, Ordering::Relaxed);
-                }
-            }
-        });
+            });
     });
+
+    progress.finish();
 
     if failed.load(Ordering::Relaxed) {
         Err(1)
@@ -237,7 +246,8 @@ fn process_group(
     limits: &crate::config::Limits,
     group: &FileGroup,
     processors_per_file: usize,
-) -> io::Result<()> {
+    file_progress: FileProgress<'_>,
+) -> io::Result<u64> {
     // Open the sequence file(s)
     let mut seq_file: Box<dyn SequenceFile> = if group.files.len() == 1 {
         // Single file - open directly
@@ -263,6 +273,15 @@ fn process_group(
         module.set_filename(&file_display_name);
     }
 
+    // If the terminal display is showing a live statistics table, give
+    // BasicStats somewhere to publish its running counters. Only BasicStats
+    // acts on this; nothing about the analysis changes.
+    if let Some(live) = file_progress.live_stats() {
+        for module in modules.iter_mut() {
+            module.attach_live_stats(Arc::clone(&live));
+        }
+    }
+
     // Feed every sequence through all modules. With a budget of one thread we
     // take the original single-threaded path (byte-identical, no pipeline
     // overhead); otherwise a reader thread batches records and hands them to
@@ -274,22 +293,18 @@ fn process_group(
     // There is no point in more workers than there are modules, so cap the
     // worker count by the number of active modules.
     let num_processors = processors_per_file.min(modules.len());
-    if num_processors == 0 {
-        process_sequences_sequential(
-            seq_file.as_mut(),
-            &mut modules,
-            config.quiet,
-            &file_display_name,
-        )?;
+    let read_count = if num_processors == 0 {
+        process_sequences_sequential(seq_file.as_mut(), &mut modules, file_progress)?
     } else {
-        modules = process_sequences_parallel(
-            seq_file.as_mut(),
-            modules,
-            num_processors,
-            config.quiet,
-            &file_display_name,
-        )?;
-    }
+        let (rebuilt, count) =
+            process_sequences_parallel(seq_file.as_mut(), modules, num_processors, file_progress)?;
+        modules = rebuilt;
+        count
+    };
+
+    // Reading is done; the remaining work (chart rendering, HTML, zip) is not
+    // measured as a fraction of the file, so the bar switches to a stage label.
+    file_progress.stage("report");
 
     // Finalize all modules (lazy computation)
     for module in modules.iter_mut() {
@@ -353,7 +368,7 @@ fn process_group(
         }
     }
 
-    Ok(())
+    Ok(read_count)
 }
 
 /// Feed one sequence to one module, honouring the module's request to skip
@@ -367,36 +382,22 @@ fn feed_module(module: &mut dyn QCModule, seq: &Sequence) {
     module.process_sequence(seq);
 }
 
-/// Emit a throttled "Approx N% complete" progress line, matching the Java runner:
-/// only when the file position has advanced to the next 5% multiple. `last_percent`
-/// carries the last reported multiple across calls.
-fn report_progress(
-    seq_file: &dyn SequenceFile,
-    quiet: bool,
-    display_name: &str,
-    last_percent: &mut i32,
-) {
-    if quiet {
-        return;
-    }
-    let percent = seq_file.percent_complete() as i32;
-    if percent != *last_percent && percent % 5 == 0 {
-        eprintln!("Approx {}% complete for {}", percent, display_name);
-        *last_percent = percent;
-    }
-}
+/// How many records to read between updates of the terminal progress display.
+/// The display throttles its own redraws, so this only needs to be frequent
+/// enough that the bars look smooth.
+const PROGRESS_INTERVAL: u64 = 1000;
 
 /// Single-threaded analysis path: read each sequence and feed it to every module
 /// in order. Used when the thread budget is 1, and byte-identical to the original
 /// unbatched runner (AnalysisRunner.runSequential in the Java pipeline).
+///
+/// Returns the number of records read.
 fn process_sequences_sequential(
     seq_file: &mut dyn SequenceFile,
     modules: &mut [Box<dyn QCModule>],
-    quiet: bool,
-    display_name: &str,
-) -> io::Result<()> {
+    file_progress: FileProgress<'_>,
+) -> io::Result<u64> {
     let mut sequence_count: u64 = 0;
-    let mut last_percent: i32 = -1;
 
     loop {
         match seq_file.next() {
@@ -407,9 +408,8 @@ fn process_sequences_sequential(
                     feed_module(module.as_mut(), &seq);
                 }
 
-                // Check progress every 1000 records (the report itself is 5%-gated).
-                if sequence_count.is_multiple_of(1000) {
-                    report_progress(&*seq_file, quiet, display_name, &mut last_percent);
+                if sequence_count.is_multiple_of(PROGRESS_INTERVAL) {
+                    file_progress.update(seq_file.percent_complete(), sequence_count);
                 }
             }
             Some(Err(e)) => {
@@ -419,7 +419,7 @@ fn process_sequences_sequential(
         }
     }
 
-    Ok(())
+    Ok(sequence_count)
 }
 
 /// Multi-threaded analysis path: a reader on the calling thread batches sequences
@@ -439,13 +439,14 @@ fn process_sequences_sequential(
 /// sequences, adapter and k-mer content) land on different workers, giving an even
 /// load balance. Ownership of each module is returned to the caller in the original
 /// order for finalisation and reporting.
+///
+/// Returns the modules in report order along with the number of records read.
 fn process_sequences_parallel(
     seq_file: &mut dyn SequenceFile,
     modules: Vec<Box<dyn QCModule>>,
     num_processors: usize,
-    quiet: bool,
-    display_name: &str,
-) -> io::Result<Vec<Box<dyn QCModule>>> {
+    file_progress: FileProgress<'_>,
+) -> io::Result<(Vec<Box<dyn QCModule>>, u64)> {
     // Partition the modules across the workers to balance their estimated cost,
     // using the classic longest-processing-time (LPT) greedy: consider modules
     // heaviest-first and drop each onto the currently-lightest worker. This keeps
@@ -486,6 +487,7 @@ fn process_sequences_parallel(
     }
 
     let mut reader_error: Option<io::Error> = None;
+    let mut sequence_count: u64 = 0;
 
     // thread::scope lets the workers borrow from this stack frame and guarantees
     // they are all joined before the scope returns.
@@ -512,7 +514,6 @@ fn process_sequences_parallel(
         // Reader loop runs on the calling thread: pull records, fill a batch,
         // and publish it to every worker queue.
         let mut batch: Vec<Sequence> = Vec::with_capacity(BATCH_SIZE);
-        let mut last_percent: i32 = -1;
         'read: loop {
             match seq_file.next() {
                 Some(Ok(seq)) => {
@@ -529,7 +530,8 @@ fn process_sequences_parallel(
                             }
                         }
 
-                        report_progress(&*seq_file, quiet, display_name, &mut last_percent);
+                        sequence_count += BATCH_SIZE as u64;
+                        file_progress.update(seq_file.percent_complete(), sequence_count);
                     }
                 }
                 Some(Err(e)) => {
@@ -542,6 +544,7 @@ fn process_sequences_parallel(
 
         // Publish the final partial batch (unless a read error aborted the run).
         if reader_error.is_none() && !batch.is_empty() {
+            sequence_count += batch.len() as u64;
             let shared = Arc::new(batch);
             for tx in &senders {
                 let _ = tx.send(Arc::clone(&shared));
@@ -565,7 +568,10 @@ fn process_sequences_parallel(
     // Reassemble the modules in their original report order.
     let mut rebuilt: Vec<(usize, Box<dyn QCModule>)> = processed.into_iter().flatten().collect();
     rebuilt.sort_by_key(|(idx, _)| *idx);
-    Ok(rebuilt.into_iter().map(|(_, module)| module).collect())
+    Ok((
+        rebuilt.into_iter().map(|(_, module)| module).collect(),
+        sequence_count,
+    ))
 }
 
 /// Strip known sequencing file extensions from a filename.
@@ -698,12 +704,15 @@ mod tests {
         for m in mods_seq.iter_mut() {
             m.set_filename("mock.fastq");
         }
+        let reporter = progress::ProgressReporter::hidden();
         let mut seq_file = MockSeqFile {
             seqs: seqs.clone(),
             pos: 0,
         };
-        process_sequences_sequential(&mut seq_file, &mut mods_seq, true, "mock.fastq")
-            .expect("sequential run");
+        let sequential_reads =
+            process_sequences_sequential(&mut seq_file, &mut mods_seq, reporter.file(0))
+                .expect("sequential run");
+        assert_eq!(sequential_reads, seqs.len() as u64);
         for m in mods_seq.iter_mut() {
             m.finalize();
         }
@@ -725,14 +734,14 @@ mod tests {
                 seqs: seqs.clone(),
                 pos: 0,
             };
-            let mut mods_par = process_sequences_parallel(
+            let (mut mods_par, parallel_reads) = process_sequences_parallel(
                 &mut seq_file,
                 mods_par,
                 num_processors,
-                true,
-                "mock.fastq",
+                reporter.file(0),
             )
             .expect("parallel run");
+            assert_eq!(parallel_reads, sequential_reads);
             for m in mods_par.iter_mut() {
                 m.finalize();
             }

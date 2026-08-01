@@ -4,6 +4,18 @@
 
 ### Additional features
 
+- **Live progress display.** The `Approx N% complete for <file>` lines inherited
+  from Java FastQC are replaced by a rich terminal display: a version banner,
+  then one progress bar per input file (in command-line order) showing that
+  file's own progress, read count and elapsed time. Runs of more than 10 files
+  collapse to a single bar counting completed files. For runs of up to 4 files a
+  live Basic Statistics table is drawn underneath, with a column per file and a
+  row per measure from the top of the report — cells start as `-` and fill in as
+  the analysis proceeds, ending on exactly the values written to the report
+  (both are rendered from the same counters). Built on
+  [indicatif](https://crates.io/crates/indicatif). When stderr is not a terminal
+  the display degrades to one plain line per file at start and finish, so
+  pipeline logs stay readable; `--quiet` still silences everything.
 - **Parallel analysis pipeline** for a single file. `-t/--threads` is now a total
   thread budget spread across files first and then within each file: a reader
   batches records while worker threads each run a disjoint subset of the QC

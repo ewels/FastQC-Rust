@@ -48,6 +48,8 @@ png = "0.18"
 # Optional: parallel, multi-member gzip decompression (COMBINE-lab/rapidgzip-rust).
 # Pure Rust (zlib-rs backend, no C toolchain).
 rapidgzip-core = { version = "0.1.0", optional = true }
+indicatif = "0.18"
+console = "0.16"
 
 [features]
 default = ["native-zlib"]
