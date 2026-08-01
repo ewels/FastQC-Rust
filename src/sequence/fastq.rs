@@ -4,8 +4,8 @@
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, Stdin};
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use bzip2_rs::DecoderReader;
 use flate2::read::MultiGzDecoder;
@@ -333,7 +333,11 @@ impl FastQFile {
                     Some(pos_handle),
                     None,
                 ),
-                _ => (ReaderKind::Plain(BufReader::new(file)), Some(pos_handle), None),
+                _ => (
+                    ReaderKind::Plain(BufReader::new(file)),
+                    Some(pos_handle),
+                    None,
+                ),
             }
         };
 
