@@ -122,31 +122,33 @@ fn open_gz_reader(
     file: File,
     pos_handle: File,
 ) -> io::Result<(ReaderKind, Option<File>, Option<Arc<AtomicU64>>)> {
+    // When rapidgzip is selected it either takes over (early return) or, if it
+    // rejects the stream, hands back a freshly reopened `(file, pos_handle)` so
+    // the flate2 fallthrough below builds the reader once. Deriving the progress
+    // handle from the same reopened file keeps it tracking the decoder position.
     #[cfg(feature = "rapidgzip")]
-    {
-        if rapidgzip_selected() {
-            let threads = resolve_decompress_threads(config);
-            return match open_rapidgzip(file, threads) {
-                Ok((reader, counter)) => Ok((
+    let (file, pos_handle) = if rapidgzip_selected() {
+        let threads = resolve_decompress_threads(config);
+        match open_rapidgzip(file, threads) {
+            Ok((reader, counter)) => {
+                return Ok((
                     ReaderKind::Rapidgzip(BufReader::new(reader)),
                     None,
                     Some(counter),
-                )),
-                Err(_) => {
-                    // rapidgzip rejected the stream (e.g. an optional-header
-                    // shape it does not support). Re-open and fall back to
-                    // flate2 so a valid gzip file is never refused purely
-                    // because of the backend choice.
-                    let file = File::open(path)?;
-                    Ok((
-                        ReaderKind::Gzip(BufReader::new(MultiGzDecoder::new(file))),
-                        Some(pos_handle),
-                        None,
-                    ))
-                }
-            };
+                ));
+            }
+            // rapidgzip rejected the stream (e.g. an optional-header shape it
+            // does not support); fall back to flate2 so a valid gzip file is
+            // never refused purely because of the backend choice.
+            Err(_) => {
+                let file = File::open(path)?;
+                let pos_handle = file.try_clone()?;
+                (file, pos_handle)
+            }
         }
-    }
+    } else {
+        (file, pos_handle)
+    };
 
     Ok((
         ReaderKind::Gzip(BufReader::new(MultiGzDecoder::new(file))),
@@ -183,9 +185,7 @@ fn resolve_decompress_threads(config: &FastQCConfig) -> usize {
     if config.decompress_threads > 0 {
         config.decompress_threads
     } else {
-        std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1)
+        crate::utils::available_parallelism()
     }
 }
 

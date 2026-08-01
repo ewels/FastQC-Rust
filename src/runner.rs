@@ -75,19 +75,13 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
     // fair slice each. An explicit --decompress-threads value is used verbatim.
     // This only matters when the `rapidgzip` feature is compiled in, but the
     // arithmetic is harmless (and free) otherwise.
-    let owned_config;
-    let config = if config.decompress_threads == 0 {
-        let budget = std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1);
-        let concurrency = file_groups.len().max(1).min(config.threads.max(1));
-        let mut c = config.clone();
-        c.decompress_threads = (budget / concurrency).max(1);
-        owned_config = c;
-        &owned_config
-    } else {
-        config
-    };
+    let mut owned_config = config.clone();
+    if owned_config.decompress_threads == 0 {
+        let budget = crate::utils::available_parallelism();
+        let concurrency = file_groups.len().max(1).min(owned_config.threads.max(1));
+        owned_config.decompress_threads = (budget / concurrency).max(1);
+    }
+    let config = &owned_config;
 
     // Build rayon thread pool matching --threads
     // Java's AnalysisQueue uses a fixed thread pool of size --threads
