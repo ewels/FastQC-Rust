@@ -137,15 +137,12 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
     // decompression and analysis overlap without gross CPU oversubscription.
     // zlib-rs decode is fast per-thread, so a small budget keeps the reader fed
     // once analysis (not gzip) is the bottleneck. An explicit
-    // --decompress-threads value is used verbatim. This only matters when the
-    // `rapidgzip` feature is compiled in, but the arithmetic is free otherwise.
+    // --decompress-threads value is used verbatim.
     let owned_config;
     let config = if config.decompress_threads == 0 {
-        let budget = std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1);
-        let concurrency = outer_slots.min(file_groups.len().max(1)).max(1);
-        let per_file = budget / concurrency;
+        let budget = crate::utils::available_parallelism();
+        // `outer_slots` (>= 1) is the number of files decompressed concurrently.
+        let per_file = budget / outer_slots;
         let mut c = config.clone();
         c.decompress_threads = per_file.saturating_sub(processors_per_file).max(1);
         owned_config = c;
@@ -356,6 +353,36 @@ fn process_group(
     Ok(())
 }
 
+/// Feed one sequence to one module, honouring the module's request to skip
+/// sequences flagged as filtered. Shared by the sequential and parallel paths so
+/// the filtered-skip rule lives in one place.
+#[inline]
+fn feed_module(module: &mut dyn QCModule, seq: &Sequence) {
+    if seq.is_filtered && module.ignore_filtered_sequences() {
+        return;
+    }
+    module.process_sequence(seq);
+}
+
+/// Emit a throttled "Approx N% complete" progress line, matching the Java runner:
+/// only when the file position has advanced to the next 5% multiple. `last_percent`
+/// carries the last reported multiple across calls.
+fn report_progress(
+    seq_file: &dyn SequenceFile,
+    quiet: bool,
+    display_name: &str,
+    last_percent: &mut i32,
+) {
+    if quiet {
+        return;
+    }
+    let percent = seq_file.percent_complete() as i32;
+    if percent != *last_percent && percent % 5 == 0 {
+        eprintln!("Approx {}% complete for {}", percent, display_name);
+        *last_percent = percent;
+    }
+}
+
 /// Single-threaded analysis path: read each sequence and feed it to every module
 /// in order. Used when the thread budget is 1, and byte-identical to the original
 /// unbatched runner (AnalysisRunner.runSequential in the Java pipeline).
@@ -374,20 +401,12 @@ fn process_sequences_sequential(
                 sequence_count += 1;
 
                 for module in modules.iter_mut() {
-                    // Skip filtered sequences for modules that request it
-                    if seq.is_filtered && module.ignore_filtered_sequences() {
-                        continue;
-                    }
-                    module.process_sequence(&seq);
+                    feed_module(module.as_mut(), &seq);
                 }
 
-                // Progress reporting every 5%
-                if !quiet && sequence_count.is_multiple_of(1000) {
-                    let percent = seq_file.percent_complete() as i32;
-                    if percent != last_percent && percent % 5 == 0 {
-                        eprintln!("Approx {}% complete for {}", percent, display_name);
-                        last_percent = percent;
-                    }
+                // Check progress every 1000 records (the report itself is 5%-gated).
+                if sequence_count.is_multiple_of(1000) {
+                    report_progress(&*seq_file, quiet, display_name, &mut last_percent);
                 }
             }
             Some(Err(e)) => {
@@ -412,11 +431,11 @@ fn process_sequences_sequential(
 /// different modules concurrently, and from overlapping analysis with the reader
 /// (which drives decompression and record parsing).
 ///
-/// Modules are assigned to workers round-robin rather than in contiguous blocks so
-/// the few expensive modules (overrepresented sequences, adapter and k-mer content)
-/// tend to land on different workers, giving a more even load balance. Ownership of
-/// each module is returned to the caller in the original order for finalisation and
-/// reporting.
+/// Modules are distributed across workers by longest-processing-time bin-packing
+/// (see the partition below) so the few expensive modules (overrepresented
+/// sequences, adapter and k-mer content) land on different workers, giving an even
+/// load balance. Ownership of each module is returned to the caller in the original
+/// order for finalisation and reporting.
 fn process_sequences_parallel(
     seq_file: &mut dyn SequenceFile,
     modules: Vec<Box<dyn QCModule>>,
@@ -424,8 +443,6 @@ fn process_sequences_parallel(
     quiet: bool,
     display_name: &str,
 ) -> io::Result<Vec<Box<dyn QCModule>>> {
-    let n_modules = modules.len();
-
     // Partition the modules across the workers to balance their estimated cost,
     // using the classic longest-processing-time (LPT) greedy: consider modules
     // heaviest-first and drop each onto the currently-lightest worker. This keeps
@@ -480,10 +497,7 @@ fn process_sequences_parallel(
                     while let Ok(batch) = rx.recv() {
                         for seq in batch.iter() {
                             for (_, module) in group.iter_mut() {
-                                if seq.is_filtered && module.ignore_filtered_sequences() {
-                                    continue;
-                                }
-                                module.process_sequence(seq);
+                                feed_module(module.as_mut(), seq);
                             }
                         }
                     }
@@ -512,13 +526,7 @@ fn process_sequences_parallel(
                             }
                         }
 
-                        if !quiet {
-                            let percent = seq_file.percent_complete() as i32;
-                            if percent != last_percent && percent % 5 == 0 {
-                                eprintln!("Approx {}% complete for {}", percent, display_name);
-                                last_percent = percent;
-                            }
-                        }
+                        report_progress(&*seq_file, quiet, display_name, &mut last_percent);
                     }
                 }
                 Some(Err(e)) => {
@@ -551,17 +559,10 @@ fn process_sequences_parallel(
         return Err(e);
     }
 
-    // Reassemble the modules in their original order for finalisation/reporting.
-    let mut rebuilt: Vec<Option<Box<dyn QCModule>>> = (0..n_modules).map(|_| None).collect();
-    for group in processed {
-        for (idx, module) in group {
-            rebuilt[idx] = Some(module);
-        }
-    }
-    Ok(rebuilt
-        .into_iter()
-        .map(|m| m.expect("module slot filled"))
-        .collect())
+    // Reassemble the modules in their original report order.
+    let mut rebuilt: Vec<(usize, Box<dyn QCModule>)> = processed.into_iter().flatten().collect();
+    rebuilt.sort_by_key(|(idx, _)| *idx);
+    Ok(rebuilt.into_iter().map(|(_, module)| module).collect())
 }
 
 /// Strip known sequencing file extensions from a filename.
