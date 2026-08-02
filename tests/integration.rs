@@ -386,25 +386,24 @@ fn test_no_ansi_escapes_when_stderr_is_piped() {
 /// drag the animated display along with it.
 #[test]
 fn test_colour_can_be_forced_on_a_pipe() {
-    for (args, env) in [
+    for env in [
         // The clicolors spec's override is the only way to force colour.
-        (&[][..], &[("CLICOLOR_FORCE", "1")][..]),
+        &[("CLICOLOR_FORCE", "1")][..],
         // ...and it wins over a terminal that is not one.
-        (&[][..], &[("CLICOLOR_FORCE", "1"), ("TERM", "dumb")][..]),
+        &[("CLICOLOR_FORCE", "1"), ("TERM", "dumb")][..],
     ] {
-        let stderr = run_binary_stderr(args, env);
+        let stderr = run_binary_stderr(&[], env);
         assert!(
             has_color(&stderr),
-            "expected colour for {:?} {:?}: {:?}",
-            args,
+            "expected colour for {:?}: {:?}",
             env,
             stderr
         );
         assert!(
             !has_redraw(&stderr),
-            "colour must not imply the animated display for {:?} {:?}",
-            args,
-            env
+            "colour must not imply the animated display for {:?}: {:?}",
+            env,
+            stderr
         );
     }
 
@@ -548,19 +547,15 @@ fn test_the_banner_comes_before_anything_the_run_says() {
 fn test_quiet_beats_everything() {
     // The bare `--quiet` case is `test_quiet_suppresses_the_completion_summary`;
     // these are the overrides it has to beat.
-    for (args, env) in [
-        (&["--quiet"][..], &[("NO_COLOR", "1")][..]),
-        (&["--quiet"][..], &[("CLICOLOR_FORCE", "1")][..]),
-        (
-            &["--quiet"][..],
-            &[("FASTQC_PROGRESS", "always"), ("CLICOLOR_FORCE", "1")][..],
-        ),
+    for env in [
+        &[("NO_COLOR", "1")][..],
+        &[("CLICOLOR_FORCE", "1")][..],
+        &[("FASTQC_PROGRESS", "always"), ("CLICOLOR_FORCE", "1")][..],
     ] {
-        let stderr = run_binary_stderr(args, env);
+        let stderr = run_binary_stderr(&["--quiet"], env);
         assert!(
             stderr.is_empty(),
-            "--quiet wrote to stderr for {:?} {:?}: {:?}",
-            args,
+            "--quiet wrote to stderr for {:?}: {:?}",
             env,
             stderr
         );

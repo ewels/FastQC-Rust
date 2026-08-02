@@ -345,9 +345,9 @@ fn choose_mode(
 
 /// The mode this process would use, from `--quiet` and the environment.
 ///
-/// Both halves of the two-phase startup consult it: [`ProgressPlan::new`] to
-/// decide whether to print the banner and with which line ending, and
-/// [`ProgressPlan::start`] to build the display itself.
+/// Called once, by [`ProgressPlan::new`], which stores the answer so both
+/// phases of startup act on the same decision. Split from [`choose_mode`] so
+/// that the rule itself can be tested without a terminal or the environment.
 fn current_choice(quiet: bool) -> ModeChoice {
     choose_mode(
         quiet,
@@ -450,13 +450,12 @@ impl ProgressReporter {
 
     /// Print an error line above the display. Shown even under `--quiet`,
     /// matching the previous behaviour of the runner.
+    ///
+    /// Routed through [`log_line`] rather than matched on the mode: the two
+    /// would say the same thing, since a log sink is registered exactly while
+    /// a display is up.
     pub fn error(&self, message: &str) {
-        match &self.mode {
-            Mode::Live(live) => live.log.print(&paint_error(message)),
-            Mode::Plain => eprintln!("{}", paint_error(message)),
-            // Silent still reports errors, but has no colour context to use.
-            Mode::Silent => eprintln!("{}", message),
-        }
+        log_line(&paint_error(message));
     }
 
     /// Tear the display down once every file is done, leaving the final state
@@ -1441,15 +1440,18 @@ mod tests {
         // Widening the terminal brings more columns into range, and the
         // threshold only ever moves one way.
         for columns in 1..=10 {
+            // The first width that fits. Asserting that narrower ones do not
+            // would be vacuous — `find` returns the smallest by definition.
+            // What has to hold is the other direction: every wider terminal
+            // fits too, so the table never blinks out again as the window
+            // grows.
             let threshold = (1..600)
                 .find(|w| fits(columns, *w))
                 .expect("some width is wide enough");
             assert!(
-                !fits(columns, threshold - 1),
-                "{columns} columns: {threshold} should be the first width that fits"
+                (threshold..600).all(|w| fits(columns, w)),
+                "{columns} columns: fits at {threshold} but not at every wider width"
             );
-            // Once it fits, it keeps fitting.
-            assert!(fits(columns, threshold + 40));
             // More files always need at least as much room.
             if columns > 1 {
                 let narrower = (1..600).find(|w| fits(columns - 1, *w)).unwrap();
