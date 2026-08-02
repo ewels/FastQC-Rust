@@ -208,6 +208,17 @@ impl QCModule for DuplicationLevel {
     fn process_sequence(&mut self, _sequence: &Sequence) {
         // DuplicationLevel doesn't process sequences itself;
         // it uses the shared data from OverRepresentedSeqs.
+        //
+        // This MUST stay a no-op with respect to `shared_data`. The parallel
+        // pipeline (see runner.rs) partitions modules across worker threads
+        // assuming each module's per-sequence work is independent, so
+        // DuplicationLevel and OverRepresentedSeqs may run on different threads.
+        // OverRepresentedSeqs is the sole per-sequence writer of the shared
+        // `OverRepresentedData`; DuplicationLevel only reads it, once, at
+        // finalize (after all workers have joined). Adding per-sequence writes
+        // here would introduce a data race and make output depend on thread
+        // timing — breaking the byte-identical guarantee. If that ever becomes
+        // necessary, the two modules must instead be pinned to the same worker.
     }
 
     fn finalize(&mut self) {

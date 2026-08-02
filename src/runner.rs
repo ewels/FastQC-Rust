@@ -433,6 +433,16 @@ fn process_sequences_sequential(
 /// original index so report order can be restored afterwards; the assignment
 /// never changes results, only how evenly the work is spread. Pure and
 /// deterministic (ties break to the lowest group index).
+///
+/// This is free to place any module on any worker *because every module's
+/// per-sequence processing is independent* — a module accumulates only into
+/// its own state as it sees the stream in file order. The one pair that shares
+/// state, DuplicationLevel and OverRepresentedSeqs (via an `Arc<Mutex<_>>`), is
+/// safe because only OverRepresentedSeqs writes per sequence; DuplicationLevel
+/// reads that shared data once at finalize, after all workers have joined. If a
+/// future change makes two modules write shared state per sequence, they can no
+/// longer be split blindly and must be co-located on one worker instead (see
+/// the note on `DuplicationLevel::process_sequence`).
 fn partition_modules_by_cost(
     modules: Vec<Box<dyn QCModule>>,
     num_workers: usize,
@@ -783,7 +793,7 @@ mod tests {
 
             assert_eq!(mods_par.len(), reference.len());
             for (module, (name, ref_text, ref_status)) in mods_par.iter().zip(&reference) {
-                // Module order must be preserved after the round-robin split.
+                // Module order must be preserved after the cost-balanced split.
                 assert_eq!(module.name(), name, "module order changed");
                 let mut buf = Vec::new();
                 module.write_text_report(&mut buf).expect("text report");
