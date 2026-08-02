@@ -118,7 +118,7 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
     // say, so the banner really is the first line and everything else appears
     // beneath it. The display itself cannot be drawn until the files have been
     // grouped, since it needs one bar per group.
-    let plan = progress::ProgressPlan::new(config.quiet);
+    let progress_plan = progress::ProgressPlan::new(config.quiet);
 
     let limits = config.load_limits().map_err(|e| {
         eprintln!("Failed to load limits: {}", e);
@@ -198,7 +198,7 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
     // It is inert under --quiet and degrades to plain start/finish lines when
     // stderr is not a terminal, unless FASTQC_PROGRESS says otherwise.
     let names: Vec<String> = file_groups.iter().map(|g| g.name.clone()).collect();
-    let progress = plan.start(&names);
+    let progress = progress_plan.start(&names);
 
     // rayon counts the groups that made it through, so no shared tally is
     // needed; the ones that did not have already been reported.
