@@ -730,13 +730,11 @@ fn test_table_headings_are_coloured_by_progress() {
         .expect("no heading row drawn");
     let heading = &heading[..heading.find('\r').unwrap_or(heading.len())];
 
-    // SGR 32 = green, 31 = red, both bold (1).
-    let green_at = heading
-        .find("\u{1b}[1m\u{1b}[32m")
-        .or_else(|| heading.find("\u{1b}[32m"));
-    let red_at = heading
-        .find("\u{1b}[1m\u{1b}[31m")
-        .or_else(|| heading.find("\u{1b}[31m"));
+    // SGR 32 = green, 31 = red. console emits the colour before the bold, so
+    // the bold is not part of what is searched for — only the colour and which
+    // column it lands on are the point here.
+    let green_at = heading.find("\u{1b}[32m");
+    let red_at = heading.find("\u{1b}[31m");
     assert!(
         green_at.is_some(),
         "analysed file's heading is not green: {:?}",
