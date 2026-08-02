@@ -451,9 +451,12 @@ fn test_progress_display_can_be_forced_on_a_pipe() {
     let bogus = run_binary_stderr(&[], &[("FASTQC_PROGRESS", "sometimes")]);
     assert!(!has_redraw(&bogus) && !bogus.contains('\u{1b}'));
 
-    // Colour and animation are independent switches: forcing both on is
-    // `test_header_is_styled`, which runs exactly this command; here is the
-    // other half, animation without colour.
+    // Colour and animation are independent switches, so forcing the display on
+    // must not drag colour along with it. Both-on is `test_header_is_styled`,
+    // which runs exactly this command with `CLICOLOR_FORCE`; this is the same
+    // command with `NO_COLOR` instead, which must not cost it the display.
+    // (Colour would be off here anyway — stderr is a pipe — so the load-bearing
+    // half of this assertion is `has_redraw`.)
     let mono = run_binary_stderr(
         &[],
         &[
@@ -464,7 +467,7 @@ fn test_progress_display_can_be_forced_on_a_pipe() {
     );
     assert!(
         has_redraw(&mono) && !has_color(&mono),
-        "NO_COLOR must strip colour from a forced display"
+        "NO_COLOR must strip colour without costing the forced display"
     );
 }
 
