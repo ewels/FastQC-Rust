@@ -783,6 +783,17 @@ impl ForcedTerm {
     }
 }
 
+impl ForcedTerm {
+    /// `ESC [ n <op>`, the cursor-movement form. A zero count is a no-op
+    /// rather than an escape, matching what console would emit.
+    fn escape(&self, n: usize, op: char) -> std::io::Result<()> {
+        if n == 0 {
+            return Ok(());
+        }
+        self.inner.write_str(&format!("\x1b[{n}{op}"))
+    }
+}
+
 fn env_dimension(name: &str) -> Option<u16> {
     std::env::var(name)
         .ok()?
@@ -800,20 +811,28 @@ impl TermLike for ForcedTerm {
         self.height
     }
 
+    // Cursor movement is written as ANSI rather than delegated to `Term`.
+    // console drives a real Windows console through the Win32 API, which
+    // silently does nothing when the handle is a pipe — so delegating would
+    // draw every frame and erase none, leaving one long concatenation. This
+    // type is only used when the display has been forced onto something that
+    // is not a terminal, where the consumer is a recorder or a log viewer that
+    // interprets escapes, so emitting them is exactly right. On Unix these are
+    // the same bytes `Term` would have written.
     fn move_cursor_up(&self, n: usize) -> std::io::Result<()> {
-        self.inner.move_cursor_up(n)
+        self.escape(n, 'A')
     }
 
     fn move_cursor_down(&self, n: usize) -> std::io::Result<()> {
-        self.inner.move_cursor_down(n)
+        self.escape(n, 'B')
     }
 
     fn move_cursor_right(&self, n: usize) -> std::io::Result<()> {
-        self.inner.move_cursor_right(n)
+        self.escape(n, 'C')
     }
 
     fn move_cursor_left(&self, n: usize) -> std::io::Result<()> {
-        self.inner.move_cursor_left(n)
+        self.escape(n, 'D')
     }
 
     fn write_line(&self, s: &str) -> std::io::Result<()> {
@@ -825,7 +844,7 @@ impl TermLike for ForcedTerm {
     }
 
     fn clear_line(&self) -> std::io::Result<()> {
-        self.inner.clear_line()
+        self.inner.write_str("\r\x1b[2K")
     }
 
     fn flush(&self) -> std::io::Result<()> {

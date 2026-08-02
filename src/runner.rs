@@ -464,7 +464,7 @@ fn process_sequences_parallel(
     // original index so report order can be restored afterwards; the assignment
     // never changes results, only how evenly the work is spread.
     let mut order: Vec<(usize, Box<dyn QCModule>)> = modules.into_iter().enumerate().collect();
-    order.sort_by(|a, b| b.1.cost_hint().cmp(&a.1.cost_hint()));
+    order.sort_by_key(|(_, module)| std::cmp::Reverse(module.cost_hint()));
 
     let mut groups: Vec<Vec<(usize, Box<dyn QCModule>)>> =
         (0..num_processors).map(|_| Vec::new()).collect();
