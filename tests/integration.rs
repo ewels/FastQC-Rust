@@ -451,16 +451,9 @@ fn test_progress_display_can_be_forced_on_a_pipe() {
     let bogus = run_binary_stderr(&[], &[("FASTQC_PROGRESS", "sometimes")]);
     assert!(!has_redraw(&bogus) && !bogus.contains('\u{1b}'));
 
-    // Colour and animation are independent switches.
-    let both = run_binary_stderr(
-        &[],
-        &[
-            ("FASTQC_PROGRESS", "always"),
-            ("CLICOLOR_FORCE", "1"),
-            ("COLUMNS", "100"),
-        ],
-    );
-    assert!(has_redraw(&both) && has_color(&both));
+    // Colour and animation are independent switches: forcing both on is
+    // `test_header_is_styled`, which runs exactly this command; here is the
+    // other half, animation without colour.
     let mono = run_binary_stderr(
         &[],
         &[
@@ -475,7 +468,9 @@ fn test_progress_display_can_be_forced_on_a_pipe() {
     );
 }
 
-/// The header must be styled: the name bold cyan, the version dim.
+/// The header must be styled in the logo's colours, and forcing colour on must
+/// bring the animated display with it when the display is forced on too — the
+/// two switches are independent, so this is the both-on corner.
 #[test]
 fn test_header_is_styled() {
     let stderr = run_binary_stderr(
@@ -485,6 +480,11 @@ fn test_header_is_styled() {
             ("CLICOLOR_FORCE", "1"),
             ("COLUMNS", "100"),
         ],
+    );
+    assert!(
+        has_redraw(&stderr),
+        "forced display did not redraw: {:?}",
+        stderr
     );
     // Not `contains("FastQC-Rust")`: the name is split across two colours, so
     // it is no longer one contiguous run of text.

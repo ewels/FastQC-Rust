@@ -237,9 +237,13 @@ static SAID: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
 /// time.
 pub fn log_line_once(message: &str) {
     let mut said = SAID.lock().unwrap_or_else(|e| e.into_inner());
-    if !said.insert(message.to_string()) {
+    // Checked before inserting: the repeat is the common case here — a file
+    // with a systematically bad encoding hits this once per base — and it
+    // should not have to allocate to find that out.
+    if said.contains(message) {
         return;
     }
+    said.insert(message.to_string());
     // Not while holding the lock: printing takes indicatif's draw lock, and
     // this one is taken from every analysis thread.
     drop(said);
