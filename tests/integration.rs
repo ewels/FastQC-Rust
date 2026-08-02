@@ -298,6 +298,12 @@ fn run_binary(
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"));
     command.args(extra_args).arg("-o").arg(&tmp_dir);
     command.args(inputs(&tmp_dir));
+    // Start from a known display environment rather than the developer's. A
+    // shell exporting NO_COLOR or CLICOLOR_FORCE would otherwise decide the
+    // outcome of the very tests that exist to pin these switches down.
+    for key in DISPLAY_ENV {
+        command.env_remove(key);
+    }
     for (key, value) in env {
         command.env(key, value);
     }
@@ -322,6 +328,17 @@ fn broken_input(dir: &Path) -> PathBuf {
 
 const MINIMAL: &str = "tests/data/minimal.fastq";
 const COMPLEX: &str = "tests/data/complex.fastq";
+
+/// Everything that steers the display. Cleared before each run so a test says
+/// exactly what environment it is testing, and inherits nothing else.
+const DISPLAY_ENV: [&str; 6] = [
+    "FASTQC_PROGRESS",
+    "NO_COLOR",
+    "CLICOLOR",
+    "CLICOLOR_FORCE",
+    "COLUMNS",
+    "LINES",
+];
 
 /// The ANSI escape sequences in `stderr`, parsed by console rather than by
 /// hand — searching forward for a terminator turns the `m` in "minimal.fastq"
@@ -707,6 +724,216 @@ fn test_table_visibility_follows_terminal_width() {
         cramped.contains('━'),
         "bars should survive a narrow terminal: {:?}",
         cramped
+    );
+}
+
+/// Run the binary with stderr attached to a real pty of the given size, and
+/// return everything it drew.
+///
+/// Every other display test forces the display on with `FASTQC_PROGRESS`, which
+/// takes the `ForcedTerm` path — a different draw target, different line
+/// endings and hand-written cursor movement. This is the path an actual user
+/// gets, and nothing else covers it.
+#[cfg(unix)]
+fn run_on_a_pty(args: &[&str], rows: u16, columns: u16) -> String {
+    use std::os::fd::{FromRawFd, OwnedFd};
+
+    let mut primary = 0;
+    let mut secondary = 0;
+    let size = libc::winsize {
+        ws_row: rows,
+        ws_col: columns,
+        ws_xpixel: 0,
+        ws_ypixel: 0,
+    };
+    // SAFETY: openpty writes two owned descriptors into the out-params, or
+    // returns non-zero and writes neither. The size is a plain value.
+    let opened = unsafe {
+        libc::openpty(
+            &mut primary,
+            &mut secondary,
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            &size,
+        )
+    };
+    assert_eq!(opened, 0, "could not open a pty");
+    // SAFETY: both descriptors were just created by openpty and are not owned
+    // anywhere else.
+    let (primary, secondary) = unsafe {
+        (
+            OwnedFd::from_raw_fd(primary),
+            OwnedFd::from_raw_fd(secondary),
+        )
+    };
+
+    static NEXT_DIR: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "fastqc_pty_test_{}_{}",
+        std::process::id(),
+        NEXT_DIR.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+    ));
+    std::fs::create_dir_all(&tmp_dir).expect("Failed to create temp dir");
+
+    // Scoped so the `Command` is dropped as soon as the child exists. It owns
+    // the `Stdio` it was handed, so while it is alive the parent still holds an
+    // open secondary end -- and the pty only reports EOF once every writer is
+    // gone, so the reader below would block forever.
+    let mut child = {
+        let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"));
+        command.args(args).arg("-o").arg(&tmp_dir);
+        for key in DISPLAY_ENV {
+            command.env_remove(key);
+        }
+        command.env("TERM", "xterm-256color");
+        command.stderr(secondary.try_clone().expect("dup the pty"));
+        command.spawn().expect("Failed to run fastqc")
+    };
+
+    // ...and the same goes for this end.
+    drop(secondary);
+
+    // Drained on another thread: a pty buffer is a few tens of kilobytes and
+    // the display writes far more than that, so waiting first would wedge the
+    // child against a full buffer.
+    let reader = std::thread::spawn(move || {
+        use std::io::Read;
+        let mut file = std::fs::File::from(primary);
+        let mut out = Vec::new();
+        let mut buffer = [0u8; 16 * 1024];
+        loop {
+            match file.read(&mut buffer) {
+                // EOF on Linux surfaces as EIO once the last writer closes.
+                Ok(0) | Err(_) => break,
+                Ok(n) => out.extend_from_slice(&buffer[..n]),
+            }
+        }
+        out
+    });
+
+    child.wait().expect("fastqc did not exit");
+    let out = reader.join().expect("pty reader panicked");
+    std::fs::remove_dir_all(&tmp_dir).ok();
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// On a real terminal — the path users actually take, and the one every other
+/// display test bypasses — the whole display must be drawn: bars, the live
+/// table, and the closing summary beneath them, with warnings scrolling above
+/// as ordinary output rather than being pulled into the redrawn region.
+#[cfg(unix)]
+#[test]
+fn test_display_on_a_real_terminal() {
+    let broken = std::env::temp_dir().join("fastqc_pty_broken.fastq");
+    std::fs::write(&broken, "not a fastq file at all\n").expect("write");
+    let stderr = run_on_a_pty(&[MINIMAL, broken.to_str().unwrap()], 45, 140);
+    std::fs::remove_file(&broken).ok();
+
+    // Drawn in place, in colour, with bars: this is the live display.
+    assert!(stderr.contains('━'), "no progress bar drawn: {stderr:?}");
+    assert!(
+        stderr.contains("\u{1b}["),
+        "no escape sequences on a terminal: {stderr:?}"
+    );
+
+    // The banner comes first, then the failure as ordinary scrollback, written
+    // exactly once rather than redrawn with the display.
+    let message = "Failed to process fastqc_pty_broken.fastq";
+    let banner = stderr.find("FastQC").expect("no banner");
+    let complaint = stderr.find(message).unwrap_or_else(|| panic!("{stderr:?}"));
+    assert!(banner < complaint, "banner must come first");
+    assert_eq!(
+        stderr.matches(message).count(),
+        1,
+        "a log line should be written once, not redrawn"
+    );
+
+    // The last frame carries the table and, below it, the summary — the pieces
+    // most easily lost to a rate-limited final draw.
+    let last_frame = &stderr[stderr.rfind('┌').expect("no table drawn")..];
+    assert!(
+        last_frame.contains("Total Sequences"),
+        "table missing from the final frame: {last_frame:?}"
+    );
+    assert!(
+        last_frame.contains('└'),
+        "table was left unclosed: {last_frame:?}"
+    );
+    // "Complete." and the count are styled separately, so match the count.
+    assert!(
+        last_frame.find("Total Sequences") < last_frame.find("Analysed 1 file in"),
+        "the summary must be drawn below the table: {last_frame:?}"
+    );
+    assert!(
+        !last_frame.contains("Failed to process"),
+        "the log line was pulled into the redrawn region: {last_frame:?}"
+    );
+}
+
+/// A file that has not started must not report time it spent queued.
+///
+/// indicatif starts a bar's clock when the bar is created, and all the bars are
+/// created together before any file is opened. With one thread the second file
+/// waits for the first, so its bar used to count throughout the wait — a tiny
+/// file finishing "behind" a huge one at a *longer* elapsed time than the huge
+/// one took.
+#[cfg(unix)]
+#[test]
+fn test_queued_files_do_not_accumulate_elapsed_time() {
+    // Two files, one thread: the second cannot start until the first is done.
+    let stderr = run_on_a_pty(&[COMPLEX, MINIMAL, "-t", "1"], 45, 140);
+
+    // Every rendered state of the second file's bar, oldest first. Frames are
+    // laid out with cursor movement rather than newlines, so rather than
+    // splitting into lines, anchor on each mention of the file and take what
+    // follows up to the table's first rule. The table's heading row names the
+    // file too, but only a bar is drawn with '━'.
+    let plain = console::strip_ansi_codes(&stderr).into_owned();
+    let bars: Vec<&str> = plain
+        .match_indices("minimal.fastq")
+        .filter_map(|(at, name)| {
+            let rest = &plain[at + name.len()..];
+            let segment = &rest[..rest.find('│').unwrap_or(rest.len())];
+            segment.contains('━').then_some(segment)
+        })
+        .collect();
+    assert!(!bars.is_empty(), "no bar for the second file: {stderr:?}");
+
+    let elapsed = |bar: &str| -> f64 {
+        bar.split_whitespace()
+            .find_map(|word| word.strip_suffix('s')?.parse::<f64>().ok())
+            .unwrap_or_else(|| panic!("no elapsed time in {bar:?}"))
+    };
+
+    // While it is queued its clock must read zero, however long the wait. This
+    // is the invariant, and it does not depend on how fast the machine is.
+    for bar in bars.iter().filter(|bar| bar.contains("waiting")) {
+        assert_eq!(
+            elapsed(bar),
+            0.0,
+            "a queued file was already counting: {bar:?}"
+        );
+    }
+
+    // And once it has run, its time is its own rather than the whole run's.
+    let finished = *bars.last().expect("a final bar");
+    assert!(
+        finished.contains('✔'),
+        "second file did not finish: {finished:?}"
+    );
+    let run_total = stderr
+        .rfind("Analysed 2 files in ")
+        .map(|i| {
+            let summary = console::strip_ansi_codes(&stderr[i..]).into_owned();
+            let clock = summary.trim_start_matches("Analysed 2 files in ");
+            let (minutes, seconds) = clock.split_once(':').expect("mm:ss");
+            minutes.trim().parse::<f64>().unwrap() * 60.0 + seconds[..2].parse::<f64>().unwrap()
+        })
+        .expect("no closing summary");
+    assert!(
+        elapsed(finished) <= run_total,
+        "second file reported {}s of a {run_total}s run",
+        elapsed(finished)
     );
 }
 

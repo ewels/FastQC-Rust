@@ -59,6 +59,19 @@
   default modules); the order-dependent modules (overrepresented sequences,
   per-sequence GC) can't be split without changing output, so beyond that extra
   cores are best spent on more files at once, which scales linearly.
+- **`-t/--threads` is a ceiling on the whole run**, decompression included. Give
+  it and the run stays inside it — `-t 1` really does mean one analysis thread
+  and one decoder, which is what a workflow engine passing `task.cpus` needs.
+  Leave it out and the analysis stays single-threaded while decompression scales
+  to the machine, so a plain `fastqc sample.fastq.gz` is still fast without
+  being asked. `--decompress-threads N` overrides the decompression side either
+  way. (The thread budget honours cgroup quotas and CPU affinity, so a container
+  or a scheduler-pinned job sees its own allowance, not the host's cores.)
+- **Bounded pipeline memory on long reads.** The analysis pipeline capped its
+  in-flight batches by record count alone, which is a few MB of Illumina reads
+  but gigabytes of nanopore or PacBio ones. Batches are now capped by bytes as
+  well: peak RSS on a 10 kb-read FASTQ at `-t 8` drops from 552 MB to 66 MB, and
+  short-read runs batch exactly as before.
 - **Parallel gzip decompression is now the default** (and only) gzip reader,
   backed by [`rapidgzip-core`](https://crates.io/crates/rapidgzip-core).
   `.fastq.gz` is decompressed on a pool of background threads and overlapped
@@ -71,14 +84,45 @@
   Rust (zlib-rs) with no C toolchain or system-library dependency, so builds are
   fully static by default. As a side effect, BAM/BGZF and Fast5 decompression
   (via `noodles`/`hdf5-pure`) now use the pure-Rust `miniz_oxide` backend rather
-  than system zlib.
+  than system zlib. The `zip` dependency is likewise reduced to the `deflate`
+  feature — the only compression method FastQC ever writes or reads — which
+  drops `xz2`/`lzma-sys` and with it the last dynamically linked C library.
 
 ### Bug fixes
 
+- **The progress bar for a `.fastq.gz` no longer runs ahead of the file.** It
+  was driven by the compressed bytes the decoder had read, and rapidgzip's
+  workers read far ahead of the parser: on four cores a 99 MB `.gz` opened at
+  22% and hit 100% halfway through the run, and anything under about 20 MB was
+  pinned at 100% from the first update. Progress now comes from the decompressed
+  bytes handed to the analysis, against a total taken from the gzip trailer
+  (exact for the single-member files `gzip` and `pigz` produce, including past
+  4 GiB) or estimated from the achieved ratio for multi-member and BGZF input.
+- **A file's elapsed time is its own.** Every bar's clock started when the
+  display was built rather than when its file did, so anything queued behind
+  another file counted the wait: a 2,000-read file reported 13.9s next to the
+  400,000-read file it was waiting for, which reported 9.8s. Queued files now
+  sit at zero, with an idle spinner, until they actually start.
+- **A quality byte of 128 or more no longer panics the run.** `Per sequence
+  quality scores` indexed its 128-slot tally with the mean quality directly, so
+  a mis-encoded or non-ASCII quality line aborted the analysis (and, under the
+  parallel pipeline, took a worker thread with it). It clamps and warns once,
+  like the per-position tally next to it. Pre-existing, not new in this release.
 - `--template` no longer claims the short flag `-t`, which is `--threads` (as in
   Java FastQC). Two arguments sharing a short name makes clap abort at startup —
   release builds skip that assertion so it only showed up in debug builds, but
   `-t` was ambiguous either way. Use the long `--template` form.
+- The live statistics table follows a terminal resized mid-run, rather than
+  staying laid out for the width the run started at.
+- Read counts just short of a unit read as `1.0M` rather than `1000.0k`.
+
+### Breaking changes for library users
+
+- `FastQCConfig::threads` is now `Option<usize>`; `None` (the default) means
+  "not specified", which is what lets an explicit budget bound decompression
+  while an absent one does not. Pass `Some(n)` where you passed `n`.
+- `BasicStats::format_length` is now the free function
+  `modules::basic_stats::format_length`. The behaviour is unchanged.
 
 ## v1.0.1
 

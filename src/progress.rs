@@ -69,10 +69,11 @@
 //!
 //! # Log lines
 //!
-//! Anything printed while the display is up has to go through [`log_line`] —
-//! or [`log_line_once`] from an inner analysis loop, or
+//! Anything printed while the display is up has to go through [`log_line`], or
 //! [`ProgressReporter::error`]. Writing to stderr directly would land in the
-//! middle of the display and be erased by the next frame.
+//! middle of the display and be erased by the next frame. A warning raised from
+//! an inner analysis loop pairs [`log_line`] with an [`OncePerRun`] latch, so
+//! the run says it once instead of once per base.
 //!
 //! Those lines are written *above* the redrawn region and scroll up as ordinary
 //! terminal output, which is what rich, tqdm, indicatif, cargo and Nextflow all
@@ -86,8 +87,7 @@
 //! the last line of the redrawn region so that it always lands below the bars
 //! and the table. `--quiet` suppresses it along with everything else.
 
-use std::collections::BTreeSet;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -222,32 +222,44 @@ pub fn log_line(message: &str) {
     }
 }
 
-/// What [`log_line_once`] has already said this run, cleared by
-/// [`ProgressPlan::new`].
-static SAID: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+/// Which run is in progress. Bumped by [`ProgressPlan::new`], and compared
+/// against by [`OncePerRun`] to know whether it has already spoken.
+static RUN: AtomicU64 = AtomicU64::new(1);
 
-/// Emit a line unless this run has already emitted exactly it.
+/// A latch for a warning raised from an innermost analysis loop, where the same
+/// message can be produced millions of times — once per bad base, once per
+/// unreadable read.
 ///
-/// For warnings raised from the innermost analysis loops, where the same
-/// message can be produced millions of times — once per bad base, or once per
-/// unreadable read. Deduplicating here rather than with a latch at the call
-/// site keeps the scope right: a latch is per *process*, so with several files
-/// analysed in parallel only whichever one won the race would say anything,
-/// and an embedder calling the library twice would hear nothing the second
-/// time.
-pub fn log_line_once(message: &str) {
-    let mut said = SAID.lock().unwrap_or_else(|e| e.into_inner());
-    // Checked before inserting: the repeat is the common case here — a file
-    // with a systematically bad encoding hits this once per base — and it
-    // should not have to allocate to find that out.
-    if said.contains(message) {
-        return;
+/// Declared as a `static` beside the code that raises the warning, so asking
+/// whether to speak is one relaxed atomic: no formatting, no allocation and no
+/// lock on the overwhelmingly common repeat. That matters because these sit in
+/// the hot loop — building the message unconditionally and then discarding it
+/// cost ~26% of the analysis on a file whose every base tripped the warning.
+///
+/// The latch is per *run*, not per process: it resets when the next
+/// [`ProgressPlan`] is created, so an embedder driving the library twice hears
+/// the warning both times. Within a run it fires once however many files are
+/// being analysed in parallel, which is the point — the warning is about the
+/// data, and one copy of it is the useful amount.
+pub struct OncePerRun(AtomicU64);
+
+impl Default for OncePerRun {
+    fn default() -> Self {
+        Self::new()
     }
-    said.insert(message.to_string());
-    // Not while holding the lock: printing takes indicatif's draw lock, and
-    // this one is taken from every analysis thread.
-    drop(said);
-    log_line(message);
+}
+
+impl OncePerRun {
+    pub const fn new() -> Self {
+        OncePerRun(AtomicU64::new(0))
+    }
+
+    /// True for exactly one caller per run. Racing threads all swap in the
+    /// current run, and only the one that displaced an older value speaks.
+    pub fn should_say(&self) -> bool {
+        let run = RUN.load(Ordering::Relaxed);
+        self.0.swap(run, Ordering::Relaxed) != run
+    }
 }
 
 /// The terminal progress display for a whole run.
@@ -287,9 +299,55 @@ struct Live {
 
 enum Bars {
     /// One bar per file, indexed by file group.
-    PerFile(Vec<ProgressBar>),
+    PerFile(Arc<Vec<FileBar>>),
     /// A single bar counting completed files.
     Aggregate(ProgressBar),
+}
+
+/// One file's bar, plus whether its analysis has actually begun.
+///
+/// The flag matters because indicatif starts a bar's clock when the bar is
+/// *created*, and all the bars are created together before any file is opened.
+/// A run with more files than parallel slots would otherwise show a queued file
+/// counting up the time it spent waiting, and then report that as how long it
+/// took: `small.fastq` finishing in "13.9s" behind a `big.fastq` that took
+/// "9.8s". So the clock is reset when the file starts, and until then the bar
+/// is left alone entirely — not even ticked, so its spinner does not animate as
+/// though something were happening.
+struct FileBar {
+    bar: ProgressBar,
+    started: AtomicBool,
+}
+
+/// The bars the ticker animates, cheap to hand to the background thread.
+enum TickerBars {
+    PerFile(Arc<Vec<FileBar>>),
+    Aggregate(ProgressBar),
+}
+
+impl Bars {
+    fn clone_for_ticker(&self) -> TickerBars {
+        match self {
+            Bars::PerFile(bars) => TickerBars::PerFile(Arc::clone(bars)),
+            Bars::Aggregate(bar) => TickerBars::Aggregate(bar.clone()),
+        }
+    }
+}
+
+impl TickerBars {
+    /// The bars whose spinner should be advancing: the ones whose file is
+    /// actually being worked on. A file still queued behind another has nothing
+    /// happening, and a spinning spinner would say otherwise.
+    fn spinners(&self) -> Box<dyn Iterator<Item = &ProgressBar> + '_> {
+        match self {
+            TickerBars::PerFile(bars) => Box::new(
+                bars.iter()
+                    .filter(|file| file.started.load(Ordering::Relaxed))
+                    .map(|file| &file.bar),
+            ),
+            TickerBars::Aggregate(bar) => Box::new(std::iter::once(bar)),
+        }
+    }
 }
 
 /// Which of the three display modes a run should use.
@@ -384,8 +442,8 @@ impl ProgressPlan {
     /// the clock it starts is the one the closing summary reports.
     pub fn new(quiet: bool) -> Self {
         let choice = current_choice(quiet);
-        // "Once per run" for `log_line_once` means once per plan.
-        SAID.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        // "Once per run" for [`OncePerRun`] means once per plan.
+        RUN.fetch_add(1, Ordering::Relaxed);
         if let ModeChoice::Live { bypass_detection } = choice {
             // Coloured after the logo: the name in its blue, the `-Rust`
             // suffix in its red, the version dim. Written straight to stderr
@@ -568,7 +626,6 @@ impl Live {
     /// redrawn region to, and the display has been forced on anyway.
     fn new(names: &[String], bypass_detection: bool) -> Self {
         let term = ForcedTerm::new();
-        let term_width = term.width() as usize;
 
         // The default stderr draw target hides itself when stderr is not an
         // interactive terminal. `FASTQC_PROGRESS=always` asks for the display
@@ -619,18 +676,20 @@ impl Live {
                     bar.set_prefix(pad_cell(&paint(name, |s| s.bold()), label_width));
                     bar.set_message("waiting");
                     bar.tick();
-                    bar
+                    FileBar {
+                        bar,
+                        started: AtomicBool::new(false),
+                    }
                 })
                 .collect();
-            Bars::PerFile(bars)
+            Bars::PerFile(Arc::new(bars))
         };
 
-        // Show the statistics table only when the terminal is wide enough to
-        // give every column room to be read — which is exactly the question
-        // `layout` answers. The table itself is unchanged either way: this
-        // decides whether it appears, not how it looks.
-        let table = layout(names.len(), term_width)
-            .map(|widths| Arc::new(Table::new(&multi, names, widths)));
+        // The table decides for itself, on every refresh, whether the terminal
+        // is currently wide enough to give every column room to be read, so it
+        // appears and disappears as the window is resized. It is built here
+        // whenever there is anything at all to tabulate.
+        let table = (!names.is_empty()).then(|| Arc::new(Table::new(&multi, names)));
 
         // The closing summary is the last line of the region, so it always
         // lands below the bars and the table however the run went. It renders
@@ -663,10 +722,7 @@ impl Live {
     /// to advance a spinner. One thread does both jobs.
     fn start_ticker(&self) {
         let table = self.table.as_ref().map(Arc::clone);
-        let spinners: Vec<ProgressBar> = match &self.bars {
-            Bars::PerFile(bars) => bars.clone(),
-            Bars::Aggregate(bar) => vec![bar.clone()],
-        };
+        let bars = self.bars.clone_for_ticker();
         let stop = Arc::clone(&self.stop);
         let handle = std::thread::Builder::new()
             .name("fastqc-progress".into())
@@ -675,7 +731,7 @@ impl Live {
                 // advanced, on its own deadline rather than a second thread.
                 let mut due = Instant::now();
                 while !stop.load(Ordering::Relaxed) {
-                    for bar in &spinners {
+                    for bar in bars.spinners() {
                         if !bar.is_finished() {
                             bar.tick();
                         }
@@ -701,15 +757,24 @@ impl Live {
 
     fn bar(&self, index: usize) -> Option<&ProgressBar> {
         match &self.bars {
-            Bars::PerFile(bars) => bars.get(index),
+            Bars::PerFile(bars) => bars.get(index).map(|file| &file.bar),
             Bars::Aggregate(_) => None,
         }
     }
 
     fn start(&self, index: usize) {
-        if let Some(bar) = self.bar(index) {
-            bar.set_message("reading");
-        }
+        let Bars::PerFile(bars) = &self.bars else {
+            return;
+        };
+        let Some(file) = bars.get(index) else {
+            return;
+        };
+        file.started.store(true, Ordering::Relaxed);
+        // The bar was created with every other bar, before any file was opened,
+        // and indicatif has been counting since. Restart the clock so the time
+        // this bar reports is the time this file took.
+        file.bar.reset_elapsed();
+        file.bar.set_message("reading");
     }
 
     /// Both halves of this are guarded by a comparison against the bar's
@@ -752,11 +817,12 @@ impl Live {
         self.set_file_state(index, FileState::Analysed);
         match &self.bars {
             Bars::PerFile(bars) => {
-                if let Some(bar) = bars.get(index) {
-                    bar.set_style(done_style());
-                    bar.set_position(SCALE);
-                    bar.set_message(format!("{} reads", human_count(reads)));
-                    bar.finish();
+                if let Some(file) = bars.get(index) {
+                    file.bar.set_style(done_style());
+                    file.bar.set_position(SCALE);
+                    file.bar
+                        .set_message(format!("{} reads", human_count(reads)));
+                    file.bar.finish();
                 }
             }
             Bars::Aggregate(bar) => bar.inc(1),
@@ -767,10 +833,10 @@ impl Live {
         self.set_file_state(index, FileState::Failed);
         match &self.bars {
             Bars::PerFile(bars) => {
-                if let Some(bar) = bars.get(index) {
-                    bar.set_style(failed_style());
-                    bar.set_message("failed");
-                    bar.abandon();
+                if let Some(file) = bars.get(index) {
+                    file.bar.set_style(failed_style());
+                    file.bar.set_message("failed");
+                    file.bar.abandon();
                 }
             }
             Bars::Aggregate(bar) => bar.inc(1),
@@ -825,6 +891,20 @@ struct ForcedTerm {
     height: u16,
 }
 
+/// How wide the display may draw, right now.
+///
+/// Measured on every table refresh rather than once at startup, so a window
+/// resized mid-run is followed rather than ignored. `COLUMNS` covers the case
+/// where stderr cannot be measured because it is not a terminal at all
+/// (`FASTQC_PROGRESS=always` over a pipe).
+fn measured_term_width() -> usize {
+    Term::stderr()
+        .size_checked()
+        .map(|(_, cols)| cols)
+        .or_else(|| env_dimension("COLUMNS"))
+        .unwrap_or(DEFAULT_TERM_WIDTH as u16) as usize
+}
+
 impl ForcedTerm {
     fn new() -> Self {
         // Buffered, like the `Term` behind indicatif's own stderr draw target.
@@ -834,10 +914,7 @@ impl ForcedTerm {
         let inner = Term::buffered_stderr();
         let measured = inner.size_checked();
         ForcedTerm {
-            width: measured
-                .map(|(_, cols)| cols)
-                .or_else(|| env_dimension("COLUMNS"))
-                .unwrap_or(DEFAULT_TERM_WIDTH as u16),
+            width: measured_term_width() as u16,
             height: measured
                 .map(|(rows, _)| rows)
                 .or_else(|| env_dimension("LINES"))
@@ -925,11 +1002,31 @@ impl TermLike for ForcedTerm {
 struct Table {
     line: ProgressBar,
     columns: Vec<Column>,
+    /// The file names, kept so the geometry can be rebuilt at a new width.
+    names: Vec<String>,
+    state: Mutex<TableState>,
+}
+
+struct TableState {
+    /// Terminal width [`Geometry`] was built for. A run whose window is resized
+    /// rebuilds at the new width rather than drawing a table cut to the old
+    /// one; `{wide_bar}` above it already reflows on its own.
+    width: usize,
+    /// `None` when the terminal is too narrow for the table to be worth
+    /// drawing, which is also how it disappears and comes back as the window is
+    /// resized across the threshold.
+    geometry: Option<Geometry>,
+    /// The last frame rendered, so an unchanged one can be dropped rather than
+    /// pushed through indicatif and out to the terminal again.
+    last: String,
+}
+
+/// Everything about the table that depends on how wide it may be, rendered once
+/// per width rather than once per frame: the three borders, the styled vertical
+/// rule, the heading and measure label cells, and each file's heading in each
+/// of its three states.
+struct Geometry {
     value_width: usize,
-    /// The fixed furniture, rendered once: the three borders, the styled
-    /// vertical rule, the heading row's label cell and each measure's label
-    /// cell. None of it changes during a run, and the table is re-rendered
-    /// several times a second.
     top: String,
     divider: String,
     bottom: String,
@@ -937,26 +1034,16 @@ struct Table {
     heading_label: String,
     /// One per measure, in report order — so this also fixes the row count.
     row_labels: Vec<String>,
-    /// The last frame rendered, so an unchanged one can be dropped rather than
-    /// pushed through indicatif and out to the terminal again.
-    last: Mutex<String>,
+    /// Per column, the heading pre-rendered in each state indexed by
+    /// [`FileState`]: the colour is the only thing that varies, and re-styling
+    /// it per frame would be pure waste.
+    headings: Vec<[String; 3]>,
 }
 
 struct Column {
     live: Arc<LiveStats>,
-    /// The heading pre-rendered in each state, indexed by [`FileState`]: the
-    /// colour is the only thing that varies, and re-styling it per frame would
-    /// be pure waste.
-    headings: [String; 3],
     /// Drives the heading colour, kept in step with the file's bar.
     state: AtomicU8,
-}
-
-impl Column {
-    fn styled_heading(&self) -> &str {
-        let state = self.state.load(Ordering::Relaxed) as usize;
-        self.headings.get(state).unwrap_or(&self.headings[0])
-    }
 }
 
 /// How a file is doing, for colouring its column heading the same way its
@@ -969,37 +1056,17 @@ enum FileState {
     Failed = 2,
 }
 
-impl Table {
-    /// `widths` comes from [`layout`], which is also what decided the table was
-    /// worth drawing at all.
-    fn new(
-        multi: &MultiProgress,
-        names: &[String],
-        (label_width, value_width): (usize, usize),
-    ) -> Self {
-        let columns = names
-            .iter()
-            .map(|name| {
-                // The heading tracks the file's bar: accent while it is
-                // running, green once analysed, red if it failed.
-                let headings = [
-                    pad_cell(&paint(name, |s| s.cyan().bold()), value_width),
-                    pad_cell(&paint(name, |s| s.green().bold()), value_width),
-                    pad_cell(&paint(name, |s| s.red().bold()), value_width),
-                ];
-                Column {
-                    live: Arc::new(LiveStats::new()),
-                    headings,
-                    state: AtomicU8::new(FileState::Running as u8),
-                }
-            })
-            .collect::<Vec<_>>();
+impl Geometry {
+    /// Lay a table of `names` out for a terminal of `term_width`, or `None`
+    /// when it is too narrow to be worth drawing — [`layout`] decides both.
+    fn new(names: &[String], term_width: usize) -> Option<Self> {
+        let (label_width, value_width) = layout(names.len(), term_width)?;
 
         let rule = |left: char, mid: char, right: char| {
             let mut s = String::from("  ");
             s.push(left);
             s.push_str(&"─".repeat(label_width + 2));
-            for _ in &columns {
+            for _ in names {
                 s.push(mid);
                 s.push_str(&"─".repeat(value_width + 2));
             }
@@ -1007,8 +1074,8 @@ impl Table {
             paint(&s, |st| st.dim())
         };
 
-        let table = Table {
-            line: static_line(multi),
+        Some(Geometry {
+            value_width,
             top: rule('┌', '┬', '┐'),
             divider: rule('├', '┼', '┤'),
             bottom: rule('└', '┴', '┘'),
@@ -1018,74 +1085,19 @@ impl Table {
                 .iter()
                 .map(|m| pad_cell(m, label_width))
                 .collect(),
-            columns,
-            value_width,
-            last: Mutex::new(String::new()),
-        };
-        table.refresh();
-        table
-    }
-
-    /// Mark the table finished so it is not erased when the progress bars
-    /// behind it are dropped at the end of the run.
-    fn finish(&self) {
-        self.line.finish();
-    }
-
-    /// Re-render the table from the latest published counters.
-    ///
-    /// Only the value cells are built here: the borders, the measure labels and
-    /// the three styled forms of each heading are fixed for the run and were
-    /// rendered once in `new`. The result is compared against the last frame
-    /// and dropped if identical, which is the common case — columns only change
-    /// every few thousand reads, and nothing changes at all while the reports
-    /// are being written.
-    fn refresh(&self) {
-        let mut out: Vec<String> = Vec::with_capacity(self.row_labels.len() + 5);
-        // A single space rather than an empty string: indicatif skips lines
-        // that render to nothing, and the spacer is wanted.
-        out.push(" ".to_string());
-        out.push(self.top.clone());
-        out.push(self.row(
-            &self.heading_label,
-            self.columns.iter().map(|c| c.styled_heading()),
-        ));
-        out.push(self.divider.clone());
-
-        // A column that has not published yet shows "-" everywhere, so an idle
-        // file reads as idle rather than as a file of zero reads.
-        let values: Vec<Vec<String>> = self
-            .columns
-            .iter()
-            .map(|column| match column.live.snapshot() {
-                None => vec!["-".to_string(); self.row_labels.len()],
-                Some(counters) => counters.rows().into_iter().map(|(_, v)| v).collect(),
-            })
-            .collect();
-
-        // Row labels and ordering come straight from the report's own table.
-        for (index, label) in self.row_labels.iter().enumerate() {
-            let cells: Vec<String> = values
+            headings: names
                 .iter()
-                .map(|column| self.value_cell(&column[index]))
-                .collect();
-            out.push(self.row(label, cells.iter().map(String::as_str)));
-        }
-        out.push(self.bottom.clone());
-
-        let rendered = out.join("\n");
-        let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
-        if *last == rendered {
-            return;
-        }
-        // One update, one redraw.
-        self.line.set_message(rendered.clone());
-        *last = rendered;
-    }
-
-    /// A value cell: styled, then fitted to the column.
-    fn value_cell(&self, value: &str) -> String {
-        pad_cell(&paint(value, |s| s.white()), self.value_width)
+                // The heading tracks the file's bar: accent while it is
+                // running, green once analysed, red if it failed.
+                .map(|name| {
+                    [
+                        pad_cell(&paint(name, |s| s.cyan().bold()), value_width),
+                        pad_cell(&paint(name, |s| s.green().bold()), value_width),
+                        pad_cell(&paint(name, |s| s.red().bold()), value_width),
+                    ]
+                })
+                .collect(),
+        })
     }
 
     /// A content line, from cells that are already styled and padded.
@@ -1103,6 +1115,110 @@ impl Table {
         }
         s.push_str(&self.pipe);
         s
+    }
+}
+
+impl Table {
+    fn new(multi: &MultiProgress, names: &[String]) -> Self {
+        let columns = names
+            .iter()
+            .map(|_| Column {
+                live: Arc::new(LiveStats::new()),
+                state: AtomicU8::new(FileState::Running as u8),
+            })
+            .collect::<Vec<_>>();
+
+        let width = measured_term_width();
+        let table = Table {
+            line: static_line(multi),
+            columns,
+            names: names.to_vec(),
+            state: Mutex::new(TableState {
+                width,
+                geometry: Geometry::new(names, width),
+                last: String::new(),
+            }),
+        };
+        table.refresh();
+        table
+    }
+
+    /// Mark the table finished so it is not erased when the progress bars
+    /// behind it are dropped at the end of the run.
+    fn finish(&self) {
+        self.line.finish();
+    }
+
+    /// Re-render the table from the latest published counters.
+    ///
+    /// Only the value cells are built here; everything that depends on the
+    /// width alone lives in [`Geometry`] and is rebuilt only when the terminal
+    /// is resized. The result is compared against the last frame and dropped if
+    /// identical, which is the common case — columns only change every few
+    /// thousand reads, and nothing changes at all while the reports are being
+    /// written.
+    fn refresh(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+
+        let width = measured_term_width();
+        if width != state.width {
+            state.width = width;
+            state.geometry = Geometry::new(&self.names, width);
+        }
+
+        let Some(geometry) = &state.geometry else {
+            // Too narrow for a readable table. Rendering nothing rather than
+            // something cut off, and indicatif drops the line entirely.
+            if !state.last.is_empty() {
+                state.last = String::new();
+                self.line.set_message("");
+            }
+            return;
+        };
+
+        let mut out: Vec<String> = Vec::with_capacity(geometry.row_labels.len() + 5);
+        // A single space rather than an empty string: indicatif skips lines
+        // that render to nothing, and the spacer is wanted.
+        out.push(" ".to_string());
+        out.push(geometry.top.clone());
+        out.push(geometry.row(
+            &geometry.heading_label,
+            self.columns.iter().enumerate().map(|(index, column)| {
+                let file_state = column.state.load(Ordering::Relaxed) as usize;
+                let headings = &geometry.headings[index];
+                headings.get(file_state).unwrap_or(&headings[0]).as_str()
+            }),
+        ));
+        out.push(geometry.divider.clone());
+
+        // A column that has not published yet shows "-" everywhere, so an idle
+        // file reads as idle rather than as a file of zero reads.
+        let values: Vec<Vec<String>> = self
+            .columns
+            .iter()
+            .map(|column| match column.live.snapshot() {
+                None => vec!["-".to_string(); geometry.row_labels.len()],
+                Some(counters) => counters.rows().into_iter().map(|(_, v)| v).collect(),
+            })
+            .collect();
+
+        // Row labels and ordering come straight from the report's own table.
+        for (index, label) in geometry.row_labels.iter().enumerate() {
+            let cells: Vec<String> = values
+                .iter()
+                .map(|column| pad_cell(&paint(&column[index], |s| s.white()), geometry.value_width))
+                .collect();
+            out.push(geometry.row(label, cells.iter().map(String::as_str)));
+        }
+        out.push(geometry.bottom.clone());
+
+        let rendered = out.join("\n");
+        if state.last == rendered {
+            return;
+        }
+        // One update, one redraw.
+        self.line.set_message(rendered.clone());
+        state.last = rendered;
     }
 }
 
@@ -1274,10 +1390,14 @@ fn short_duration(d: Duration) -> String {
 }
 
 /// Abbreviate a read count for display: `812`, `12.3k`, `3.0M`.
+///
+/// The thresholds are set where the *rounded* value would tip over rather than
+/// at the round number, so a count just short of the next unit reads as `1.0M`
+/// and not `1000.0k`.
 fn human_count(n: u64) -> String {
-    if n >= 1_000_000_000 {
+    if n >= 999_950_000 {
         format!("{:.1}B", n as f64 / 1e9)
-    } else if n >= 1_000_000 {
+    } else if n >= 999_950 {
         format!("{:.1}M", n as f64 / 1e6)
     } else if n >= 1_000 {
         format!("{:.1}k", n as f64 / 1e3)
@@ -1297,6 +1417,14 @@ mod tests {
         assert_eq!(human_count(1_500), "1.5k");
         assert_eq!(human_count(3_000_000), "3.0M");
         assert_eq!(human_count(2_500_000_000), "2.5B");
+
+        // Just short of the next unit: the count must roll over rather than
+        // print a mantissa that has rounded past the unit it is labelled with.
+        assert_eq!(human_count(999_999), "1.0M");
+        assert_eq!(human_count(999_999_999), "1.0B");
+        // ...and just below the rollover it stays put.
+        assert_eq!(human_count(999_949), "999.9k");
+        assert_eq!(human_count(999_949_999), "999.9M");
     }
 
     #[test]
@@ -1507,6 +1635,48 @@ mod tests {
         // Still exactly one blank line, however much is logged.
         sink.print("and again");
         assert_eq!(sink.padding.message(), " ");
+    }
+
+    /// The table's furniture is rebuilt for whatever width it is asked for, so
+    /// a window resized mid-run gets a table laid out for the new size rather
+    /// than one cut to the old one — and the table drops out entirely, and
+    /// comes back, as the width crosses the readable threshold.
+    #[test]
+    fn test_geometry_follows_the_width_it_is_built_for() {
+        let names = vec![
+            "sample_1.fastq.gz".to_string(),
+            "sample_2.fastq.gz".to_string(),
+        ];
+
+        let narrow = Geometry::new(&names, 60);
+        assert!(narrow.is_none(), "two columns cannot be readable at 60");
+
+        let wide = Geometry::new(&names, 200).expect("two columns fit at 200");
+        let wider = Geometry::new(&names, 400).expect("two columns fit at 400");
+        assert_eq!(wide.headings.len(), names.len());
+
+        // Every rendered row is exactly as wide as the border above it, and no
+        // wider than the terminal it was laid out for.
+        for (geometry, term_width) in [(&wide, 200usize), (&wider, 400)] {
+            let heading = geometry.row(
+                &geometry.heading_label,
+                geometry.headings.iter().map(|h| h[0].as_str()),
+            );
+            for line in [&geometry.top, &geometry.divider, &geometry.bottom, &heading] {
+                assert_eq!(
+                    console::measure_text_width(line),
+                    console::measure_text_width(&geometry.top),
+                    "table lines disagree on width at {term_width} cols"
+                );
+                assert!(
+                    console::measure_text_width(line) <= term_width,
+                    "table overflows {term_width} cols"
+                );
+            }
+        }
+
+        // A value column never grows past its cap, however wide the window.
+        assert_eq!(wider.value_width, MAX_VALUE_WIDTH);
     }
 
     /// A hidden reporter must be safe to drive exactly like a live one.

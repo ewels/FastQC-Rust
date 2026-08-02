@@ -71,6 +71,20 @@ fastqc sample.fastq.gz
 fastqc --help
 ```
 
+### Threads
+
+`-t`/`--threads` is the whole run's thread budget. It is spread across the files
+processed at once and then within each file (a reader plus analysis workers),
+and it bounds gzip decompression too — so `-t 1` means one analysis thread and
+one decoder, which is what a workflow engine passing `task.cpus` expects. The
+budget honours cgroup quotas and CPU affinity, so a container or a
+scheduler-pinned job sees its own allowance rather than the host's core count.
+
+Leave `--threads` out and the analysis stays single-threaded while gzip
+decompression scales to the machine, which is what makes a plain
+`fastqc sample.fastq.gz` fast without being asked. `--decompress-threads N` sets
+the decompression budget per file explicitly, overriding both.
+
 ### Progress display
 
 A run draws a live display on stderr: a progress bar per input file, and a

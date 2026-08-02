@@ -35,7 +35,11 @@ clap = { version = "4", features = ["derive"] }
 rapidgzip-core = "0.1.0"
 bzip2-rs = "0.1"
 noodles = { version = "0.88", features = ["bam", "sam", "bgzf"] }
-zip = "2"
+# Only deflate: FastQC writes (and re-reads) nothing else, and the default
+# feature set pulls in xz2 -> lzma-sys, which links system liblzma and needs a
+# C toolchain -- the one thing standing between this crate and a genuinely
+# pure-Rust, fully static build.
+zip = { version = "2", default-features = false, features = ["deflate"] }
 rayon = "1"
 base64 = "0.22"
 chrono = "0.4"
@@ -49,6 +53,12 @@ png = "0.18"
 # Terminal progress display.
 indicatif = "0.18"
 console = "0.16"
+
+[target.'cfg(unix)'.dev-dependencies]
+# Bindings only, no C compiled: used by the integration tests to open a pty, so
+# the progress display can be exercised on the path real users take rather than
+# only through FASTQC_PROGRESS=always.
+libc = "0.2"
 
 [profile.release]
 opt-level = 3
