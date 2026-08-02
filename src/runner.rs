@@ -412,12 +412,8 @@ fn process_sequences_sequential(
                     feed_module(module.as_mut(), &seq);
                 }
 
-                // `percent_complete` costs a seek on the input file, so only
-                // pay for it when there is a bar that will move.
-                if sequence_count.is_multiple_of(PROGRESS_INTERVAL)
-                    && file_progress.wants_position()
-                {
-                    file_progress.update(seq_file.percent_complete(), sequence_count);
+                if sequence_count.is_multiple_of(PROGRESS_INTERVAL) {
+                    file_progress.update(sequence_count, || seq_file.percent_complete());
                 }
             }
             Some(Err(e)) => {
@@ -539,9 +535,7 @@ fn process_sequences_parallel(
                         }
 
                         sequence_count += BATCH_SIZE as u64;
-                        if file_progress.wants_position() {
-                            file_progress.update(seq_file.percent_complete(), sequence_count);
-                        }
+                        file_progress.update(sequence_count, || seq_file.percent_complete());
                     }
                 }
                 Some(Err(e)) => {

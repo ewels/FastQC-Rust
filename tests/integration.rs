@@ -500,13 +500,13 @@ fn test_header_is_styled() {
     );
     // The logo's blue and red (256-colour), bold, with a dim version.
     for code in [
-        "\u{1b}[38;5;69m",
-        "\u{1b}[38;5;167m",
-        "\u{1b}[1m",
-        "\u{1b}[2m",
+        format!("\u{1b}[38;5;{}m", fastqc_rust::progress::LOGO_BLUE),
+        format!("\u{1b}[38;5;{}m", fastqc_rust::progress::LOGO_RED),
+        "\u{1b}[1m".to_string(),
+        "\u{1b}[2m".to_string(),
     ] {
         assert!(
-            header.contains(code),
+            header.contains(&code),
             "header missing {:?}: {:?}",
             code,
             header

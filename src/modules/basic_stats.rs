@@ -3,7 +3,6 @@
 
 use std::io;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use crate::config::Limits;
 use crate::modules::QCModule;
@@ -11,38 +10,13 @@ use crate::sequence::Sequence;
 use crate::utils::base_counts::{BASE_INDEX, IDX_A, IDX_C, IDX_G, IDX_N, IDX_T};
 use crate::utils::phred;
 
-/// How often to publish counters to the live snapshot.
+/// Sequences between publications of the counters to the live snapshot.
 ///
-/// A time rather than a sequence count: what the display wants is a refresh
-/// rate, and the number of reads that corresponds to depends entirely on the
-/// data — 8192 Illumina reads pass in a blink, 8192 nanopore reads can take
-/// long enough for the table to look frozen.
-const PUBLISH_INTERVAL: Duration = Duration::from_millis(100);
-
-/// Sequences between checks of the clock. Reading the clock is cheap but not
-/// free, and this sits in the per-read path, so amortise it.
-const PUBLISH_CHECK_INTERVAL: u32 = 256;
-
-/// What kind of base calls the file holds, as reported in the "File type" row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum FileType {
-    /// No sequence seen yet; the report falls back to conventional base calls.
-    #[default]
-    Unknown,
-    Conventional,
-    Colorspace,
-}
-
-impl FileType {
-    fn label(self) -> &'static str {
-        match self {
-            FileType::Colorspace => "Colorspace converted to bases",
-            // Java's BasicStats leaves the field null until the first sequence
-            // and prints "Conventional base calls" for it.
-            FileType::Unknown | FileType::Conventional => "Conventional base calls",
-        }
-    }
-}
+/// Only an upper bound on the update rate: the display samples the snapshot on
+/// its own schedule, so this just has to be small enough that a slow file
+/// (nanopore reads take orders of magnitude longer than Illumina ones) still
+/// looks alive, and large enough that the per-read cost rounds to nothing.
+const PUBLISH_INTERVAL: u32 = 256;
 
 /// The raw accumulated counters behind the Basic Statistics table.
 ///
@@ -68,7 +42,11 @@ pub struct BasicStatsCounters {
     /// Lowest quality character seen. Java initialises this to 126 (the
     /// highest printable ASCII) and lowers it as sequences are read.
     lowest_char: u8,
-    file_type: FileType,
+    /// Whether the base calls were converted from colorspace, for the "File
+    /// type" row. Java leaves the field null until the first sequence and
+    /// prints "Conventional base calls" for it, so `false` is also the
+    /// no-sequences-yet value.
+    colorspace: bool,
 }
 
 impl BasicStatsCounters {
@@ -113,8 +91,14 @@ impl BasicStatsCounters {
             .checked_div(total)
             .unwrap_or(0);
 
+        let file_type = if self.colorspace {
+            "Colorspace converted to bases"
+        } else {
+            "Conventional base calls"
+        };
+
         let values = [
-            self.file_type.label().to_string(),
+            file_type.to_string(),
             encoding,
             self.actual_count.to_string(),
             format_length(self.total_bases),
@@ -207,10 +191,8 @@ pub struct BasicStats {
     counters: BasicStatsCounters,
     /// Optional live snapshot sink for the terminal progress table.
     live: Option<Arc<LiveStats>>,
-    /// Sequences processed since the clock was last consulted.
-    since_check: u32,
-    /// When the counters were last published.
-    last_publish: Instant,
+    /// Sequences processed since the counters were last published.
+    since_publish: u32,
 }
 
 impl BasicStats {
@@ -219,8 +201,7 @@ impl BasicStats {
             name: None,
             counters: BasicStatsCounters::new(),
             live: None,
-            since_check: 0,
-            last_publish: Instant::now(),
+            since_publish: 0,
         }
     }
 
@@ -233,8 +214,7 @@ impl BasicStats {
     }
 
     /// Push the current counters to the live snapshot, if one is attached.
-    fn publish(&mut self) {
-        self.last_publish = Instant::now();
+    fn publish(&self) {
         if let Some(ref live) = self.live {
             live.publish(self.counters);
         }
@@ -249,12 +229,10 @@ impl QCModule for BasicStats {
     fn process_sequence(&mut self, sequence: &Sequence) {
         // Publish a snapshot for the live progress table every so often. Done
         // first so the counter is advanced even for filtered sequences.
-        self.since_check += 1;
-        if self.since_check >= PUBLISH_CHECK_INTERVAL {
-            self.since_check = 0;
-            if self.last_publish.elapsed() >= PUBLISH_INTERVAL {
-                self.publish();
-            }
+        self.since_publish += 1;
+        if self.since_publish >= PUBLISH_INTERVAL {
+            self.since_publish = 0;
+            self.publish();
         }
 
         // Java counts filtered sequences separately
@@ -267,17 +245,11 @@ impl QCModule for BasicStats {
         c.actual_count += 1;
         c.total_bases += sequence.sequence.len() as u64;
 
-        if c.file_type == FileType::Unknown {
-            c.file_type = if sequence.colorspace.is_some() {
-                FileType::Colorspace
-            } else {
-                FileType::Conventional
-            };
-        }
-
-        // min/max length initialised on first non-filtered sequence
+        // Both the file type and the length range are taken from the first
+        // non-filtered sequence, as Java does.
         let len = sequence.sequence.len();
         if c.actual_count == 1 {
+            c.colorspace = sequence.colorspace.is_some();
             c.min_length = len;
             c.max_length = len;
         } else {
@@ -438,13 +410,9 @@ mod tests {
         // can show "-" rather than a misleading row of zeroes.
         assert!(live.snapshot().is_none());
 
-        // Enough sequences to cross the check interval several times, with a
-        // pause so at least one of those checks is past the publish interval.
-        let seqs = sequences(PUBLISH_CHECK_INTERVAL as usize * 4);
-        for (i, seq) in seqs.iter().enumerate() {
-            if i == PUBLISH_CHECK_INTERVAL as usize {
-                std::thread::sleep(PUBLISH_INTERVAL);
-            }
+        // Enough sequences to cross the publish interval several times.
+        let seqs = sequences(PUBLISH_INTERVAL as usize * 4);
+        for seq in &seqs {
             module.process_sequence(seq);
         }
 
