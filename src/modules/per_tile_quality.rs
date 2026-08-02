@@ -222,7 +222,7 @@ impl QCModule for PerTileQualityScores {
         if !self.per_tile_quality_counts.contains_key(&tile) {
             if self.per_tile_quality_counts.len() > 2500 {
                 // Too many tiles, give up
-                eprintln!("Too many tiles (>2500) so giving up trying to do per-tile qualities since we're probably parsing the file wrongly");
+                crate::progress::log_line("Too many tiles (>2500) so giving up trying to do per-tile qualities since we're probably parsing the file wrongly");
                 self.ignore_in_report = true;
                 self.per_tile_quality_counts.clear();
                 return;

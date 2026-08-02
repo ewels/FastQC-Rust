@@ -46,6 +46,10 @@ resvg = "0.47"
 tiny-skia = "0.12"
 png = "0.18"
 
+# Terminal progress display.
+indicatif = "0.18"
+console = "0.16"
+
 [profile.release]
 opt-level = 3
 lto = "fat"

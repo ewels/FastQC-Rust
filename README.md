@@ -71,6 +71,30 @@ fastqc sample.fastq.gz
 fastqc --help
 ```
 
+### Progress display
+
+A run draws a live display on stderr: a progress bar per input file, and a
+Basic Statistics table that fills in as the analysis proceeds when the terminal
+is wide enough. Warnings and the closing summary appear around it as ordinary
+output.
+
+It needs an interactive stderr. When stderr is a pipe or a log file, or `TERM`
+is `dumb`/unset, it degrades to one plain line per file at start and finish so
+pipeline logs stay readable. `--quiet` silences everything but errors.
+
+Two independent environment switches, neither with a command-line equivalent:
+
+- `FASTQC_PROGRESS=auto|always|never` — `always` draws the display even when
+  stderr is redirected (for recording a demo, or a consumer that re-renders the
+  stream), sizing itself from `COLUMNS`/`LINES`; `never` always takes the plain
+  path.
+- Colour follows the usual conventions with no flag of ours: `NO_COLOR` and
+  `CLICOLOR=0` disable it, `CLICOLOR_FORCE=1` forces it on even for a pipe.
+
+Because the two are independent, colour off still draws the bars, and the plain
+fallback still colours its lines when colour is forced on — which is what a CI
+log viewer wants.
+
 ## Equivalence testing
 
 This project maintains strict equivalence with the upstream Java FastQC. CI runs automated comparison of text output and chart images against stored Java reference data.

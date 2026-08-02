@@ -28,12 +28,15 @@ impl QualityCount {
             // the run. We clamp to the last slot instead so that corrupt quality chars
             // don't abort the entire analysis -- the value will be wrong for that
             // position, but the rest of the file can still be processed.
-            eprintln!(
+            // Once per run, not once per base: this sits in the innermost loop
+            // of the analysis, and a file with a systematically bad encoding
+            // would otherwise emit the warning millions of times.
+            crate::progress::log_line_once(&format!(
                 "Warning: quality character '{}' (ASCII {}) exceeds maximum {}; clamping",
                 quality_char as char,
                 idx,
                 self.actual_counts.len() - 1
-            );
+            ));
             self.actual_counts[self.actual_counts.len() - 1] += 1;
             self.total_counts += 1;
             return;

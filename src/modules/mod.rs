@@ -70,6 +70,12 @@ pub trait QCModule: Send {
     /// Other modules ignore it.
     fn set_filename(&mut self, _name: &str) {}
 
+    /// Attach a shared snapshot sink that the module publishes partial results
+    /// to while it runs, so the terminal progress display can show live
+    /// statistics. Only BasicStats implements this; every other module ignores
+    /// it, and nothing about the analysis changes when no sink is attached.
+    fn attach_live_stats(&mut self, _live: Arc<basic_stats::LiveStats>) {}
+
     /// Finalize calculations after all sequences have been processed.
     ///
     /// In Java, modules lazily compute results in synchronized
