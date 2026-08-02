@@ -519,11 +519,36 @@ fn test_header_is_styled() {
     );
 }
 
+/// The banner is the run's *first* line, so everything the run says appears
+/// beneath it. The display cannot be built until the inputs have been grouped,
+/// so it is easy for a message raised before then — a file that does not exist
+/// — to end up above the banner instead.
+#[test]
+fn test_the_banner_comes_before_anything_the_run_says() {
+    let stderr = run_binary(
+        |_| vec![PathBuf::from("no/such/file.fastq")],
+        &[],
+        &[("FASTQC_PROGRESS", "always"), ("COLUMNS", "100")],
+    );
+    let banner = stderr
+        .find("FastQC")
+        .unwrap_or_else(|| panic!("no banner in {:?}", stderr));
+    let complaint = stderr
+        .find("doesn't exist")
+        .unwrap_or_else(|| panic!("missing file was not reported in {:?}", stderr));
+    assert!(
+        banner < complaint,
+        "the banner must come first, got: {:?}",
+        stderr
+    );
+}
+
 /// `--quiet` means silent, and beats every force flag and environment override.
 #[test]
 fn test_quiet_beats_everything() {
+    // The bare `--quiet` case is `test_quiet_suppresses_the_completion_summary`;
+    // these are the overrides it has to beat.
     for (args, env) in [
-        (&["--quiet"][..], &[][..]),
         (&["--quiet"][..], &[("NO_COLOR", "1")][..]),
         (&["--quiet"][..], &[("CLICOLOR_FORCE", "1")][..]),
         (
@@ -675,11 +700,11 @@ fn test_table_visibility_follows_terminal_width() {
     assert!(!shows_table(&run(&one, "40")));
 
     // Three files need more room than 80 columns can give.
-    assert!(!shows_table(&run(&three, "80")));
+    let cramped = run(&three, "80");
+    assert!(!shows_table(&cramped));
     assert!(shows_table(&run(&three, "120")));
 
     // The bars are drawn either way — only the table is switched off.
-    let cramped = run(&three, "80");
     assert!(
         cramped.contains('━'),
         "bars should survive a narrow terminal: {:?}",

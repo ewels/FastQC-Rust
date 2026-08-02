@@ -1,6 +1,5 @@
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::sync_channel;
 use std::sync::Arc;
 use std::thread;
@@ -62,6 +61,12 @@ struct FileGroup {
 /// Sequence to each module, then writes the report. With --threads, files
 /// are processed in parallel via AnalysisQueue.
 pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
+    // Announce the run before it does anything that might have something to
+    // say, so the banner really is the first line and everything else appears
+    // beneath it. The display itself cannot be drawn until the files have been
+    // grouped, since it needs one bar per group.
+    let plan = progress::ProgressPlan::new(config.quiet);
+
     let limits = config.load_limits().map_err(|e| {
         eprintln!("Failed to load limits: {}", e);
         1
@@ -167,41 +172,41 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
             1
         })?;
 
-    let failed = AtomicBool::new(something_failed);
-    let analysed = AtomicUsize::new(0);
-
     // The live terminal display: a progress bar per file (or one bar counting
     // files when there are many), plus a live statistics table for small runs.
     // It is inert under --quiet and degrades to plain start/finish lines when
     // stderr is not a terminal, unless FASTQC_PROGRESS says otherwise.
     let names: Vec<String> = file_groups.iter().map(|g| g.name.clone()).collect();
-    let progress = progress::ProgressReporter::new(&names, config.quiet);
+    let progress = plan.start(&names);
 
-    pool.install(|| {
+    // rayon counts the groups that made it through, so no shared tally is
+    // needed; the ones that did not have already been reported.
+    let analysed = pool.install(|| {
         file_groups
             .par_iter()
             .enumerate()
-            .for_each(|(index, group)| {
-                let file_progress = progress.file(index);
+            .filter(|(index, group)| {
+                let file_progress = progress.file(*index);
                 file_progress.start(&group.name);
 
                 match process_group(config, &limits, group, processors_per_file, file_progress) {
                     Ok(reads) => {
-                        analysed.fetch_add(1, Ordering::Relaxed);
                         file_progress.finish(&group.name, reads);
+                        true
                     }
                     Err(e) => {
                         file_progress.fail();
                         progress.error(&format!("Failed to process {}: {}", group.name, e));
-                        failed.store(true, Ordering::Relaxed);
+                        false
                     }
                 }
-            });
+            })
+            .count()
     });
 
-    progress.finish(analysed.load(Ordering::Relaxed));
+    progress.finish(analysed);
 
-    if failed.load(Ordering::Relaxed) {
+    if something_failed || analysed != file_groups.len() {
         Err(1)
     } else {
         Ok(())

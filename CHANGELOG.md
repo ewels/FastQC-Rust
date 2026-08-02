@@ -19,8 +19,9 @@
   an interactive stderr: when stderr is a pipe or a log file, or `TERM` is
   `dumb`/unset, it degrades to one plain line per file at start and finish so
   pipeline logs stay readable, and `--quiet` still silences everything but
-  errors. The name and version are the run's first log line, so everything the
-  run goes on to say appears beneath them in the order it happened.
+  errors. The name and version are printed before the run does anything else,
+  so everything it goes on to say — including complaints about the input files
+  themselves — appears beneath them in the order it happened.
 - **`FASTQC_PROGRESS=auto|always|never`** overrides the display auto-detection
   in either direction. `always` draws the bars even when stderr is redirected —
   for recording a demo, or a consumer that re-renders the stream — sizing itself
@@ -37,7 +38,8 @@
   then grow without bound, as the log of a long run must, and a blank line
   separates it from the bars when there is anything to separate. The clamping
   warning for out-of-range quality characters is also emitted once per run
-  rather than once per base.
+  rather than once per base — deduplicated centrally, so it is genuinely once
+  per run rather than once per process however many files are read at a time.
 - **A closing summary**: `Complete. Analysed N files in mm:ss`, counting the
   files that were analysed successfully and widening to `hh:mm:ss` past an hour.
   It is the last line of the redrawn region, so it always appears below the bars

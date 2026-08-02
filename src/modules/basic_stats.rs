@@ -27,7 +27,7 @@ const PUBLISH_INTERVAL: u32 = 256;
 /// module wants the formatted rows, not the raw tallies. It is `Copy` so a
 /// consistent snapshot can be handed to the progress display without holding a
 /// lock while rendering.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct BasicStatsCounters {
     actual_count: u64,
     filtered_count: u64,
@@ -49,15 +49,32 @@ pub struct BasicStatsCounters {
     colorspace: bool,
 }
 
-impl BasicStatsCounters {
-    fn new() -> Self {
+/// Spelled out rather than derived: `lowest_char` starts at the *top* of the
+/// range and is lowered, so a derived all-zeroes default would be a state the
+/// counters can never legitimately reach — and one whose `rows()` reports a
+/// bogus encoding. This is the only constructor, so there is nowhere for that
+/// state to come from.
+impl Default for BasicStatsCounters {
+    fn default() -> Self {
         BasicStatsCounters {
+            actual_count: 0,
+            filtered_count: 0,
+            min_length: 0,
+            max_length: 0,
+            total_bases: 0,
+            g_count: 0,
+            c_count: 0,
+            a_count: 0,
+            t_count: 0,
+            n_count: 0,
             // Java starts at 126 (char), we mirror that
             lowest_char: 126,
-            ..Default::default()
+            colorspace: false,
         }
     }
+}
 
+impl BasicStatsCounters {
     /// The measures reported, in report order, minus the leading "Filename"
     /// row. [`Self::rows`] returns a value for each of these, in this order.
     pub const MEASURES: [&'static str; 7] = [
@@ -191,17 +208,14 @@ pub struct BasicStats {
     counters: BasicStatsCounters,
     /// Optional live snapshot sink for the terminal progress table.
     live: Option<Arc<LiveStats>>,
-    /// Sequences processed since the counters were last published.
-    since_publish: u32,
 }
 
 impl BasicStats {
     pub fn new(_limits: &Limits) -> Self {
         BasicStats {
             name: None,
-            counters: BasicStatsCounters::new(),
+            counters: BasicStatsCounters::default(),
             live: None,
-            since_publish: 0,
         }
     }
 
@@ -227,11 +241,12 @@ impl QCModule for BasicStats {
     }
 
     fn process_sequence(&mut self, sequence: &Sequence) {
-        // Publish a snapshot for the live progress table every so often. Done
-        // first so the counter is advanced even for filtered sequences.
-        self.since_publish += 1;
-        if self.since_publish >= PUBLISH_INTERVAL {
-            self.since_publish = 0;
+        // Publish a snapshot for the live progress table every so often.
+        // Counted off the tallies themselves rather than a third counter, and
+        // taken before this sequence is added so that nothing is published
+        // until there is something to show.
+        let seen = self.counters.actual_count + self.counters.filtered_count;
+        if seen != 0 && seen.is_multiple_of(PUBLISH_INTERVAL as u64) {
             self.publish();
         }
 
@@ -443,15 +458,16 @@ mod tests {
             module.process_sequence(seq);
         }
         module.finalize();
-        assert!(module.live.is_none());
         let rows = text_rows(&module);
         assert_eq!(rows[2], ("Total Sequences".to_string(), "100".to_string()));
     }
 
-    /// Filtered sequences are counted, not analysed.
+    /// Counters that have seen nothing still render every row, so the live
+    /// table has something to show before a file has been opened — including
+    /// a `%GC` that does not divide by zero.
     #[test]
     fn test_counters_rows_placeholder_state() {
-        let counters = BasicStatsCounters::new();
+        let counters = BasicStatsCounters::default();
         let rows = counters.rows();
         assert_eq!(rows.len(), 7);
         assert_eq!(rows[0].0, "File type");

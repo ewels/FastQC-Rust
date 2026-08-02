@@ -1,5 +1,3 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-
 /// Per-position quality score accumulator.
 ///
 /// Replicates the logic from `Utilities/QualityCount.java`.
@@ -11,10 +9,6 @@ pub struct QualityCount {
     actual_counts: [u64; 150],
     total_counts: u64,
 }
-
-/// Set once the clamping warning has been emitted, so the innermost analysis
-/// loop reports a bad encoding a single time per run rather than per base.
-static CLAMP_WARNED: AtomicBool = AtomicBool::new(false);
 
 impl QualityCount {
     pub fn new() -> Self {
@@ -37,14 +31,12 @@ impl QualityCount {
             // Once per run, not once per base: this sits in the innermost loop
             // of the analysis, and a file with a systematically bad encoding
             // would otherwise emit the warning millions of times.
-            if !CLAMP_WARNED.swap(true, Ordering::Relaxed) {
-                crate::progress::log_line(&format!(
-                    "Warning: quality character '{}' (ASCII {}) exceeds maximum {}; clamping",
-                    quality_char as char,
-                    idx,
-                    self.actual_counts.len() - 1
-                ));
-            }
+            crate::progress::log_line_once(&format!(
+                "Warning: quality character '{}' (ASCII {}) exceeds maximum {}; clamping",
+                quality_char as char,
+                idx,
+                self.actual_counts.len() - 1
+            ));
             self.actual_counts[self.actual_counts.len() - 1] += 1;
             self.total_counts += 1;
             return;

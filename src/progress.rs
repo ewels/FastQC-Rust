@@ -69,22 +69,24 @@
 //!
 //! # Log lines
 //!
-//! Anything printed while the display is up has to go through [`log_line`] (or
-//! [`ProgressReporter::error`]). Writing to stderr directly would land in the
+//! Anything printed while the display is up has to go through [`log_line`] —
+//! or [`log_line_once`] from an inner analysis loop, or
+//! [`ProgressReporter::error`]. Writing to stderr directly would land in the
 //! middle of the display and be erased by the next frame.
 //!
 //! Those lines are written *above* the redrawn region and scroll up as ordinary
 //! terminal output, which is what rich, tqdm, indicatif, cargo and Nextflow all
 //! do. The log is the permanent record and has to be able to grow without
 //! bound, and the terminal's scrollback is the only place unbounded output can
-//! go. The version banner is the run's first log line, so everything the run
-//! has to say appears beneath it in the order it happened.
+//! go. The version banner is printed by [`ProgressPlan::new`] before the run
+//! does anything else, so everything the run has to say appears beneath it in
+//! the order it happened.
 //!
 //! The exception is the closing `Complete. Analysed N files in mm:ss`, which is
 //! the last line of the redrawn region so that it always lands below the bars
 //! and the table. `--quiet` suppresses it along with everything else.
 
-use std::io::IsTerminal;
+use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -122,19 +124,10 @@ impl When {
         }
     }
 
-    fn from_env(name: &str) -> Self {
-        std::env::var(name)
+    fn from_env() -> Self {
+        std::env::var(PROGRESS_ENV)
             .map(|v| Self::parse(&v))
             .unwrap_or_default()
-    }
-
-    /// The forced value, or `None` when the environment should decide.
-    fn forced(self) -> Option<bool> {
-        match self {
-            When::Auto => None,
-            When::Always => Some(true),
-            When::Never => Some(false),
-        }
     }
 }
 
@@ -229,6 +222,30 @@ pub fn log_line(message: &str) {
     }
 }
 
+/// What [`log_line_once`] has already said this run, cleared by
+/// [`ProgressPlan::new`].
+static SAID: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+
+/// Emit a line unless this run has already emitted exactly it.
+///
+/// For warnings raised from the innermost analysis loops, where the same
+/// message can be produced millions of times — once per bad base, or once per
+/// unreadable read. Deduplicating here rather than with a latch at the call
+/// site keeps the scope right: a latch is per *process*, so with several files
+/// analysed in parallel only whichever one won the race would say anything,
+/// and an embedder calling the library twice would hear nothing the second
+/// time.
+pub fn log_line_once(message: &str) {
+    let mut said = SAID.lock().unwrap_or_else(|e| e.into_inner());
+    if !said.insert(message.to_string()) {
+        return;
+    }
+    // Not while holding the lock: printing takes indicatif's draw lock, and
+    // this one is taken from every analysis thread.
+    drop(said);
+    log_line(message);
+}
+
 /// The terminal progress display for a whole run.
 ///
 /// Cheap to share across the rayon workers: every method is `&self` and
@@ -314,30 +331,80 @@ fn choose_mode(
     // The same condition indicatif's stderr draw target hides itself on, so
     // when it holds there is nothing to bypass and `always` costs nothing.
     let drawable = stderr_is_terminal && !dumb_terminal;
-    match progress.forced() {
-        Some(true) => ModeChoice::Live {
+    match progress {
+        When::Always => ModeChoice::Live {
             bypass_detection: !drawable,
         },
-        Some(false) => ModeChoice::Plain,
-        None if drawable => ModeChoice::Live {
+        When::Never => ModeChoice::Plain,
+        When::Auto if drawable => ModeChoice::Live {
             bypass_detection: false,
         },
-        None => ModeChoice::Plain,
+        When::Auto => ModeChoice::Plain,
     }
 }
 
-impl ProgressReporter {
-    /// Build a reporter for a run over `names` (the file group display names,
-    /// in command-line order).
-    pub fn new(names: &[String], quiet: bool) -> Self {
-        let progress = When::from_env(PROGRESS_ENV);
-        let choice = choose_mode(
-            quiet,
-            progress,
-            std::io::stderr().is_terminal(),
-            console::is_dumb(),
-        );
-        let mode = match choice {
+/// The mode this process would use, from `--quiet` and the environment.
+///
+/// Both halves of the two-phase startup consult it: [`ProgressPlan::new`] to
+/// decide whether to print the banner and with which line ending, and
+/// [`ProgressPlan::start`] to build the display itself.
+fn current_choice(quiet: bool) -> ModeChoice {
+    choose_mode(
+        quiet,
+        When::from_env(),
+        // console's own tty probe, not `std::io::IsTerminal`: indicatif decides
+        // whether to hide its bars with `console::Term::is_term`, and the two
+        // disagree on an MSYS pty, where console recognises a terminal that
+        // `IsTerminal` does not.
+        Term::stderr().is_term(),
+        console::is_dumb(),
+    )
+}
+
+/// A decided-but-not-yet-drawn display, and the first half of starting a run.
+///
+/// The display cannot be built until the input files have been validated and
+/// grouped, because it needs one bar per group — but the banner has to be
+/// printed *before* that work, or the messages validation emits land above it
+/// and the "everything the run says appears beneath the banner" property is
+/// quietly false. So the decision and the banner happen here, at the very top
+/// of the run, and [`start`](Self::start) turns the plan into a reporter once
+/// the names are known.
+pub struct ProgressPlan {
+    choice: ModeChoice,
+    started: Instant,
+}
+
+impl ProgressPlan {
+    /// Decide how this run will report, and announce it. Call this first:
+    /// the clock it starts is the one the closing summary reports.
+    pub fn new(quiet: bool) -> Self {
+        let choice = current_choice(quiet);
+        // "Once per run" for `log_line_once` means once per plan.
+        SAID.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        if let ModeChoice::Live { bypass_detection } = choice {
+            // Coloured after the logo: the name in its blue, the `-Rust`
+            // suffix in its red, the version dim. Written straight to stderr
+            // because nothing has been drawn yet — there is no region to clear
+            // and no padding to add.
+            let line_ending = line_ending(bypass_detection);
+            eprint!(
+                "{}{} {}{line_ending}{line_ending}",
+                paint("FastQC", |s| s.color256(LOGO_BLUE).bold()),
+                paint("-Rust", |s| s.color256(LOGO_RED).bold()),
+                paint(&format!("v{}", crate::RUST_VERSION), |s| s.dim()),
+            );
+        }
+        ProgressPlan {
+            choice,
+            started: Instant::now(),
+        }
+    }
+
+    /// Draw the display for `names` (the file group display names, in
+    /// command-line order).
+    pub fn start(self, names: &[String]) -> ProgressReporter {
+        let mode = match self.choice {
             ModeChoice::Silent => Mode::Silent,
             ModeChoice::Plain => Mode::Plain,
             ModeChoice::Live { bypass_detection } => {
@@ -346,10 +413,23 @@ impl ProgressReporter {
         };
         ProgressReporter {
             mode,
-            started: Instant::now(),
+            started: self.started,
         }
     }
+}
 
+/// A tty driver rewrites `\n` as `\r\n` on the way out (ONLCR); nothing does
+/// that for a pipe, so a bare newline would leave the cursor parked in this
+/// line's column and the next frame would start there.
+fn line_ending(bypass_detection: bool) -> &'static str {
+    if bypass_detection {
+        "\r\n"
+    } else {
+        "\n"
+    }
+}
+
+impl ProgressReporter {
     /// A reporter that displays nothing. Used by tests and by callers of the
     /// library API that drive the analysis themselves.
     pub fn hidden() -> Self {
@@ -503,23 +583,9 @@ impl Live {
             MultiProgress::new()
         };
 
-        // The name and version are the run's first log line, not part of the
-        // redrawn region, so everything the run has to say appears underneath
-        // them in the order it happened. Written directly because nothing has
-        // been drawn yet: there is no region to clear, and no padding to add.
-        let line_ending = if bypass_detection { "\r\n" } else { "\n" };
-        // Coloured after the logo: the name in its blue, the `-Rust` suffix in
-        // its red, the version dim.
-        eprint!(
-            "{}{} {}{line_ending}{line_ending}",
-            paint("FastQC", |s| s.color256(LOGO_BLUE).bold()),
-            paint("-Rust", |s| s.color256(LOGO_RED).bold()),
-            paint(&format!("v{}", crate::RUST_VERSION), |s| s.dim()),
-        );
-
         let log = Arc::new(LogSink {
             multi: multi.clone(),
-            line_ending,
+            line_ending: line_ending(bypass_detection),
             // First line of the region, so the blank it grows lands between the
             // messages and the bars.
             padding: static_line(&multi),
@@ -885,28 +951,19 @@ struct Column {
 
 impl Column {
     fn styled_heading(&self) -> &str {
-        &self.headings[FileState::from_u8(self.state.load(Ordering::Relaxed)) as usize]
+        let state = self.state.load(Ordering::Relaxed) as usize;
+        self.headings.get(state).unwrap_or(&self.headings[0])
     }
 }
 
 /// How a file is doing, for colouring its column heading the same way its
-/// progress bar is coloured.
+/// progress bar is coloured. The discriminant indexes [`Column::headings`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FileState {
     /// Waiting or being read.
     Running = 0,
     Analysed = 1,
     Failed = 2,
-}
-
-impl FileState {
-    fn from_u8(value: u8) -> Self {
-        match value {
-            1 => FileState::Analysed,
-            2 => FileState::Failed,
-            _ => FileState::Running,
-        }
-    }
 }
 
 impl Table {
@@ -1247,13 +1304,6 @@ mod tests {
     }
 
     #[test]
-    fn test_when_forced() {
-        assert_eq!(When::Auto.forced(), None);
-        assert_eq!(When::Always.forced(), Some(true));
-        assert_eq!(When::Never.forced(), Some(false));
-    }
-
-    #[test]
     fn test_when_parse() {
         for on in [
             "always", "ALWAYS", " always ", "force", "1", "yes", "true", "on",
@@ -1296,22 +1346,25 @@ mod tests {
     /// terminal that works would be a downgrade, not a force.
     #[test]
     fn test_choose_mode_forced() {
-        for &is_terminal in &[true, false] {
-            for &dumb in &[true, false] {
-                let drawable = is_terminal && !dumb;
-                assert_eq!(
-                    choose_mode(false, When::Always, is_terminal, dumb),
-                    ModeChoice::Live {
-                        bypass_detection: !drawable
-                    },
-                    "always must draw the display (tty={is_terminal}, dumb={dumb})"
-                );
-                assert_eq!(
-                    choose_mode(false, When::Never, is_terminal, dumb),
-                    ModeChoice::Plain,
-                    "never must not draw the display (tty={is_terminal}, dumb={dumb})"
-                );
-            }
+        // is_terminal, dumb, and whether the display has to be driven by hand.
+        // Spelled out rather than recomputed from the rule, so that getting the
+        // rule wrong fails the test instead of being copied into it.
+        for (is_terminal, dumb, bypass_detection) in [
+            (true, false, false),
+            (true, true, true),
+            (false, false, true),
+            (false, true, true),
+        ] {
+            assert_eq!(
+                choose_mode(false, When::Always, is_terminal, dumb),
+                ModeChoice::Live { bypass_detection },
+                "always must draw the display (tty={is_terminal}, dumb={dumb})"
+            );
+            assert_eq!(
+                choose_mode(false, When::Never, is_terminal, dumb),
+                ModeChoice::Plain,
+                "never must not draw the display (tty={is_terminal}, dumb={dumb})"
+            );
         }
     }
 
@@ -1346,7 +1399,7 @@ mod tests {
     fn test_a_shown_table_renders_inside_the_terminal() {
         let natural_label = BasicStatsCounters::MEASURES
             .iter()
-            .map(|m| m.len())
+            .map(|m| console::measure_text_width(m))
             .max()
             .unwrap();
         for term_width in [40usize, 60, 72, 80, 100, 120, 160, 200, 400] {
