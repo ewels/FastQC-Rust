@@ -17,18 +17,22 @@
   an interactive stderr: when stderr is a pipe or a log file, or `TERM` is
   `dumb`/unset, it degrades to one plain line per file at start and finish so
   pipeline logs stay readable, and `--quiet` still silences everything but
-  errors.
-- **`--progress auto|always|never` and `--color auto|always|never`** (also
-  spelled `--colour`) override that auto-detection in either direction, as two
-  independent switches. `--progress always` draws the display even when stderr
-  is redirected — for recording a demo, or a consumer that re-renders the
-  stream — sizing itself from `COLUMNS`/`LINES`; `--progress never` always takes
-  the plain path. `--color` defaults to honouring `NO_COLOR` and the
-  [clicolors spec](https://bixense.com/clicolors/) (`CLICOLOR`,
-  `CLICOLOR_FORCE`), and overrides them when given explicitly. Because the two
-  are independent, colour off still draws the bars and table (just without
-  escape codes), and the plain fallback still colours its lines when colour is
-  on, which is what a CI log viewer wants. `--quiet` beats both.
+  errors. The name and version are a pinned header at the top of the display,
+  so they stay directly above the bars for the whole run.
+- **`FASTQC_PROGRESS=auto|always|never`** overrides the display auto-detection
+  in either direction. `always` draws the bars even when stderr is redirected —
+  for recording a demo, or a consumer that re-renders the stream — sizing itself
+  from `COLUMNS`/`LINES`; `never` always takes the plain path. Colour is a
+  separate, independent switch and follows the usual environment conventions:
+  `NO_COLOR` and `CLICOLOR=0` disable it, `CLICOLOR_FORCE=1` forces it on even
+  for a pipe. Because the two are independent, colour off still draws the bars
+  and table, and the plain fallback still colours its lines when colour is
+  forced on, which is what a CI log viewer wants. `--quiet` beats both.
+- **Warnings raised during analysis** (a bad quality character, too many tiles,
+  an unreadable nanopore read) now scroll above the progress display instead of
+  being written into the middle of it and erased by the next frame. The
+  clamping warning for out-of-range quality characters is also emitted once per
+  run rather than once per base.
 - **Parallel analysis pipeline** for a single file. `-t/--threads` is now a total
   thread budget spread across files first and then within each file: a reader
   batches records while worker threads each run a disjoint subset of the QC

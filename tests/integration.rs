@@ -385,11 +385,10 @@ fn test_no_ansi_escapes_when_stderr_is_piped() {
 #[test]
 fn test_colour_can_be_forced_on_a_pipe() {
     for (args, env) in [
-        (&["--color", "always"][..], &[][..]),
-        // The clicolors spec's own override, with no flag at all.
+        // The clicolors spec's override is the only way to force colour.
         (&[][..], &[("CLICOLOR_FORCE", "1")][..]),
-        // An explicit flag beats a conflicting environment in both directions.
-        (&["--color", "always"][..], &[("NO_COLOR", "1")][..]),
+        // ...and it wins over a terminal that is not one.
+        (&[][..], &[("CLICOLOR_FORCE", "1"), ("TERM", "dumb")][..]),
     ] {
         let stderr = run_binary_stderr(args, env);
         assert!(
@@ -407,11 +406,11 @@ fn test_colour_can_be_forced_on_a_pipe() {
         );
     }
 
-    // ...and `--color never` wins over an environment asking for colour.
-    let stderr = run_binary_stderr(&["--color", "never"], &[("CLICOLOR_FORCE", "1")]);
+    // NO_COLOR wins over CLICOLOR_FORCE when both are set, per NO_COLOR's spec.
+    let stderr = run_binary_stderr(&[], &[("NO_COLOR", "1"), ("CLICOLOR", "0")]);
     assert!(
         !stderr.contains('\u{1b}'),
-        "--color never must beat CLICOLOR_FORCE: {:?}",
+        "NO_COLOR must suppress colour: {:?}",
         stderr
     );
 }
@@ -420,42 +419,89 @@ fn test_colour_can_be_forced_on_a_pipe() {
 /// consumer that re-renders the stream), and forced off on any stream.
 #[test]
 fn test_progress_display_can_be_forced_on_a_pipe() {
-    let forced = run_binary_stderr(&["--progress", "always"], &[("COLUMNS", "100")]);
+    let forced = run_binary_stderr(&[], &[("FASTQC_PROGRESS", "always"), ("COLUMNS", "100")]);
     assert!(
         has_redraw(&forced),
-        "--progress always must redraw in place: {:?}",
+        "FASTQC_PROGRESS=always must redraw in place: {:?}",
         forced
     );
     assert!(
         forced.contains('━'),
-        "--progress always must draw the bar: {:?}",
+        "FASTQC_PROGRESS=always must draw the bar: {:?}",
         forced
     );
-    // Every line the display emits has to be positioned from column zero, so a
-    // bare newline would leave the first frame indented by the banner's width.
+    // The pinned header sits at the top of the display, with the version dim.
     assert!(
-        !forced.contains("dev0\n"),
-        "banner must end with a carriage return when forced onto a pipe"
+        forced.contains("FastQC-Rust"),
+        "forced display is missing its header: {:?}",
+        forced
     );
 
     // Forced off, a pipe stays exactly as it was.
-    let never = run_binary_stderr(&["--progress", "never"], &[]);
-    assert!(!has_redraw(&never), "--progress never redrew: {:?}", never);
+    let never = run_binary_stderr(&[], &[("FASTQC_PROGRESS", "never")]);
+    assert!(
+        !has_redraw(&never),
+        "FASTQC_PROGRESS=never redrew: {:?}",
+        never
+    );
     assert!(never.contains("Started analysis of minimal.fastq"));
+
+    // An unrecognised value falls back to detection rather than failing.
+    let bogus = run_binary_stderr(&[], &[("FASTQC_PROGRESS", "sometimes")]);
+    assert!(!has_redraw(&bogus) && !bogus.contains('\u{1b}'));
 
     // Colour and animation are independent switches.
     let both = run_binary_stderr(
-        &["--progress", "always", "--color", "always"],
-        &[("COLUMNS", "100")],
+        &[],
+        &[
+            ("FASTQC_PROGRESS", "always"),
+            ("CLICOLOR_FORCE", "1"),
+            ("COLUMNS", "100"),
+        ],
     );
     assert!(has_redraw(&both) && has_color(&both));
     let mono = run_binary_stderr(
-        &["--progress", "always", "--color", "never"],
-        &[("COLUMNS", "100")],
+        &[],
+        &[
+            ("FASTQC_PROGRESS", "always"),
+            ("NO_COLOR", "1"),
+            ("COLUMNS", "100"),
+        ],
     );
     assert!(
         has_redraw(&mono) && !has_color(&mono),
-        "--color never must strip colour from a forced display"
+        "NO_COLOR must strip colour from a forced display"
+    );
+}
+
+/// The header must be styled: the name bold cyan, the version dim.
+#[test]
+fn test_header_is_styled() {
+    let stderr = run_binary_stderr(
+        &[],
+        &[
+            ("FASTQC_PROGRESS", "always"),
+            ("CLICOLOR_FORCE", "1"),
+            ("COLUMNS", "100"),
+        ],
+    );
+    let header = stderr
+        .lines()
+        .find(|l| l.contains("FastQC-Rust"))
+        .unwrap_or_else(|| panic!("no header line in {:?}", stderr));
+    // SGR 36 = cyan, 1 = bold, 2 = dim (the version).
+    for code in ["\u{1b}[36m", "\u{1b}[1m", "\u{1b}[2m"] {
+        assert!(
+            header.contains(code),
+            "header missing {:?}: {:?}",
+            code,
+            header
+        );
+    }
+    assert!(
+        header.contains(env!("CARGO_PKG_VERSION")),
+        "header missing the version: {:?}",
+        header
     );
 }
 
@@ -467,8 +513,8 @@ fn test_quiet_beats_everything() {
         (&["--quiet"][..], &[("NO_COLOR", "1")][..]),
         (&["--quiet"][..], &[("CLICOLOR_FORCE", "1")][..]),
         (
-            &["--quiet", "--progress", "always", "--color", "always"][..],
-            &[][..],
+            &["--quiet"][..],
+            &[("FASTQC_PROGRESS", "always"), ("CLICOLOR_FORCE", "1")][..],
         ),
     ] {
         let stderr = run_binary_stderr(args, env);
@@ -480,4 +526,64 @@ fn test_quiet_beats_everything() {
             stderr
         );
     }
+}
+
+/// A log line emitted while the display is live must end up *above* it, as
+/// ordinary scrollback, with the display redrawn intact underneath — no stale
+/// copy stranded on screen and nothing of the message overwritten.
+///
+/// Checked on the forced display so the assertion does not need a terminal.
+#[test]
+fn test_log_lines_scroll_above_the_display() {
+    let tmp_dir = std::env::temp_dir().join(format!("fastqc_logline_{}", std::process::id()));
+    std::fs::create_dir_all(&tmp_dir).expect("temp dir");
+
+    // A file whose second record is malformed: the run reports it and carries
+    // on with the other file, so the error is printed mid-display.
+    let bad = tmp_dir.join("broken.fastq");
+    std::fs::write(&bad, "not a fastq file at all\n").expect("write");
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
+        .env("FASTQC_PROGRESS", "always")
+        .env("COLUMNS", "100")
+        .arg("-o")
+        .arg(&tmp_dir)
+        .arg(&bad)
+        .arg("tests/data/complex.fastq")
+        .output()
+        .expect("run fastqc");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    std::fs::remove_dir_all(&tmp_dir).ok();
+
+    assert!(
+        stderr.contains("Failed to process broken.fastq"),
+        "error line missing entirely: {:?}",
+        stderr
+    );
+
+    // The message must survive intact on one line, not be cut in half by a
+    // redraw landing in the middle of it.
+    let message = "Failed to process broken.fastq";
+    let after = &stderr[stderr.find(message).unwrap() + message.len()..];
+    let rest_of_line = after.split('\n').next().unwrap_or("");
+    assert!(
+        !rest_of_line.contains('\u{1b}'),
+        "the display redrew into the middle of the log line: {:?}",
+        rest_of_line
+    );
+
+    // The display is still whole afterwards: exactly one header, and the bars
+    // and table drawn below the message rather than a stale copy above it.
+    let headers = stderr.matches("FastQC-Rust").count();
+    let after_message = &stderr[stderr.find(message).unwrap()..];
+    assert!(
+        after_message.contains("FastQC-Rust"),
+        "display was not redrawn below the log line: {:?}",
+        stderr
+    );
+    assert!(
+        headers >= 1,
+        "expected the pinned header, found {}",
+        headers
+    );
 }

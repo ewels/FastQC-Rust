@@ -32,32 +32,41 @@
 //!
 //! # Animation and colour
 //!
-//! These are two independent switches, each auto-detected and each forceable in
-//! both directions. `--quiet` beats both and says nothing but errors.
+//! These are two independent switches, each auto-detected and each overridable
+//! through the environment — there are no command-line flags for them.
+//! `--quiet` beats both and says nothing but errors.
 //!
-//! **Animation** (`--progress auto|always|never`) — `auto` draws the display
-//! only for an interactive stderr. When stderr is a pipe, a log file or a
-//! workflow engine's capture, or when `TERM` says the terminal cannot handle a
-//! redrawn region (`dumb`, or unset on Unix), a redrawn region would be noise
-//! or outright corruption, so the reporter degrades to one plain line per file
-//! at start and finish. `always` draws it regardless — for recording a demo, or
-//! writing a transcript to a file — by handing indicatif the terminal directly
-//! instead of its self-hiding stderr draw target. `never` always takes the
-//! plain path. A forced run has no terminal to measure, so it sizes itself from
-//! `COLUMNS`/`LINES`, falling back to a sensible default.
+//! **Animation** (`FASTQC_PROGRESS=auto|always|never`) — the default `auto`
+//! draws the display only for an interactive stderr. When stderr is a pipe, a
+//! log file or a workflow engine's capture, or when `TERM` says the terminal
+//! cannot handle a redrawn region (`dumb`, or unset on Unix), a redrawn region
+//! would be noise or outright corruption, so the reporter degrades to one plain
+//! line per file at start and finish. `always` draws it regardless — for
+//! recording a demo, or feeding a consumer that re-renders the stream — by
+//! handing indicatif the terminal directly instead of its self-hiding stderr
+//! draw target, sizing itself from `COLUMNS`/`LINES` since there is no terminal
+//! to measure. `never` always takes the plain path.
 //!
-//! **Colour** (`--color auto|always|never`) — `auto` follows
-//! [`console::colors_enabled_stderr`], which honours `NO_COLOR`, the
-//! [clicolors spec](https://bixense.com/clicolors/) (`CLICOLOR`,
-//! `CLICOLOR_FORCE`), whether stderr is a tty, and `TERM=dumb`. `always` and
-//! `never` override that via `console::set_colors_enabled_stderr`, which is
-//! also what indicatif's template styling reads, so one call covers this
-//! module's own styling and the bars alike.
+//! **Colour** follows [`console::colors_enabled_stderr`], which implements the
+//! usual conventions with no help from us: `NO_COLOR` disables colour, the
+//! [clicolors spec](https://bixense.com/clicolors/) `CLICOLOR=0` disables it and
+//! `CLICOLOR_FORCE=1` forces it on even for a pipe, and `TERM=dumb` disables it.
+//! indicatif's template styling reads the same function, so one signal covers
+//! this module's styling and the bars alike.
 //!
-//! Because they are independent: colour off still draws the bars, just without
-//! escape codes; and the plain fallback still colours its lines when colour is
-//! on, which is what a CI log viewer wants — it renders escape sequences
-//! happily while not being a terminal.
+//! Because the two are independent: colour off still draws the bars, just
+//! without escape codes; and the plain fallback still colours its lines when
+//! colour is forced on, which is what a CI log viewer wants — it renders escape
+//! sequences happily while not being a terminal.
+//!
+//! # Log lines
+//!
+//! Anything printed while the display is up has to go through
+//! [`log_line`] (or [`ProgressReporter::error`]), which hands it to indicatif to
+//! print *above* the redrawn region. The line then scrolls up as ordinary
+//! output and the display stays pinned below it, so nothing is overwritten and
+//! nothing overwrites the bars. Writing to stderr directly would land in the
+//! middle of the display and be erased by the next frame.
 
 use std::io::IsTerminal;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -68,8 +77,50 @@ use std::time::Duration;
 use console::{style, truncate_str, Term};
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle, TermLike};
 
-use crate::config::{FastQCConfig, When};
 use crate::modules::basic_stats::{BasicStatsCounters, LiveStats};
+
+/// Environment variable selecting the progress display, matching the
+/// `FASTQC_`-prefixed convention already used for the gzip backend.
+pub const PROGRESS_ENV: &str = "FASTQC_PROGRESS";
+
+/// A tri-state switch for behaviour that is normally auto-detected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum When {
+    /// Decide from the environment (default).
+    #[default]
+    Auto,
+    /// Force on, whatever the environment looks like.
+    Always,
+    /// Force off.
+    Never,
+}
+
+impl When {
+    /// Parse a `FASTQC_PROGRESS`-style value. Unrecognised values fall back to
+    /// `Auto` rather than failing a run over a display preference.
+    fn parse(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "always" | "force" | "1" | "yes" | "true" | "on" => When::Always,
+            "never" | "none" | "0" | "no" | "false" | "off" => When::Never,
+            _ => When::Auto,
+        }
+    }
+
+    fn from_env(name: &str) -> Self {
+        std::env::var(name)
+            .map(|v| Self::parse(&v))
+            .unwrap_or_default()
+    }
+
+    /// The forced value, or `None` when the environment should decide.
+    fn forced(self) -> Option<bool> {
+        match self {
+            When::Auto => None,
+            When::Always => Some(true),
+            When::Never => Some(false),
+        }
+    }
+}
 
 /// Above this many files, per-file bars are replaced by a single bar counting
 /// completed files.
@@ -101,6 +152,48 @@ const MAX_NAME_WIDTH: usize = 30;
 /// smoothly rather than in 1% steps.
 const SCALE: u64 = 1000;
 
+/// The display currently drawing to stderr, if there is one.
+///
+/// Code deep in the analysis (a module noticing bad data, a reader hitting an
+/// odd record) has no handle on the reporter, but its warnings must not be
+/// written straight to stderr while a redrawn region is on screen — they would
+/// land in the middle of the bars and be overwritten by the next frame. Routing
+/// them through here makes them scroll away above the display instead.
+static ACTIVE_DISPLAY: Mutex<Option<MultiProgress>> = Mutex::new(None);
+
+/// Emit a line that scrolls above the progress display, wherever it is called
+/// from. Falls back to plain stderr when no display is active.
+///
+/// The line is printed exactly once and never redrawn, so it behaves like an
+/// ordinary log line: the display stays pinned below it.
+pub fn log_line(message: &str) {
+    let active = ACTIVE_DISPLAY.lock().unwrap_or_else(|e| e.into_inner());
+    match active.as_ref() {
+        Some(multi) => print_above(multi, message),
+        None => eprintln!("{}", message),
+    }
+}
+
+/// Print `message` above the redrawn region.
+///
+/// `suspend` rather than `println`: `println` clears the display using a line
+/// count captured before it takes the lock, so a bar update landing from
+/// another thread in between leaves a stale copy of the whole display stranded
+/// on screen. `suspend` holds indicatif's lock across clear, print and redraw,
+/// which is exactly the atomicity a concurrent run needs.
+fn print_above(multi: &MultiProgress, message: &str) {
+    // Erase the whole region, write the line as ordinary scrollback, and let
+    // the next update redraw the display beneath it.
+    //
+    // Not `println` or `suspend`: both erase using the line count from the last
+    // frame indicatif drew, and with bars being updated from several threads
+    // that count can lag what is actually on screen, which strands a stale copy
+    // of the display above the live one. `clear` resets the count to zero, so
+    // there is no bookkeeping left to be wrong.
+    let _ = multi.clear();
+    eprintln!("{}", message);
+}
+
 /// The terminal progress display for a whole run.
 ///
 /// Cheap to share across the rayon workers: every method is `&self` and
@@ -122,6 +215,8 @@ enum Mode {
 
 struct Live {
     multi: MultiProgress,
+    /// Pinned header and spacer at the top of the redrawn region.
+    header: Vec<ProgressBar>,
     bars: Bars,
     table: Option<Arc<Table>>,
     /// Blank line kept at the bottom of the redrawn region.
@@ -183,20 +278,13 @@ fn choose_mode(
 
 impl ProgressReporter {
     /// Build a reporter for a run over `names` (the file group display names,
-    /// in command-line order), honouring the run's `--quiet`, `--progress` and
-    /// `--color` settings.
-    pub fn new(names: &[String], config: &FastQCConfig) -> Self {
-        // `--color always/never` overrides the environment for everything that
-        // follows: console caches the answer behind this same flag, and
-        // indicatif's template styling reads it too.
-        if let Some(forced) = config.color.forced() {
-            console::set_colors_enabled_stderr(forced);
-        }
-
-        let forced_display = config.progress == When::Always;
+    /// in command-line order).
+    pub fn new(names: &[String], quiet: bool) -> Self {
+        let progress = When::from_env(PROGRESS_ENV);
+        let forced_display = progress == When::Always;
         let choice = choose_mode(
-            config.quiet,
-            config.progress,
+            quiet,
+            progress,
             std::io::stderr().is_terminal(),
             console::is_dumb(),
         );
@@ -243,9 +331,7 @@ impl ProgressReporter {
     /// matching the previous behaviour of the runner.
     pub fn error(&self, message: &str) {
         match &self.mode {
-            Mode::Live(live) => {
-                let _ = live.multi.println(paint_error(live.colors, message));
-            }
+            Mode::Live(live) => print_above(&live.multi, &paint_error(live.colors, message)),
             Mode::Plain { colors } => eprintln!("{}", paint_error(*colors, message)),
             // Silent still reports errors, but has no colour context to use.
             Mode::Silent => eprintln!("{}", message),
@@ -355,23 +441,6 @@ impl Live {
         let term = ForcedTerm::new();
         let term_width = term.width() as usize;
 
-        // The version banner sits above the bars as an ordinary log line, so
-        // it scrolls with the rest of the output rather than being redrawn.
-        //
-        // A terminal driver rewrites `\n` as `\r\n` on the way out (ONLCR). A
-        // forced display is deliberately writing terminal control output to
-        // something that is *not* a terminal, so nothing performs that
-        // translation, and a bare newline would leave the cursor parked in the
-        // banner's column for whatever re-renders the stream — putting the
-        // first frame of the display 23 columns to the right. Emit the carriage
-        // return ourselves in that case; on a real terminal it is a no-op.
-        let newline = if forced { "\r\n" } else { "\n" };
-        eprint!(
-            "{} {}{newline}{newline}",
-            paint(colors, "FastQC-Rust", |s| s.cyan().bold()),
-            paint(colors, &format!("v{}", crate::RUST_VERSION), |s| s.dim()),
-        );
-
         // The default stderr draw target hides itself when stderr is not an
         // interactive terminal. `--progress always` asks for the display
         // anyway, so bypass that check by handing indicatif the terminal
@@ -387,6 +456,21 @@ impl Live {
         } else {
             MultiProgress::new()
         };
+
+        // The name and version are a pinned header at the top of the redrawn
+        // region rather than a line printed once before it. That keeps them
+        // directly above the bars for the whole run: anything printed with
+        // `println` scrolls past *above* the header instead of separating it
+        // from the display.
+        let banner = static_line(&multi);
+        banner.set_message(format!(
+            "{} {}",
+            paint(colors, "FastQC-Rust", |s| s.cyan().bold()),
+            paint(colors, &format!("v{}", crate::RUST_VERSION), |s| s.dim()),
+        ));
+        let spacer = static_line(&multi);
+        spacer.set_message(" ");
+        let header = vec![banner, spacer];
 
         let label_width = names
             .iter()
@@ -440,8 +524,11 @@ impl Live {
         let trailer = static_line(&multi);
         trailer.set_message(" ");
 
+        *ACTIVE_DISPLAY.lock().unwrap_or_else(|e| e.into_inner()) = Some(multi.clone());
+
         let live = Live {
             multi,
+            header,
             bars,
             table,
             trailer,
@@ -544,6 +631,10 @@ impl Live {
         // indicatif erases any bar that is still unfinished when it is dropped,
         // so the static lines have to be explicitly finished for the completed
         // display to survive the end of the run.
+        *ACTIVE_DISPLAY.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        for line in &self.header {
+            line.finish();
+        }
         if let Some(table) = &self.table {
             table.finish();
         }
@@ -651,11 +742,14 @@ impl TermLike for ForcedTerm {
 
 /// The live Basic Statistics table shown underneath the progress bars.
 ///
-/// Each line of the table (borders included) is a zero-length progress bar
-/// rendering only its message, which is how a static block of text can be kept
-/// in the redrawn region below the bars.
+/// The whole table is a *single* zero-length progress bar whose message spans
+/// several lines — indicatif splits a message on newlines and accounts for
+/// every line. One bar rather than one per row matters: a refresh is then a
+/// single message update and so a single redraw, instead of a dozen redraws of
+/// the entire display several times a second, which churns the terminal and
+/// races with anything trying to print above it.
 struct Table {
-    lines: Vec<ProgressBar>,
+    line: ProgressBar,
     columns: Vec<Column>,
     /// Row labels, in report order.
     measures: Vec<&'static str>,
@@ -688,15 +782,8 @@ impl Table {
             })
             .collect();
 
-        // A blank spacer, then one line per table row. The line count is fixed
-        // (spacer + three borders + header + one row per measure), so the block
-        // never needs to grow or shrink while the run is in progress.
-        let lines = (0..measures.len() + 5)
-            .map(|_| static_line(multi))
-            .collect();
-
         let table = Table {
-            lines,
+            line: static_line(multi),
             columns,
             measures,
             label_width,
@@ -707,12 +794,10 @@ impl Table {
         table
     }
 
-    /// Mark every line finished so the table is not erased when the progress
-    /// bars behind it are dropped at the end of the run.
+    /// Mark the table finished so it is not erased when the progress bars
+    /// behind it are dropped at the end of the run.
     fn finish(&self) {
-        for line in &self.lines {
-            line.finish();
-        }
+        self.line.finish();
     }
 
     /// Re-render every line from the latest published counters.
@@ -729,7 +814,7 @@ impl Table {
             })
             .collect();
 
-        let mut out = Vec::with_capacity(self.lines.len());
+        let mut out: Vec<String> = Vec::with_capacity(self.measures.len() + 5);
         // A single space rather than an empty string: indicatif skips lines
         // that render to nothing, and the spacer is wanted.
         out.push(" ".to_string());
@@ -764,9 +849,8 @@ impl Table {
         }
         out.push(self.rule('└', '┴', '┘'));
 
-        for (line, text) in self.lines.iter().zip(out) {
-            line.set_message(text);
-        }
+        // One update, one redraw.
+        self.line.set_message(out.join("\n"));
     }
 
     /// A horizontal border line.
@@ -1068,6 +1152,34 @@ mod tests {
         assert_eq!(When::Auto.forced(), None);
         assert_eq!(When::Always.forced(), Some(true));
         assert_eq!(When::Never.forced(), Some(false));
+    }
+
+    #[test]
+    fn test_when_parse() {
+        for on in [
+            "always", "ALWAYS", " always ", "force", "1", "yes", "true", "on",
+        ] {
+            assert_eq!(When::parse(on), When::Always, "{on:?}");
+        }
+        for off in ["never", "Never", "none", "0", "no", "false", "off"] {
+            assert_eq!(When::parse(off), When::Never, "{off:?}");
+        }
+        // Anything unrecognised falls back to detection rather than failing the
+        // run over a display preference.
+        for other in ["", "auto", "maybe", "yes please"] {
+            assert_eq!(When::parse(other), When::Auto, "{other:?}");
+        }
+    }
+
+    /// With no display active, a log line still reaches stderr rather than
+    /// being swallowed.
+    #[test]
+    fn test_log_line_without_a_display() {
+        assert!(ACTIVE_DISPLAY
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_none());
+        log_line("no display active, so this goes straight to stderr");
     }
 
     /// With colour off, styling helpers must emit the bare text — no escapes,

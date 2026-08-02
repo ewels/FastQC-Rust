@@ -93,10 +93,10 @@ pub fn get_casava_groups(files: &[PathBuf]) -> Vec<(String, Vec<PathBuf>)> {
             }
             Err(_) => {
                 // Java prints warning and adds as singleton
-                eprintln!(
+                crate::progress::log_line(&format!(
                     "File '{}' didn't look like part of a CASAVA group",
                     file_name
-                );
+                ));
                 order.push(file_name.clone());
                 groups.entry(file_name).or_default().push(file.clone());
             }

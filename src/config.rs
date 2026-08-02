@@ -17,33 +17,6 @@ pub enum TemplateName {
     Modern,
 }
 
-/// A tri-state switch for terminal behaviour that is normally auto-detected.
-///
-/// `Auto` keeps the detection; `Always` and `Never` override it in either
-/// direction, which is what makes the behaviour usable from a script, a CI job
-/// or a screen recording where the detection would guess wrong.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, clap::ValueEnum)]
-pub enum When {
-    /// Decide from the environment (default).
-    #[default]
-    Auto,
-    /// Force on, whatever the environment looks like.
-    Always,
-    /// Force off.
-    Never,
-}
-
-impl When {
-    /// The forced value, or `None` when the environment should decide.
-    pub fn forced(self) -> Option<bool> {
-        match self {
-            When::Auto => None,
-            When::Always => Some(true),
-            When::Never => Some(false),
-        }
-    }
-}
-
 // Embedded default config files match the Java resource files exactly.
 // These are the same files shipped in the Java FastQC Configuration/ directory.
 const DEFAULT_LIMITS: &str = include_str!("../assets/limits.txt");
@@ -73,18 +46,6 @@ pub struct FastQCConfig {
     pub svg_output: bool,
     pub temp_dir: Option<PathBuf>,
     pub template: TemplateName,
-    /// Whether to draw the live progress display (`--progress`).
-    ///
-    /// `Auto` uses it only on an interactive terminal. `Always` forces it even
-    /// when stderr is redirected — for recording a demo, or a CI log viewer
-    /// that renders escape sequences. `Never` falls back to plain per-file
-    /// lines. `--quiet` overrides all three.
-    pub progress: When,
-    /// Whether to colour terminal output (`--color`).
-    ///
-    /// `Auto` honours `NO_COLOR` and the clicolors spec. `Always` and `Never`
-    /// override that, independently of `progress`.
-    pub color: When,
     /// Per-file worker budget for the parallel gzip (rapidgzip) backend.
     ///
     /// `0` means "auto": the runner derives a value from the available
@@ -117,8 +78,6 @@ impl Default for FastQCConfig {
             svg_output: false,
             temp_dir: None,
             template: TemplateName::Classic,
-            progress: When::Auto,
-            color: When::Auto,
             decompress_threads: 0,
         }
     }
