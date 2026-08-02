@@ -63,6 +63,23 @@ impl Read for ReaderKind {
     }
 }
 
+/// How a reader estimates its `percent_complete`. The three reader families
+/// track the compressed position differently; making it an enum keeps the modes
+/// mutually exclusive (previously two `Option` fields that must never both be
+/// `Some`) and drives the `percent_complete` match directly.
+enum Progress {
+    /// stdin has no seekable position; report 0% until EOF (matching Java).
+    Stdin,
+    /// bzip2 / plain text read on this thread: seek a cloned file handle for the
+    /// compressed byte position, exactly as Java queries
+    /// `fis.getChannel().position()`.
+    FilePosition(File),
+    /// gzip via rapidgzip: the decoder owns the file and reads it positionally on
+    /// worker threads, so there is no single cursor to seek. Count the compressed
+    /// bytes physically served instead.
+    CompressedBytes(Arc<AtomicU64>),
+}
+
 // ---------------------------------------------------------------------------
 // Compression detection
 // ---------------------------------------------------------------------------
@@ -91,20 +108,6 @@ fn detect_compression_from_magic(path: &Path) -> io::Result<&'static str> {
 // ---------------------------------------------------------------------------
 // gzip decompression (parallel & multi-member, via rapidgzip)
 // ---------------------------------------------------------------------------
-
-/// Resolve the per-file rapidgzip worker budget.
-///
-/// `config.decompress_threads == 0` means "auto": use the machine's available
-/// parallelism. `runner::run` normalises this ahead of time to spread the
-/// budget across the files processed concurrently; a direct caller (e.g. a
-/// unit test) instead gets the full machine width.
-fn resolve_decompress_threads(config: &FastQCConfig) -> usize {
-    if config.decompress_threads > 0 {
-        config.decompress_threads
-    } else {
-        crate::utils::available_parallelism()
-    }
-}
 
 /// A [`rapidgzip_core::ReadAt`] source that counts the compressed bytes served,
 /// so the FASTQ reader can report progress while rapidgzip owns the file.
@@ -162,17 +165,8 @@ pub struct FastQFile {
     reader: ReaderKind,
     name: String,
     file_size: u64,
-    /// Cloned file handle used solely to query the compressed byte position
-    /// via seek(Current). Java does this with fis.getChannel().position().
-    /// `Some` for the bzip2 and plain-text readers; `None` for gzip (which is
-    /// tracked via `compressed_counter`) and stdin (no file to track).
-    position_handle: Option<File>,
-
-    /// Compressed bytes physically read so far, for progress tracking on gzip
-    /// inputs. The rapidgzip decoder owns the file and reads it positionally on
-    /// worker threads, so there is no single seekable cursor to query. `None`
-    /// for every other reader kind. See `percent_complete`.
-    compressed_counter: Option<Arc<AtomicU64>>,
+    /// How this reader reports progress. See [`Progress`] and `percent_complete`.
+    progress: Progress,
 
     /// The next sequence ready to be returned (look-ahead buffer).
     next_sequence: Option<Sequence>,
@@ -223,8 +217,11 @@ impl FastQFile {
         // fis.getChannel().position() for progress tracking. We clone the File
         // handle before wrapping it in decompression so we can seek on the clone
         // to get the compressed byte position.
-        let (reader, position_handle, compressed_counter) = if is_stdin {
-            (ReaderKind::Stdin(BufReader::new(io::stdin())), None, None)
+        let (reader, progress) = if is_stdin {
+            (
+                ReaderKind::Stdin(BufReader::new(io::stdin())),
+                Progress::Stdin,
+            )
         } else {
             let lower_name = name.to_lowercase();
             let compression = if lower_name.ends_with(".gz") {
@@ -241,12 +238,14 @@ impl FastQFile {
                 // .gz is decompressed in parallel by rapidgzip; progress is
                 // tracked by the compressed-byte counter it returns.
                 "gz" => {
-                    let threads = resolve_decompress_threads(config);
+                    // `runner::run` normalises the "auto" (0) budget to a positive
+                    // value before we get here; `.max(1)` floors any direct caller
+                    // (e.g. a unit test) that leaves it at 0.
+                    let threads = config.decompress_threads.max(1);
                     let (reader, counter) = open_rapidgzip(file, threads)?;
                     (
                         ReaderKind::Gzip(BufReader::new(reader)),
-                        None,
-                        Some(counter),
+                        Progress::CompressedBytes(counter),
                     )
                 }
                 // bzip2 and plain text are read on this thread; progress uses a
@@ -255,16 +254,14 @@ impl FastQFile {
                     let pos_handle = file.try_clone()?;
                     (
                         ReaderKind::Bzip2(Box::new(BufReader::new(DecoderReader::new(file)))),
-                        Some(pos_handle),
-                        None,
+                        Progress::FilePosition(pos_handle),
                     )
                 }
                 _ => {
                     let pos_handle = file.try_clone()?;
                     (
                         ReaderKind::Plain(BufReader::new(file)),
-                        Some(pos_handle),
-                        None,
+                        Progress::FilePosition(pos_handle),
                     )
                 }
             }
@@ -277,8 +274,7 @@ impl FastQFile {
             reader,
             name,
             file_size,
-            position_handle,
-            compressed_counter,
+            progress,
             next_sequence: None,
             line_number: 0,
             is_colorspace: false,
@@ -469,33 +465,32 @@ impl SequenceFile for FastQFile {
         if self.next_sequence.is_none() {
             return 100.0;
         }
-        if self.name.starts_with("stdin") {
-            return 0.0;
-        }
-        // gzip: the rapidgzip decoder owns the file and reads it positionally on
-        // background threads, so there is no single cursor to seek. Estimate
-        // progress from the compressed bytes physically read so far (bounded
-        // read-ahead keeps this close to what the parser has consumed). Same
-        // intent as Java's compressed-position / file-size.
-        if let Some(ref counter) = self.compressed_counter {
-            if self.file_size == 0 {
-                return 0.0;
-            }
-            let read = counter.load(Ordering::Relaxed);
-            return ((read as f64 / self.file_size as f64) * 100.0).min(100.0);
-        }
-        // Java queries fis.getChannel().position() on the raw FileInputStream
-        // to get the compressed byte position, then divides by fileSize.
-        // We do the same via a cloned file handle using seek(Current).
-        if let Some(ref handle) = self.position_handle {
-            // try_clone to get a mutable handle without requiring &mut self
-            if let Ok(mut h) = handle.try_clone() {
-                if let Ok(pos) = h.stream_position() {
-                    return (pos as f64 / self.file_size as f64) * 100.0;
+        match &self.progress {
+            // stdin: Java returns 0 until EOF (handled above), then 100.
+            Progress::Stdin => 0.0,
+            // gzip: the rapidgzip decoder owns the file and reads it positionally
+            // on background threads, so there is no single cursor to seek.
+            // Estimate progress from the compressed bytes physically read so far
+            // (bounded read-ahead keeps this close to what the parser has
+            // consumed). Same intent as Java's compressed-position / file-size.
+            Progress::CompressedBytes(counter) => {
+                if self.file_size == 0 {
+                    0.0
+                } else {
+                    let read = counter.load(Ordering::Relaxed);
+                    ((read as f64 / self.file_size as f64) * 100.0).min(100.0)
                 }
             }
+            // Java queries fis.getChannel().position() on the raw FileInputStream
+            // to get the compressed byte position, then divides by fileSize. We
+            // do the same via a cloned handle (seek(Current)) so we need only
+            // `&self`; a clone or seek failure degrades to 0%.
+            Progress::FilePosition(handle) => handle
+                .try_clone()
+                .and_then(|mut h| h.stream_position())
+                .map(|pos| (pos as f64 / self.file_size as f64) * 100.0)
+                .unwrap_or(0.0),
         }
-        0.0
     }
 }
 
@@ -762,10 +757,10 @@ mod tests {
         let mut plain = FastQFile::open(&config, format!("{base}minimal.fastq")).unwrap();
         let mut gz = FastQFile::open(&config, format!("{base}minimal.fastq.gz")).unwrap();
 
-        // Opening the .gz file must engage the gzip path (compressed_counter is
-        // set only there).
+        // Opening the .gz file must engage the gzip path (compressed-byte
+        // progress tracking is used only there).
         assert!(
-            gz.compressed_counter.is_some(),
+            matches!(gz.progress, Progress::CompressedBytes(_)),
             "expected the gzip reader for .gz input"
         );
 
@@ -791,7 +786,7 @@ mod tests {
         let config = FastQCConfig::default();
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/realistic.fastq.gz");
         let mut reader = FastQFile::open(&config, path).unwrap();
-        assert!(reader.compressed_counter.is_some());
+        assert!(matches!(reader.progress, Progress::CompressedBytes(_)));
 
         let mut count = 0u64;
         while let Some(result) = reader.next() {
