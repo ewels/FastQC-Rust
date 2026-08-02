@@ -31,7 +31,8 @@ path = "src/lib.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+# Parallel, multi-member gzip decompression for .fastq.gz (pure Rust, zlib-rs backend).
+rapidgzip-core = "0.1.0"
 bzip2-rs = "0.1"
 noodles = { version = "0.88", features = ["bam", "sam", "bgzf"] }
 zip = "2"
@@ -44,16 +45,6 @@ memchr = "2"
 resvg = "0.47"
 tiny-skia = "0.12"
 png = "0.18"
-
-# Optional: parallel, multi-member gzip decompression (COMBINE-lab/rapidgzip-rust).
-# Pure Rust (zlib-rs backend, no C toolchain).
-rapidgzip-core = { version = "0.1.0", optional = true }
-
-[features]
-default = ["native-zlib"]
-native-zlib = ["flate2/zlib"]
-# Enable the rapidgzip parallel-gzip backend for .fastq.gz inputs.
-rapidgzip = ["dep:rapidgzip-core"]
 
 [profile.release]
 opt-level = 3

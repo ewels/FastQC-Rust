@@ -77,10 +77,9 @@ struct Cli {
     #[arg(short, long, value_name = "N", default_value = "1")]
     threads: usize,
 
-    /// Worker budget for the parallel gzip (rapidgzip) backend, per file.
-    /// 0 (default) auto-derives from available CPUs and the number of files
-    /// processed concurrently. Only affects .fastq.gz inputs when the binary
-    /// was built with the `rapidgzip` feature and that backend is selected.
+    /// Worker budget for parallel gzip decompression of .fastq.gz inputs, per
+    /// file. 0 (default) auto-derives from the available CPUs and the number of
+    /// files processed concurrently.
     #[arg(long = "decompress-threads", value_name = "N", default_value = "0")]
     decompress_threads: usize,
 
