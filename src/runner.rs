@@ -45,6 +45,59 @@ const BATCH_SIZE: usize = 1024;
 /// keeping peak memory bounded. Matches the Java pipeline's queue capacity.
 const QUEUE_CAPACITY: usize = 32;
 
+/// How the `-t/--threads` budget and the hardware split across the two axes of
+/// concurrency, computed once per run. See [`plan_threads`].
+struct ThreadPlan {
+    /// Number of file groups analysed in parallel (outer rayon pool width).
+    outer_slots: usize,
+    /// Per-file analysis workers. `0` selects the byte-identical sequential path.
+    processors_per_file: usize,
+    /// Per-file rapidgzip decode budget used when `--decompress-threads` is `0`.
+    auto_decompress_threads: usize,
+}
+
+/// Split the `-t/--threads` budget across files and per-file pipelines, and
+/// derive the "auto" gzip-decompression budget from the hardware.
+///
+/// Files are the cheapest axis to parallelise across (each scales linearly and
+/// needs no coordination), so the `-t` budget is spread over files first and
+/// whatever is left builds each file's internal pipeline:
+///
+/// ```text
+/// outer_slots         = min(files, total)
+/// threads_per_file    = max(1, total / outer_slots)
+/// processors_per_file = min(MAX_PROCESSORS_PER_FILE, threads_per_file - 1)
+/// ```
+///
+/// A lone large file gets the whole budget as one pipeline (reader + up to
+/// `MAX_PROCESSORS_PER_FILE` workers); a run with many files mostly scales out
+/// across them. A budget of one thread per file yields `processors_per_file == 0`,
+/// i.e. the single-threaded path that is byte-identical to the original runner.
+///
+/// `auto_decompress_threads` is budgeted from the *hardware* (`hw_parallelism`),
+/// not from `-t`: `-t` governs the analysis pipeline, while decompression fills
+/// the physical cores each concurrently-analysed file leaves free. It is only
+/// used when `--decompress-threads` is left at its `0` ("auto") default; an
+/// explicit value is honoured verbatim.
+fn plan_threads(total_threads: usize, n_files: usize, hw_parallelism: usize) -> ThreadPlan {
+    let total = total_threads.max(1);
+    let n_files = n_files.max(1);
+    let outer_slots = n_files.min(total);
+    let threads_per_file = (total / outer_slots).max(1);
+    let processors_per_file = MAX_PROCESSORS_PER_FILE.min(threads_per_file - 1);
+
+    // Cores left for decompression on each concurrently-analysed file after its
+    // pipeline (reader + processors) has taken its share. `outer_slots >= 1`.
+    let per_file_hw = hw_parallelism / outer_slots;
+    let auto_decompress_threads = per_file_hw.saturating_sub(processors_per_file).max(1);
+
+    ThreadPlan {
+        outer_slots,
+        processors_per_file,
+        auto_decompress_threads,
+    }
+}
+
 /// A unit of work: one logical sample to process through all QC modules.
 /// Contains a display name and the list of file paths that constitute it.
 struct FileGroup {
@@ -102,59 +155,25 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
     // Java's OfflineRunner.java lines 103-117 handles this branching.
     let file_groups = build_file_groups(config, &valid_files);
 
-    // Split the total thread budget (-t/--threads) between outer concurrency
-    // (file groups analysed in parallel) and inner concurrency (the per-file
-    // reader + processor pipeline).
-    //
-    // Files are the cheapest axis to parallelise across — each one scales
-    // linearly and needs no coordination — so spread the budget over the files
-    // first, then hand whatever is left to each file's internal pipeline:
-    //
-    //   outer_slots         = min(files, total)          // files run at once
-    //   threads_per_file    = max(1, total / outer_slots)
-    //   processors_per_file = min(MAX_PROCESSORS_PER_FILE, threads_per_file - 1)
-    //
-    // So a lone large file gets the whole budget as an internal pipeline (reader
-    // + up to MAX workers), while a run with many files mostly scales out across
-    // them and only builds a pipeline per file if threads are left over. A budget
-    // of 1 (or one thread per file) disables the pipeline entirely: each file is
-    // analysed on a single thread, byte-identical to the original unbatched
-    // runner. Going wide on one file is what lets a single .fastq.gz benefit from
-    // extra threads now that parallel decompression has removed the gzip floor.
-    let total_threads = config.threads.max(1);
-    let n_files = file_groups.len().max(1);
-    let outer_slots = n_files.min(total_threads);
-    let threads_per_file = (total_threads / outer_slots).max(1);
-    // With `threads_per_file >= 1`, a budget of one thread per file yields 0
-    // processors (`min(MAX, 0)`), which disables the pipeline for that file.
-    let processors_per_file = MAX_PROCESSORS_PER_FILE.min(threads_per_file - 1);
+    // Split the `-t/--threads` budget across the two axes of concurrency, and
+    // derive the "auto" gzip-decompression budget from the hardware. See
+    // [`plan_threads`] for the reasoning behind the split.
+    let plan = plan_threads(
+        config.threads,
+        file_groups.len(),
+        crate::utils::available_parallelism(),
+    );
+    let outer_slots = plan.outer_slots;
+    let processors_per_file = plan.processors_per_file;
 
-    // Normalise the parallel-gzip (rapidgzip) worker budget. When left on
-    // "auto" (0), give each concurrently-decompressed file the cores left over
-    // after its analysis pipeline (reader + processors) has taken its share, so
-    // decompression and analysis overlap without gross CPU oversubscription.
-    // zlib-rs decode is fast per-thread, so a small budget keeps the reader fed
-    // once analysis (not gzip) is the bottleneck. An explicit
-    // --decompress-threads value is used verbatim.
-    //
-    // By design this is budgeted from the hardware (`available_parallelism`), not
-    // from `-t`: `-t` governs the analysis pipeline, while decompression fills the
-    // physical cores left over. `processors_per_file` is the analysis-worker count
-    // reserved per file; the pipeline may later run fewer workers than that (capped
-    // by module count), which only means decompression is provisioned slightly
-    // conservatively in that edge case.
-    let owned_config;
-    let config = if config.decompress_threads == 0 {
-        let budget = crate::utils::available_parallelism();
-        // `outer_slots` (>= 1) is the number of files decompressed concurrently.
-        let per_file = budget / outer_slots;
-        let mut c = config.clone();
-        c.decompress_threads = per_file.saturating_sub(processors_per_file).max(1);
-        owned_config = c;
-        &owned_config
-    } else {
-        config
-    };
+    // Normalise the parallel-gzip (rapidgzip) worker budget: a `0`
+    // ("auto") `--decompress-threads` takes the hardware-derived value; an
+    // explicit value is used verbatim.
+    let mut owned_config = config.clone();
+    if owned_config.decompress_threads == 0 {
+        owned_config.decompress_threads = plan.auto_decompress_threads;
+    }
+    let config = &owned_config;
 
     // Build the outer rayon pool: one slot per file group analysed in parallel.
     // Each slot drives a per-file pipeline (a reader plus `processors_per_file`
@@ -447,6 +466,8 @@ fn partition_modules_by_cost(
     modules: Vec<Box<dyn QCModule>>,
     num_workers: usize,
 ) -> Vec<Vec<(usize, Box<dyn QCModule>)>> {
+    debug_assert!(num_workers > 0, "partition needs at least one worker");
+
     let mut order: Vec<(usize, Box<dyn QCModule>)> = modules.into_iter().enumerate().collect();
     order.sort_by_key(|entry| std::cmp::Reverse(entry.1.cost_hint()));
 
@@ -454,12 +475,8 @@ fn partition_modules_by_cost(
         (0..num_workers).map(|_| Vec::new()).collect();
     let mut loads = vec![0u64; num_workers];
     for (idx, module) in order {
-        let target = loads
-            .iter()
-            .enumerate()
-            .min_by_key(|&(_, &load)| load)
-            .map(|(i, _)| i)
-            .unwrap_or(0);
+        // Drop onto the currently lightest group; ties break to the lowest index.
+        let target = (0..num_workers).min_by_key(|&i| loads[i]).unwrap_or(0);
         loads[target] += module.cost_hint() as u64;
         groups[target].push((idx, module));
     }
@@ -496,13 +513,9 @@ fn process_sequences_parallel(
     // batch to every queue; workers only read from the sequences, never mutate
     // them, so sharing is safe. Bounded capacity gives backpressure so the
     // reader runs at most QUEUE_CAPACITY batches ahead of the slowest worker.
-    let mut senders = Vec::with_capacity(num_processors);
-    let mut receivers = Vec::with_capacity(num_processors);
-    for _ in 0..num_processors {
-        let (tx, rx) = sync_channel::<Arc<Vec<Sequence>>>(QUEUE_CAPACITY);
-        senders.push(tx);
-        receivers.push(rx);
-    }
+    let (senders, receivers): (Vec<_>, Vec<_>) = (0..num_processors)
+        .map(|_| sync_channel::<Arc<Vec<Sequence>>>(QUEUE_CAPACITY))
+        .unzip();
 
     let mut reader_error: Option<io::Error> = None;
 
@@ -739,6 +752,41 @@ mod tests {
             .collect();
         indices.sort_unstable();
         assert_eq!(indices, (0..n).collect::<Vec<_>>());
+    }
+
+    /// The thread planner splits the `-t` budget across files first, then builds
+    /// each file's pipeline from what's left, and derives the auto-decompress
+    /// budget from the hardware.
+    #[test]
+    fn test_plan_threads() {
+        // One thread total: no pipeline (0 processors = sequential path), all
+        // hardware left for decompression.
+        let p = plan_threads(1, 5, 8);
+        assert_eq!((p.outer_slots, p.processors_per_file), (1, 0));
+        assert_eq!(p.auto_decompress_threads, 8);
+
+        // A lone file with a big budget takes one pipeline capped at MAX workers.
+        let p = plan_threads(64, 1, 64);
+        assert_eq!(p.outer_slots, 1);
+        assert_eq!(p.processors_per_file, MAX_PROCESSORS_PER_FILE);
+        assert_eq!(p.auto_decompress_threads, 64 - MAX_PROCESSORS_PER_FILE);
+
+        // More files than threads: scale out across files, one thread each, so
+        // every file falls to the sequential path.
+        let p = plan_threads(4, 10, 8);
+        assert_eq!((p.outer_slots, p.processors_per_file), (4, 0));
+        assert_eq!(p.auto_decompress_threads, 2); // 8 hw / 4 files
+
+        // Budget divides evenly across two files: reader + 3 workers each.
+        let p = plan_threads(8, 2, 16);
+        assert_eq!((p.outer_slots, p.processors_per_file), (2, 3));
+        assert_eq!(p.auto_decompress_threads, 5); // 16/2 hw - 3 workers
+
+        // Degenerate zeros must not divide by zero and must stay >= 1.
+        let p = plan_threads(0, 0, 0);
+        assert_eq!(p.outer_slots, 1);
+        assert_eq!(p.processors_per_file, 0);
+        assert_eq!(p.auto_decompress_threads, 1);
     }
 
     /// The parallel analysis pipeline must produce output that is byte-identical

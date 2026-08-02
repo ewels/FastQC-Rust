@@ -92,20 +92,6 @@ fn detect_compression_from_magic(path: &Path) -> io::Result<&'static str> {
 // gzip decompression (parallel & multi-member, via rapidgzip)
 // ---------------------------------------------------------------------------
 
-/// Resolve the per-file rapidgzip worker budget.
-///
-/// `config.decompress_threads == 0` means "auto": use the machine's available
-/// parallelism. `runner::run` normalises this ahead of time to spread the
-/// budget across the files processed concurrently; a direct caller (e.g. a
-/// unit test) instead gets the full machine width.
-fn resolve_decompress_threads(config: &FastQCConfig) -> usize {
-    if config.decompress_threads > 0 {
-        config.decompress_threads
-    } else {
-        crate::utils::available_parallelism()
-    }
-}
-
 /// A [`rapidgzip_core::ReadAt`] source that counts the compressed bytes served,
 /// so the FASTQ reader can report progress while rapidgzip owns the file.
 struct CountingReadAt {
@@ -241,7 +227,10 @@ impl FastQFile {
                 // .gz is decompressed in parallel by rapidgzip; progress is
                 // tracked by the compressed-byte counter it returns.
                 "gz" => {
-                    let threads = resolve_decompress_threads(config);
+                    // `runner::run` normalises the "auto" (0) budget to a positive
+                    // value before we get here; `.max(1)` floors any direct caller
+                    // (e.g. a unit test) that leaves it at 0.
+                    let threads = config.decompress_threads.max(1);
                     let (reader, counter) = open_rapidgzip(file, threads)?;
                     (
                         ReaderKind::Gzip(BufReader::new(reader)),
