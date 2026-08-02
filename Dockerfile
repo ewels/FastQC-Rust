@@ -3,7 +3,6 @@ FROM rust:1-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
-    zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 ARG CPU_TARGET=""
@@ -25,7 +24,6 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     procps \
-    zlib1g \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /fastqc /usr/local/bin/fastqc

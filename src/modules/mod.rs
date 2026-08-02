@@ -45,6 +45,17 @@ pub trait QCModule: Send {
     /// Process a single sequence record, accumulating statistics.
     fn process_sequence(&mut self, sequence: &Sequence);
 
+    /// A rough, static hint of this module's per-sequence processing cost
+    /// relative to the other modules. It is used *only* to balance the modules
+    /// across worker threads in the parallel analysis pipeline, so that the few
+    /// expensive modules don't pile onto one thread. The values are approximate
+    /// and never affect results — a wrong hint only costs a little parallel
+    /// efficiency, never correctness. The default suits a lightweight
+    /// counting/accumulating module; heavier modules override it.
+    fn cost_hint(&self) -> u32 {
+        2
+    }
+
     /// The display name of this module as shown in the report.
     fn name(&self) -> &str;
 
@@ -58,6 +69,12 @@ pub trait QCModule: Send {
     /// BasicStats uses this to display the filename in the report.
     /// Other modules ignore it.
     fn set_filename(&mut self, _name: &str) {}
+
+    /// Attach a shared snapshot sink that the module publishes partial results
+    /// to while it runs, so the terminal progress display can show live
+    /// statistics. Only BasicStats implements this; every other module ignores
+    /// it, and nothing about the analysis changes when no sink is attached.
+    fn attach_live_stats(&mut self, _live: Arc<basic_stats::LiveStats>) {}
 
     /// Finalize calculations after all sequences have been processed.
     ///

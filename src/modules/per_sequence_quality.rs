@@ -119,6 +119,10 @@ impl PerSequenceQualityScores {
 }
 
 impl QCModule for PerSequenceQualityScores {
+    fn cost_hint(&self) -> u32 {
+        3
+    }
+
     fn process_sequence(&mut self, sequence: &Sequence) {
         let qual = &sequence.quality;
 
@@ -137,7 +141,26 @@ impl QCModule for PerSequenceQualityScores {
             // JAVA COMPAT: Integer division truncates towards zero, matching Java's `/`
             average_quality /= qual.len() as i32;
 
-            self.average_score_counts[average_quality as usize] += 1;
+            // Clamp rather than index blindly. Java throws
+            // ArrayIndexOutOfBoundsException and kills the run; a file whose
+            // quality line holds bytes at or above MAX_QUALITY_SCORE (a
+            // mis-encoded or non-ASCII line) would otherwise panic here, and
+            // under the parallel pipeline take a worker thread with it. Same
+            // treatment as QualityCount::add_value: the value is wrong for that
+            // read, but the rest of the file still gets analysed. Valid input
+            // never reaches this, so byte-identical output is unaffected.
+            let slot = (average_quality as usize).min(MAX_QUALITY_SCORE - 1);
+            if slot != average_quality as usize {
+                static WARNED: crate::progress::OncePerRun = crate::progress::OncePerRun::new();
+                if WARNED.should_say() {
+                    crate::progress::log_line(&format!(
+                        "Warning: mean quality {} exceeds maximum {}; clamping",
+                        average_quality,
+                        MAX_QUALITY_SCORE - 1
+                    ));
+                }
+            }
+            self.average_score_counts[slot] += 1;
             self.has_data = true;
         }
     }

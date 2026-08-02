@@ -52,6 +52,16 @@ impl Sequence {
     pub fn is_empty(&self) -> bool {
         self.sequence.is_empty()
     }
+
+    /// Roughly how much heap this record holds, for the analysis pipeline's
+    /// memory budgeting. The `Sequence` itself is not counted — only what it
+    /// owns, which is everything that scales with read length.
+    pub fn heap_bytes(&self) -> usize {
+        self.id.len()
+            + self.sequence.len()
+            + self.quality.len()
+            + self.colorspace.as_ref().map_or(0, Vec::len)
+    }
 }
 
 /// Trait for reading sequences from various file formats.

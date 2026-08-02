@@ -1,5 +1,133 @@
 # Changelog
 
+## Unreleased
+
+### Changes
+
+- **Live progress display.** The `Approx N% complete for <file>` lines inherited
+  from Java FastQC are replaced by a rich terminal display: a version banner,
+  then one progress bar per input file (in command-line order) showing that
+  file's own progress, read count and elapsed time. Runs of more than 10 files
+  collapse to a single bar counting completed files. A live Basic Statistics
+  table is drawn underneath whenever the terminal is wide enough for every
+  column to be readable, with a column per file and a row per measure from the
+  top of the report — cells start as `-` and fill in as the analysis proceeds,
+  ending on exactly the values written to the report (both are rendered from the
+  same counters). Each column heading is coloured to match its file's bar:
+  accent while it runs, green once analysed, red if it failed. Built on
+  [indicatif](https://crates.io/crates/indicatif). The display is used only for
+  an interactive stderr: when stderr is a pipe or a log file, or `TERM` is
+  `dumb`/unset, it degrades to one plain line per file at start and finish so
+  pipeline logs stay readable, and `--quiet` still silences everything but
+  errors. The name and version are printed before the run does anything else,
+  so everything it goes on to say — including complaints about the input files
+  themselves — appears beneath them in the order it happened.
+- **`FASTQC_PROGRESS=auto|always|never`** overrides the display auto-detection
+  in either direction. `always` draws the bars even when stderr is redirected —
+  for recording a demo, or a consumer that re-renders the stream — sizing itself
+  from `COLUMNS`/`LINES`; `never` always takes the plain path. Colour is a
+  separate, independent switch and follows the usual environment conventions:
+  `NO_COLOR` and `CLICOLOR=0` disable it, `CLICOLOR_FORCE=1` forces it on even
+  for a pipe. Because the two are independent, colour off still draws the bars
+  and table, and the plain fallback still colours its lines when colour is
+  forced on, which is what a CI log viewer wants. `--quiet` beats both.
+- **Warnings and errors scroll above the display** as ordinary terminal output,
+  rather than being written into the middle of the bars and erased by the next
+  frame, which is what happened to warnings raised during analysis (a bad
+  quality character, too many tiles, an unreadable nanopore read). The log can
+  then grow without bound, as the log of a long run must, and a blank line
+  separates it from the bars when there is anything to separate. The clamping
+  warning for out-of-range quality characters is also emitted once per run
+  rather than once per base — deduplicated centrally, so it is genuinely once
+  per run rather than once per process however many files are read at a time.
+- **A closing summary**: `Complete. Analysed N files in mm:ss`, counting the
+  files that were analysed successfully and widening to `hh:mm:ss` past an hour.
+  It is the last line of the redrawn region, so it always appears below the bars
+  and the table; `--quiet` suppresses it along with everything else.
+- **Parallel analysis pipeline** for a single file. `-t/--threads` is now a total
+  thread budget spread across files first and then within each file: a reader
+  batches records while worker threads each run a disjoint subset of the QC
+  modules over every sequence. Work is split by module rather than by data, so
+  each module still sees the whole stream in file order on one thread and the
+  output stays **byte-identical** to the single-threaded runner (`-t 1` is
+  unchanged). Modules are balanced across workers by estimated cost so the few
+  expensive ones don't cluster. Combined with parallel gzip decompression, a
+  single large `.fastq.gz` now benefits from extra threads instead of being
+  pinned to one core. Builds on the upstream Java three-stage pipeline
+  ([s-andrews/FastQC#197](https://github.com/s-andrews/FastQC/pull/197)).
+  A single file scales until the heaviest single module dominates (~4x for the
+  default modules); the order-dependent modules (overrepresented sequences,
+  per-sequence GC) can't be split without changing output, so beyond that extra
+  cores are best spent on more files at once, which scales linearly.
+- **`-t/--threads` is a ceiling on the whole run**, decompression included. Give
+  it and the run stays inside it — `-t 1` really does mean one analysis thread
+  and one decoder, which is what a workflow engine passing `task.cpus` needs.
+  Leave it out and the analysis stays single-threaded while decompression takes
+  up to **4 threads per file** — a plain `fastqc sample.fastq.gz` is still fast
+  without being asked, but a big shared machine is not treated as idle just
+  because it is big. `--decompress-threads N` overrides the decompression side
+  either way. (The thread budget honours cgroup quotas and CPU affinity, so a
+  container or a scheduler-pinned job sees its own allowance, not the host's
+  cores.) Four is a ceiling with headroom rather than a target: on a 498 MB
+  Illumina-like FASTQ at a 2.4x ratio, a single decoder already matched reading
+  the *uncompressed* file, so decompression is not what limits a run.
+- **Bounded pipeline memory on long reads.** The analysis pipeline capped its
+  in-flight batches by record count alone, which is a few MB of Illumina reads
+  but gigabytes of nanopore or PacBio ones. Batches are now capped by bytes as
+  well: peak RSS on a 10 kb-read FASTQ at `-t 8` drops from 552 MB to 66 MB, and
+  short-read runs batch exactly as before.
+- **Parallel gzip decompression is now the default** (and only) gzip reader,
+  backed by [`rapidgzip-core`](https://crates.io/crates/rapidgzip-core).
+  `.fastq.gz` is decompressed on a pool of background threads and overlapped
+  with the analysis, giving a meaningful end-to-end speedup on large gzipped
+  inputs (~1.5× end-to-end, up to ~4× on decompression alone in local tests)
+  while producing byte-identical output. New `--decompress-threads N` option
+  (default `0` = auto).
+- **Removed the flate2/system-zlib gzip path**, the `rapidgzip`/`native-zlib`
+  Cargo features, and the `FASTQC_GZIP_BACKEND` switch. The binary is now pure
+  Rust (zlib-rs) with no C toolchain or system-library dependency, so builds are
+  fully static by default. As a side effect, BAM/BGZF and Fast5 decompression
+  (via `noodles`/`hdf5-pure`) now use the pure-Rust `miniz_oxide` backend rather
+  than system zlib. The `zip` dependency is likewise reduced to the `deflate`
+  feature — the only compression method FastQC ever writes or reads — which
+  drops `xz2`/`lzma-sys` and with it the last dynamically linked C library.
+
+### Bug fixes
+
+- **The progress bar for a `.fastq.gz` no longer runs ahead of the file.** It
+  was driven by the compressed bytes the decoder had read, and rapidgzip's
+  workers read far ahead of the parser: on four cores a 99 MB `.gz` opened at
+  22% and hit 100% halfway through the run, and anything under about 20 MB was
+  pinned at 100% from the first update. Progress now comes from the decompressed
+  bytes handed to the analysis, against a total taken from the gzip trailer
+  (exact for the single-member files `gzip` and `pigz` produce, including past
+  4 GiB) or estimated from the achieved ratio for multi-member and BGZF input.
+- **A file's elapsed time is its own.** Every bar's clock started when the
+  display was built rather than when its file did, so anything queued behind
+  another file counted the wait: a 2,000-read file reported 13.9s next to the
+  400,000-read file it was waiting for, which reported 9.8s. Queued files now
+  sit at zero, with an idle spinner, until they actually start.
+- **A quality byte of 128 or more no longer panics the run.** `Per sequence
+  quality scores` indexed its 128-slot tally with the mean quality directly, so
+  a mis-encoded or non-ASCII quality line aborted the analysis (and, under the
+  parallel pipeline, took a worker thread with it). It clamps and warns once,
+  like the per-position tally next to it. Pre-existing, not new in this release.
+- `--template` no longer claims the short flag `-t`, which is `--threads` (as in
+  Java FastQC). Two arguments sharing a short name makes clap abort at startup —
+  release builds skip that assertion so it only showed up in debug builds, but
+  `-t` was ambiguous either way. Use the long `--template` form.
+- The live statistics table follows a terminal resized mid-run, rather than
+  staying laid out for the width the run started at.
+- Read counts just short of a unit read as `1.0M` rather than `1000.0k`.
+
+### Breaking changes for library users
+
+- `FastQCConfig::threads` is now `Option<usize>`; `None` (the default) means
+  "not specified", which is what lets an explicit budget bound decompression
+  while an absent one does not. Pass `Some(n)` where you passed `n`.
+- `BasicStats::format_length` is now the free function
+  `modules::basic_stats::format_length`. The behaviour is unchanged.
+
 ## v1.0.1
 
 > [!NOTE]

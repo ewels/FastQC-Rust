@@ -72,10 +72,19 @@ struct Cli {
     #[arg(short, long, value_name = "FILE")]
     limits: Option<PathBuf>,
 
-    /// Specifies the number of files which can be processed simultaneously.
-    /// Each thread will be allocated 250MB of memory.
-    #[arg(short, long, value_name = "N", default_value = "1")]
-    threads: usize,
+    /// Total thread budget for the run [default: 1]. Spread across the files
+    /// processed simultaneously and then within each file (a reader plus
+    /// analysis workers). Giving this explicitly also caps gzip decompression,
+    /// so the whole run stays inside the budget; left unset, decompression
+    /// takes up to 4 threads per file rather than the whole machine.
+    #[arg(short, long, value_name = "N")]
+    threads: Option<usize>,
+
+    /// Worker budget for parallel gzip decompression of .fastq.gz inputs, per
+    /// file. 0 (default) derives it from --threads when that was given, and
+    /// otherwise takes up to 4 per file, whatever the core count.
+    #[arg(long = "decompress-threads", value_name = "N", default_value = "0")]
+    decompress_threads: usize,
 
     /// Specifies the length of Kmer to look for in the Kmer content module.
     /// Specified Kmer length must be between 2 and 10. Default length is 7.
@@ -121,7 +130,9 @@ struct Cli {
     /// Select the HTML report template.
     /// "classic" produces the original FastQC report layout.
     /// "modern" uses a redesigned layout with responsive sidebar and help text.
-    #[arg(short = 't', long, value_name = "NAME", default_value = "classic")]
+    // No short form: `-t` is --threads in Java FastQC, and claiming it here made
+    // clap panic on startup in debug builds ("Short option names must be unique").
+    #[arg(long, value_name = "NAME", default_value = "classic")]
     template: TemplateName,
 
     /// Input files (one or more FastQ, BAM, or SAM files).
@@ -197,6 +208,7 @@ fn main() {
         svg_output: cli.svg,
         temp_dir: cli.dir,
         template: cli.template,
+        decompress_threads: cli.decompress_threads,
     };
 
     if let Err(exit_code) = runner::run(&config, &cli.files) {

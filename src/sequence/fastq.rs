@@ -4,9 +4,14 @@
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, Stdin};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use bzip2_rs::DecoderReader;
-use flate2::read::MultiGzDecoder;
+
+// NOTE: rapidgzip's reader is referred to by its full path
+// (`rapidgzip_core::DecoderReader`) below because the name `DecoderReader` is
+// already taken by the bzip2 reader imported above.
 
 use super::{Sequence, SequenceFile};
 use crate::config::FastQCConfig;
@@ -19,7 +24,10 @@ use crate::config::FastQCConfig;
 /// Each variant wraps a `BufReader` around the appropriate decompression stream.
 enum ReaderKind {
     Plain(BufReader<File>),
-    Gzip(BufReader<MultiGzDecoder<File>>),
+    /// Parallel, multi-member gzip decompression via rapidgzip. The heavy
+    /// lifting (inflate on a pool of background threads) happens behind a
+    /// `Read + Send` handle, so it looks like any other buffered reader here.
+    Gzip(BufReader<rapidgzip_core::DecoderReader>),
     Bzip2(Box<BufReader<DecoderReader<File>>>),
     Stdin(BufReader<Stdin>),
 }
@@ -55,6 +63,149 @@ impl Read for ReaderKind {
     }
 }
 
+/// How a reader estimates its `percent_complete`. The three reader families
+/// track the compressed position differently; making it an enum keeps the modes
+/// mutually exclusive (previously two `Option` fields that must never both be
+/// `Some`) and drives the `percent_complete` match directly.
+enum Progress {
+    /// stdin has no seekable position; report 0% until EOF (matching Java).
+    Stdin,
+    /// bzip2 / plain text read on this thread: seek a cloned file handle for the
+    /// compressed byte position, exactly as Java queries
+    /// `fis.getChannel().position()`.
+    FilePosition(File),
+    /// gzip via rapidgzip. See [`GzipProgress`].
+    Gzip(GzipProgress),
+}
+
+/// Largest compression ratio a gzip trailer may imply before it is treated as
+/// untrustworthy. FASTQ compresses around 3-5x; anything past this is a
+/// truncated `ISIZE` rather than a real ratio.
+const MAX_PLAUSIBLE_RATIO: u64 = 1000;
+
+/// gzip records the uncompressed size modulo this, so a file larger than it
+/// wraps and the trailer has to be unwrapped against what has been read.
+const ISIZE_MODULUS: u64 = 1 << 32;
+
+/// Progress tracking for the parallel gzip decoder.
+///
+/// The obvious measure — compressed bytes served to the decoder over the file
+/// size — is badly wrong here, because rapidgzip's workers read *far* ahead of
+/// what the parser has consumed. Measured on four cores, that estimate opens a
+/// 99 MB `.gz` at 22%, reaches 100% at the halfway mark and sits there for the
+/// rest of the run; a 16 MB `.gz` is pinned at 100% from the very first update.
+/// The read-ahead is roughly a fixed window, so the smaller the file the more
+/// useless the number.
+///
+/// So progress is measured on the *output* side instead: `consumed_bytes`, the
+/// decompressed bytes the decoder has actually handed to the parser, which by
+/// construction never runs ahead of the analysis. What that needs is a total to
+/// divide by, and there are two ways to get one.
+///
+/// **The gzip trailer**, when it is trustworthy, is exact and free — see
+/// [`gzip_trailer_size`]. Every `gzip`/`pigz`-compressed `.fastq.gz` is a
+/// single member and lands here.
+///
+/// **Otherwise** — concatenated members, BGZF — fall back to scaling the file
+/// size by the ratio the decoder has achieved so far. That ratio is an
+/// underestimate while the read-ahead is outstanding (the compressed tally is
+/// ahead of the decompressed one) and converges up to the true ratio by EOF, so
+/// the running maximum is taken and the bar can run ahead and stall near the
+/// end. That is the same weakness the old whole-file estimate had, but confined
+/// to inputs whose true size genuinely cannot be known up front.
+struct GzipProgress {
+    /// Compressed bytes served to the decoder, counted by [`CountingReadAt`].
+    compressed: Arc<AtomicU64>,
+    /// Lock-free telemetry from the decoder: decompressed bytes produced, and
+    /// decompressed bytes actually returned through `Read`.
+    handle: rapidgzip_core::DecoderHandle,
+    /// Total decompressed size from the gzip trailer, if it looked plausible.
+    trailer_total: Option<u64>,
+    /// Contended once per [`PROGRESS_INTERVAL`](crate::runner) records at most.
+    estimate: std::sync::Mutex<GzipEstimate>,
+}
+
+#[derive(Default)]
+struct GzipEstimate {
+    /// Best estimate of the file's total decompressed size.
+    total: u64,
+    /// Highest permille reported so far. A bar that goes backwards looks
+    /// broken, and the fallback estimate does move as it settles.
+    high_water: u64,
+}
+
+impl GzipProgress {
+    /// Progress through the file as a percentage, or `None` before the decoder
+    /// has produced enough to estimate a total.
+    fn percent(&self, file_size: u64) -> Option<f64> {
+        if file_size == 0 {
+            return None;
+        }
+        let stats = self.handle.stats();
+        let compressed = self.compressed.load(Ordering::Relaxed);
+        if compressed == 0 || stats.decompressed_bytes == 0 {
+            return None;
+        }
+
+        let mut estimate = self
+            .estimate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let total = match self.trailer_total {
+            // The trailer counts modulo 4 GiB. Reading past it means the file
+            // is larger than that, and the true size is the recorded one plus
+            // however many whole wraps have been consumed -- still exact.
+            Some(trailer) => {
+                let wraps = stats.consumed_bytes.saturating_sub(1) / ISIZE_MODULUS;
+                trailer + wraps * ISIZE_MODULUS
+            }
+            // Underestimates while the read-ahead is outstanding and converges
+            // up to the truth, so keep the largest seen.
+            None => {
+                let ratio = stats.decompressed_bytes as f64 / compressed as f64;
+                estimate.total.max((file_size as f64 * ratio) as u64)
+            }
+        };
+        estimate.total = total;
+        if total == 0 {
+            return None;
+        }
+
+        let permille =
+            ((stats.consumed_bytes as f64 / total as f64) * 1000.0).clamp(0.0, 1000.0) as u64;
+        estimate.high_water = estimate.high_water.max(permille);
+        Some(estimate.high_water as f64 / 10.0)
+    }
+}
+
+/// The uncompressed size recorded in a gzip file's `ISIZE` trailer (the last
+/// four bytes, little-endian), when it is worth believing.
+///
+/// Exact for a single-member file, which is what `gzip` and `pigz` produce and
+/// so what almost every `.fastq.gz` is. Sizes over 4 GiB wrap, which the caller
+/// unwraps against the bytes it has read.
+///
+/// For concatenated members the trailer describes only the *last* one, so it
+/// has to be rejected: requiring the implied ratio to be at least 1:1 catches
+/// that (a trailing member is a small fraction of the file, and BGZF's empty
+/// end-of-file member records zero), as well as the pathological case of a
+/// stored-not-deflated stream. [`MAX_PLAUSIBLE_RATIO`] catches a truncated
+/// file whose last four bytes are not a trailer at all.
+fn gzip_trailer_size(path: &Path, file_size: u64) -> Option<u64> {
+    // Smaller than the smallest possible member: header, empty deflate block,
+    // trailer.
+    if file_size < 20 {
+        return None;
+    }
+    let mut file = File::open(path).ok()?;
+    file.seek(io::SeekFrom::End(-4)).ok()?;
+    let mut trailer = [0u8; 4];
+    file.read_exact(&mut trailer).ok()?;
+    let total = u32::from_le_bytes(trailer) as u64;
+    (total >= file_size && total <= file_size.saturating_mul(MAX_PLAUSIBLE_RATIO)).then_some(total)
+}
+
 // ---------------------------------------------------------------------------
 // Compression detection
 // ---------------------------------------------------------------------------
@@ -81,6 +232,60 @@ fn detect_compression_from_magic(path: &Path) -> io::Result<&'static str> {
 }
 
 // ---------------------------------------------------------------------------
+// gzip decompression (parallel & multi-member, via rapidgzip)
+// ---------------------------------------------------------------------------
+
+/// A [`rapidgzip_core::ReadAt`] source that counts the compressed bytes served,
+/// so the FASTQ reader can report progress while rapidgzip owns the file.
+struct CountingReadAt {
+    file: File,
+    counter: Arc<AtomicU64>,
+}
+
+impl rapidgzip_core::ReadAt for CountingReadAt {
+    fn len(&self) -> io::Result<u64> {
+        self.file.metadata().map(|metadata| metadata.len())
+    }
+
+    fn read_at(&self, offset: u64, buffer: &mut [u8]) -> io::Result<usize> {
+        let read = rapidgzip_core::ReadAt::read_at(&self.file, offset, buffer)?;
+        self.counter.fetch_add(read as u64, Ordering::Relaxed);
+        Ok(read)
+    }
+}
+
+/// Open a gzip file through the parallel rapidgzip decoder.
+///
+/// The returned [`GzipProgress`] pairs the compressed-byte counter with the
+/// decoder's telemetry handle; see that type for how the two combine into a
+/// progress estimate. The decoder streams with backpressure, so peak memory is
+/// bounded by the in-flight-chunk budget regardless of input size.
+fn open_rapidgzip(
+    file: File,
+    threads: usize,
+    trailer_total: Option<u64>,
+) -> io::Result<(rapidgzip_core::DecoderReader, GzipProgress)> {
+    let compressed = Arc::new(AtomicU64::new(0));
+    let source = CountingReadAt {
+        file,
+        counter: Arc::clone(&compressed),
+    };
+    let decoder = rapidgzip_core::Decoder::builder()
+        .decoder_threads(threads.max(1))
+        .build()?;
+    let reader = decoder
+        .reader(source)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let progress = GzipProgress {
+        compressed,
+        handle: reader.handle(),
+        trailer_total,
+        estimate: std::sync::Mutex::new(GzipEstimate::default()),
+    };
+    Ok((reader, progress))
+}
+
+// ---------------------------------------------------------------------------
 // FastQFile
 // ---------------------------------------------------------------------------
 
@@ -94,10 +299,8 @@ pub struct FastQFile {
     reader: ReaderKind,
     name: String,
     file_size: u64,
-    /// Cloned file handle used solely to query the compressed byte position
-    /// via seek(Current). Java does this with fis.getChannel().position().
-    /// None for stdin (no file to track).
-    position_handle: Option<File>,
+    /// How this reader reports progress. See [`Progress`] and `percent_complete`.
+    progress: Progress,
 
     /// The next sequence ready to be returned (look-ahead buffer).
     next_sequence: Option<Sequence>,
@@ -148,8 +351,11 @@ impl FastQFile {
         // fis.getChannel().position() for progress tracking. We clone the File
         // handle before wrapping it in decompression so we can seek on the clone
         // to get the compressed byte position.
-        let (reader, position_handle) = if is_stdin {
-            (ReaderKind::Stdin(BufReader::new(io::stdin())), None)
+        let (reader, progress) = if is_stdin {
+            (
+                ReaderKind::Stdin(BufReader::new(io::stdin())),
+                Progress::Stdin,
+            )
         } else {
             let lower_name = name.to_lowercase();
             let compression = if lower_name.ends_with(".gz") {
@@ -161,14 +367,39 @@ impl FastQFile {
             };
 
             let file = File::open(path)?;
-            let pos_handle = file.try_clone()?;
 
-            let rdr = match compression {
-                "gz" => ReaderKind::Gzip(BufReader::new(MultiGzDecoder::new(file))),
-                "bz2" => ReaderKind::Bzip2(Box::new(BufReader::new(DecoderReader::new(file)))),
-                _ => ReaderKind::Plain(BufReader::new(file)),
-            };
-            (rdr, Some(pos_handle))
+            match compression {
+                // .gz is decompressed in parallel by rapidgzip; progress is
+                // tracked by the compressed-byte counter it returns.
+                "gz" => {
+                    // `runner::run` normalises the "auto" (0) budget to a positive
+                    // value before we get here; `.max(1)` floors any direct caller
+                    // (e.g. a unit test) that leaves it at 0.
+                    let threads = config.decompress_threads.max(1);
+                    let trailer = gzip_trailer_size(path, file_size);
+                    let (reader, progress) = open_rapidgzip(file, threads, trailer)?;
+                    (
+                        ReaderKind::Gzip(BufReader::new(reader)),
+                        Progress::Gzip(progress),
+                    )
+                }
+                // bzip2 and plain text are read on this thread; progress uses a
+                // cloned handle to query the compressed file position.
+                "bz2" => {
+                    let pos_handle = file.try_clone()?;
+                    (
+                        ReaderKind::Bzip2(Box::new(BufReader::new(DecoderReader::new(file)))),
+                        Progress::FilePosition(pos_handle),
+                    )
+                }
+                _ => {
+                    let pos_handle = file.try_clone()?;
+                    (
+                        ReaderKind::Plain(BufReader::new(file)),
+                        Progress::FilePosition(pos_handle),
+                    )
+                }
+            }
         };
 
         let casava_mode = config.casava;
@@ -178,7 +409,7 @@ impl FastQFile {
             reader,
             name,
             file_size,
-            position_handle,
+            progress,
             next_sequence: None,
             line_number: 0,
             is_colorspace: false,
@@ -369,21 +600,23 @@ impl SequenceFile for FastQFile {
         if self.next_sequence.is_none() {
             return 100.0;
         }
-        if self.name.starts_with("stdin") {
-            return 0.0;
+        match &self.progress {
+            // stdin: Java returns 0 until EOF (handled above), then 100.
+            Progress::Stdin => 0.0,
+            // gzip: the rapidgzip decoder owns the file and reads it positionally
+            // on background threads, so there is no single cursor to seek, and
+            // its workers read far ahead of the parser. See [`GzipProgress`].
+            Progress::Gzip(progress) => progress.percent(self.file_size).unwrap_or(0.0),
+            // Java queries fis.getChannel().position() on the raw FileInputStream
+            // to get the compressed byte position, then divides by fileSize. We
+            // do the same via a cloned handle (seek(Current)) so we need only
+            // `&self`; a clone or seek failure degrades to 0%.
+            Progress::FilePosition(handle) => handle
+                .try_clone()
+                .and_then(|mut h| h.stream_position())
+                .map(|pos| (pos as f64 / self.file_size as f64) * 100.0)
+                .unwrap_or(0.0),
         }
-        // Java queries fis.getChannel().position() on the raw FileInputStream
-        // to get the compressed byte position, then divides by fileSize.
-        // We do the same via a cloned file handle using seek(Current).
-        if let Some(ref handle) = self.position_handle {
-            // try_clone to get a mutable handle without requiring &mut self
-            if let Ok(mut h) = handle.try_clone() {
-                if let Ok(pos) = h.stream_position() {
-                    return (pos as f64 / self.file_size as f64) * 100.0;
-                }
-            }
-        }
-        0.0
     }
 }
 
@@ -635,5 +868,128 @@ mod tests {
             b"IIIIIIII".to_vec(),
         );
         assert_eq!(seq.sequence, b"ACGTACGT");
+    }
+
+    // ---- gzip decoding (rapidgzip) ----
+
+    /// Decoding a `.gz` file must produce byte-identical records to reading its
+    /// plaintext twin. Opening a `.gz` goes through the parallel rapidgzip
+    /// decoder; the plaintext side involves no decompression at all.
+    #[test]
+    fn test_gzip_matches_plaintext() {
+        let config = FastQCConfig::default();
+        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/");
+
+        let mut plain = FastQFile::open(&config, format!("{base}minimal.fastq")).unwrap();
+        let mut gz = FastQFile::open(&config, format!("{base}minimal.fastq.gz")).unwrap();
+
+        // Opening the .gz file must engage the gzip path (compressed-byte
+        // progress tracking is used only there).
+        assert!(
+            matches!(gz.progress, Progress::Gzip(_)),
+            "expected the gzip reader for .gz input"
+        );
+
+        loop {
+            match (plain.next(), gz.next()) {
+                (Some(a), Some(b)) => {
+                    let a = a.unwrap();
+                    let b = b.unwrap();
+                    assert_eq!(a.id, b.id);
+                    assert_eq!(a.sequence, b.sequence);
+                    assert_eq!(a.quality, b.quality);
+                }
+                (None, None) => break,
+                _ => panic!("record count mismatch between plaintext and gzip"),
+            }
+        }
+    }
+
+    /// The trailer is the exact uncompressed size for the single-member files
+    /// `gzip` and `pigz` produce, and is rejected when it cannot be one.
+    #[test]
+    fn test_gzip_trailer_size() {
+        let base = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/");
+
+        // A real single-member fixture. The trailer must be the decompressed
+        // size, which is checked here against the bytes the reader actually
+        // produces rather than a constant, so the two cannot drift apart if
+        // the fixture is ever regenerated.
+        let gz = Path::new(base).join("realistic.fastq.gz");
+        let gz_len = std::fs::metadata(&gz).unwrap().len();
+        let trailer = gzip_trailer_size(&gz, gz_len).expect("a plausible trailer");
+
+        let mut decoded = 0u64;
+        let (mut reader, _) = open_rapidgzip(File::open(&gz).unwrap(), 1, None).unwrap();
+        let mut buffer = [0u8; 8192];
+        loop {
+            match reader.read(&mut buffer).unwrap() {
+                0 => break,
+                n => decoded += n as u64,
+            }
+        }
+        assert_eq!(trailer, decoded, "trailer is not the uncompressed size");
+
+        // Too small to hold a member at all.
+        assert_eq!(gzip_trailer_size(&gz, 19), None);
+        // A trailer implying that the file barely compressed, or expanded, is
+        // the last member of a concatenated stream rather than the whole size.
+        assert_eq!(gzip_trailer_size(&gz, trailer + 1), None);
+        // ...and one implying an absurd ratio is not a trailer at all.
+        assert_eq!(gzip_trailer_size(&gz, 1), None);
+    }
+
+    /// Progress must come from the bytes handed to the parser, not from the
+    /// compressed bytes the decoder's workers have raced ahead to read, and it
+    /// must never go backwards.
+    #[test]
+    fn test_gzip_progress_tracks_consumed_bytes() {
+        let config = FastQCConfig::default();
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/realistic.fastq.gz");
+        let mut reader = FastQFile::open(&config, path).unwrap();
+
+        let mut last = 0.0f64;
+        let mut seen_partial = false;
+        while let Some(result) = reader.next() {
+            result.unwrap();
+            let percent = reader.percent_complete();
+            assert!(
+                (0.0..=100.0).contains(&percent),
+                "percent out of range: {percent}"
+            );
+            assert!(
+                percent >= last,
+                "progress went backwards: {last} -> {percent}"
+            );
+            // The whole point: a small file must not be pinned at 100% from the
+            // first record just because its bytes have all been read.
+            if percent < 100.0 {
+                seen_partial = true;
+            }
+            last = percent;
+        }
+        assert!(
+            seen_partial,
+            "progress was saturated for the whole file, which is the bug this guards"
+        );
+        assert_eq!(reader.percent_complete(), 100.0, "did not finish at 100%");
+    }
+
+    /// The gzip reader must decode a real (dynamic-Huffman) gzip stream
+    /// correctly: the realistic fixture has 1009 records.
+    #[test]
+    fn test_gzip_reads_realistic() {
+        let config = FastQCConfig::default();
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/realistic.fastq.gz");
+        let mut reader = FastQFile::open(&config, path).unwrap();
+        assert!(matches!(reader.progress, Progress::Gzip(_)));
+
+        let mut count = 0u64;
+        while let Some(result) = reader.next() {
+            let seq = result.unwrap();
+            assert!(!seq.is_empty());
+            count += 1;
+        }
+        assert_eq!(count, 1009);
     }
 }

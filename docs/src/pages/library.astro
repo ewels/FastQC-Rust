@@ -170,11 +170,10 @@ impl QCModule for GcCounter {
       <code>use</code> statements).
     </p>
     <p style="color: var(--ink-muted)">
-      The <code>native-zlib</code> feature is on by default and links system zlib
-      for faster gzip decompression. To produce a fully static, pure-Rust
-      build, disable default features:
+      The crate is pure Rust with no C toolchain or system-library dependency, so
+      it builds fully static out of the box. <code>.fastq.gz</code> inputs are
+      decompressed in parallel via <code>rapidgzip-core</code>.
     </p>
-    <Code code="cargo add fastqc-rust --no-default-features" lang="bash" themes={themes} defaultColor={false} />
   </section>
 
   <h2>Basic usage</h2>
