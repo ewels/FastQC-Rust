@@ -97,8 +97,8 @@ use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle, T
 
 use crate::modules::basic_stats::{BasicStatsCounters, LiveStats};
 
-/// Environment variable selecting the progress display, matching the
-/// `FASTQC_`-prefixed convention already used for the gzip backend.
+/// Environment variable selecting the progress display. `FASTQC_`-prefixed so
+/// that it cannot collide with anything in the environment it is read from.
 pub const PROGRESS_ENV: &str = "FASTQC_PROGRESS";
 
 /// A tri-state switch for behaviour that is normally auto-detected.

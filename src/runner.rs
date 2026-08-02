@@ -131,11 +131,9 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
     let n_files = file_groups.len().max(1);
     let outer_slots = n_files.min(total_threads);
     let threads_per_file = (total_threads / outer_slots).max(1);
-    let processors_per_file = if threads_per_file <= 1 {
-        0
-    } else {
-        MAX_PROCESSORS_PER_FILE.min(threads_per_file - 1)
-    };
+    // With `threads_per_file >= 1`, a budget of one thread per file yields 0
+    // processors (`min(MAX, 0)`), which disables the pipeline for that file.
+    let processors_per_file = MAX_PROCESSORS_PER_FILE.min(threads_per_file - 1);
 
     // Normalise the parallel-gzip (rapidgzip) worker budget. When left on
     // "auto" (0), give each concurrently-decompressed file the cores left over
@@ -143,13 +141,17 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
     // decompression and analysis overlap without gross CPU oversubscription.
     // zlib-rs decode is fast per-thread, so a small budget keeps the reader fed
     // once analysis (not gzip) is the bottleneck. An explicit
-    // --decompress-threads value is used verbatim. This only matters when the
-    // `rapidgzip` feature is compiled in, but the arithmetic is free otherwise.
+    // --decompress-threads value is used verbatim.
+    //
+    // By design this is budgeted from the hardware (`available_parallelism`), not
+    // from `-t`: `-t` governs the analysis pipeline, while decompression fills the
+    // physical cores left over. `processors_per_file` is the analysis-worker count
+    // reserved per file; the pipeline may later run fewer workers than that (capped
+    // by module count), which only means decompression is provisioned slightly
+    // conservatively in that edge case.
     let owned_config;
     let config = if config.decompress_threads == 0 {
-        let budget = std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1);
+        let budget = crate::utils::available_parallelism();
         // `outer_slots` (>= 1) is the number of files decompressed concurrently.
         let per_file = budget / outer_slots;
         let mut c = config.clone();
@@ -431,6 +433,48 @@ fn process_sequences_sequential(
     Ok(sequence_count)
 }
 
+/// Partition the modules across `num_workers` groups to balance their estimated
+/// cost, using the classic longest-processing-time (LPT) greedy: take modules
+/// heaviest-first (by [`QCModule::cost_hint`]) and drop each onto the currently
+/// lightest group. This keeps the few expensive modules (adapter, GC, per-base
+/// quality, ...) on separate workers rather than piling two onto one, which is
+/// what bounds the makespan of the pipeline. Each module is tagged with its
+/// original index so report order can be restored afterwards; the assignment
+/// never changes results, only how evenly the work is spread. Pure and
+/// deterministic (ties break to the lowest group index).
+///
+/// This is free to place any module on any worker *because every module's
+/// per-sequence processing is independent* — a module accumulates only into
+/// its own state as it sees the stream in file order. The one pair that shares
+/// state, DuplicationLevel and OverRepresentedSeqs (via an `Arc<Mutex<_>>`), is
+/// safe because only OverRepresentedSeqs writes per sequence; DuplicationLevel
+/// reads that shared data once at finalize, after all workers have joined. If a
+/// future change makes two modules write shared state per sequence, they can no
+/// longer be split blindly and must be co-located on one worker instead (see
+/// the note on `DuplicationLevel::process_sequence`).
+fn partition_modules_by_cost(
+    modules: Vec<Box<dyn QCModule>>,
+    num_workers: usize,
+) -> Vec<Vec<(usize, Box<dyn QCModule>)>> {
+    let mut order: Vec<(usize, Box<dyn QCModule>)> = modules.into_iter().enumerate().collect();
+    order.sort_by_key(|(_, module)| std::cmp::Reverse(module.cost_hint()));
+
+    let mut groups: Vec<Vec<(usize, Box<dyn QCModule>)>> =
+        (0..num_workers).map(|_| Vec::new()).collect();
+    let mut loads = vec![0u64; num_workers];
+    for (idx, module) in order {
+        let target = loads
+            .iter()
+            .enumerate()
+            .min_by_key(|&(_, &load)| load)
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        loads[target] += module.cost_hint() as u64;
+        groups[target].push((idx, module));
+    }
+    groups
+}
+
 /// Multi-threaded analysis path: a reader on the calling thread batches sequences
 /// and publishes each batch to `num_processors` worker threads, each of which owns
 /// a disjoint subset of the modules and runs them over every sequence.
@@ -456,32 +500,7 @@ fn process_sequences_parallel(
     num_processors: usize,
     file_progress: FileProgress<'_>,
 ) -> io::Result<(Vec<Box<dyn QCModule>>, u64)> {
-    // Partition the modules across the workers to balance their estimated cost,
-    // using the classic longest-processing-time (LPT) greedy: consider modules
-    // heaviest-first and drop each onto the currently-lightest worker. This keeps
-    // the few expensive modules (adapter, GC, per-base quality, ...) on separate
-    // workers rather than letting a naive split pile two of them together, which
-    // is what bounds the makespan of the pipeline. Modules are tagged with their
-    // original index so report order can be restored afterwards; the assignment
-    // never changes results, only how evenly the work is spread.
-    let mut order: Vec<(usize, Box<dyn QCModule>)> = modules.into_iter().enumerate().collect();
-    order.sort_by_key(|(_, module)| std::cmp::Reverse(module.cost_hint()));
-
-    let mut groups: Vec<Vec<(usize, Box<dyn QCModule>)>> =
-        (0..num_processors).map(|_| Vec::new()).collect();
-    let mut loads = vec![0u64; num_processors];
-    for (idx, module) in order {
-        // Pick the lightest worker; ties break to the lowest index for
-        // deterministic assignment.
-        let target = loads
-            .iter()
-            .enumerate()
-            .min_by_key(|&(_, &load)| load)
-            .map(|(i, _)| i)
-            .unwrap_or(0);
-        loads[target] += module.cost_hint() as u64;
-        groups[target].push((idx, module));
-    }
+    let groups = partition_modules_by_cost(modules, num_processors);
 
     // One bounded queue per worker. The reader publishes the same Arc-shared
     // batch to every queue; workers only read from the sequences, never mutate
@@ -699,6 +718,44 @@ mod tests {
         seqs
     }
 
+    /// The cost-balanced partition must keep the few expensive modules on
+    /// separate workers and place every module exactly once (preserving its
+    /// original index), whatever the worker count.
+    #[test]
+    fn test_partition_keeps_heavy_modules_apart() {
+        let config = FastQCConfig::default();
+        let limits = config.load_limits().expect("load limits");
+        let modules = modules::create_modules(&config, &limits);
+        let n = modules.len();
+        let groups = partition_modules_by_cost(modules, 3);
+
+        // The two heaviest modules by cost_hint (Adapter Content = 12, per-sequence
+        // GC = 10) must be balanced onto different workers, not piled together.
+        let worker_of = |name: &str| {
+            groups
+                .iter()
+                .position(|g| g.iter().any(|(_, m)| m.name() == name))
+        };
+        let adapter = worker_of("Adapter Content");
+        let gc = worker_of("Per sequence GC content");
+        assert!(
+            adapter.is_some() && gc.is_some(),
+            "expected both heavy modules"
+        );
+        assert_ne!(
+            adapter, gc,
+            "the two heaviest modules should land on different workers"
+        );
+
+        // Every module is placed exactly once, with original indices preserved.
+        let mut indices: Vec<usize> = groups
+            .iter()
+            .flat_map(|g| g.iter().map(|(i, _)| *i))
+            .collect();
+        indices.sort_unstable();
+        assert_eq!(indices, (0..n).collect::<Vec<_>>());
+    }
+
     /// The parallel analysis pipeline must produce output that is byte-identical
     /// to the single-threaded path for every module, across a range of processor
     /// counts (which change how modules are distributed across worker threads).
@@ -757,7 +814,7 @@ mod tests {
 
             assert_eq!(mods_par.len(), reference.len());
             for (module, (name, ref_text, ref_status)) in mods_par.iter().zip(&reference) {
-                // Module order must be preserved after the round-robin split.
+                // Module order must be preserved after the cost-balanced split.
                 assert_eq!(module.name(), name, "module order changed");
                 let mut buf = Vec::new();
                 module.write_text_report(&mut buf).expect("text report");

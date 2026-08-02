@@ -8,11 +8,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use bzip2_rs::DecoderReader;
-use flate2::read::MultiGzDecoder;
 
 // NOTE: rapidgzip's reader is referred to by its full path
-// (`rapidgzip_core::DecoderReader`) throughout this module because the name
-// `DecoderReader` is already taken by the bzip2 reader imported above.
+// (`rapidgzip_core::DecoderReader`) below because the name `DecoderReader` is
+// already taken by the bzip2 reader imported above.
 
 use super::{Sequence, SequenceFile};
 use crate::config::FastQCConfig;
@@ -25,14 +24,12 @@ use crate::config::FastQCConfig;
 /// Each variant wraps a `BufReader` around the appropriate decompression stream.
 enum ReaderKind {
     Plain(BufReader<File>),
-    Gzip(BufReader<MultiGzDecoder<File>>),
+    /// Parallel, multi-member gzip decompression via rapidgzip. The heavy
+    /// lifting (inflate on a pool of background threads) happens behind a
+    /// `Read + Send` handle, so it looks like any other buffered reader here.
+    Gzip(BufReader<rapidgzip_core::DecoderReader>),
     Bzip2(Box<BufReader<DecoderReader<File>>>),
     Stdin(BufReader<Stdin>),
-    /// Parallel gzip decompression via rapidgzip. The heavy lifting (inflate on
-    /// a pool of background threads) happens behind a `Read + Send` handle, so
-    /// this variant looks like any other buffered reader to the parser.
-    #[cfg(feature = "rapidgzip")]
-    Rapidgzip(BufReader<rapidgzip_core::DecoderReader>),
 }
 
 impl BufRead for ReaderKind {
@@ -42,8 +39,6 @@ impl BufRead for ReaderKind {
             ReaderKind::Gzip(r) => r.fill_buf(),
             ReaderKind::Bzip2(r) => r.fill_buf(),
             ReaderKind::Stdin(r) => r.fill_buf(),
-            #[cfg(feature = "rapidgzip")]
-            ReaderKind::Rapidgzip(r) => r.fill_buf(),
         }
     }
 
@@ -53,8 +48,6 @@ impl BufRead for ReaderKind {
             ReaderKind::Gzip(r) => r.consume(amt),
             ReaderKind::Bzip2(r) => r.consume(amt),
             ReaderKind::Stdin(r) => r.consume(amt),
-            #[cfg(feature = "rapidgzip")]
-            ReaderKind::Rapidgzip(r) => r.consume(amt),
         }
     }
 }
@@ -66,8 +59,6 @@ impl Read for ReaderKind {
             ReaderKind::Gzip(r) => r.read(buf),
             ReaderKind::Bzip2(r) => r.read(buf),
             ReaderKind::Stdin(r) => r.read(buf),
-            #[cfg(feature = "rapidgzip")]
-            ReaderKind::Rapidgzip(r) => r.read(buf),
         }
     }
 }
@@ -98,79 +89,8 @@ fn detect_compression_from_magic(path: &Path) -> io::Result<&'static str> {
 }
 
 // ---------------------------------------------------------------------------
-// gzip backend selection (flate2 vs. parallel rapidgzip)
+// gzip decompression (parallel & multi-member, via rapidgzip)
 // ---------------------------------------------------------------------------
-
-/// Build a reader for a gzip-compressed FASTQ file.
-///
-/// Returns `(reader, position_handle, compressed_counter)`:
-/// - `position_handle` is a seekable handle used for progress on the flate2
-///   path (`None` for rapidgzip).
-/// - `compressed_counter` counts compressed bytes read on the rapidgzip path
-///   (`None` for flate2).
-///
-/// When the `rapidgzip` feature is compiled in and selected at runtime (see
-/// [`rapidgzip_selected`]), gzip inputs are decompressed in parallel on
-/// background threads. If rapidgzip cannot open the stream it transparently
-/// falls back to the single-threaded flate2 reader. Without the feature — or
-/// when disabled via `FASTQC_GZIP_BACKEND` — it always uses flate2, preserving
-/// the previous behaviour byte-for-byte.
-#[cfg_attr(not(feature = "rapidgzip"), allow(unused_variables))]
-fn open_gz_reader(
-    config: &FastQCConfig,
-    path: &Path,
-    file: File,
-    pos_handle: File,
-) -> io::Result<(ReaderKind, Option<File>, Option<Arc<AtomicU64>>)> {
-    #[cfg(feature = "rapidgzip")]
-    {
-        if rapidgzip_selected() {
-            let threads = resolve_decompress_threads(config);
-            return match open_rapidgzip(file, threads) {
-                Ok((reader, counter)) => Ok((
-                    ReaderKind::Rapidgzip(BufReader::new(reader)),
-                    None,
-                    Some(counter),
-                )),
-                Err(_) => {
-                    // rapidgzip rejected the stream (e.g. an optional-header
-                    // shape it does not support). Re-open and fall back to
-                    // flate2 so a valid gzip file is never refused purely
-                    // because of the backend choice.
-                    let file = File::open(path)?;
-                    Ok((
-                        ReaderKind::Gzip(BufReader::new(MultiGzDecoder::new(file))),
-                        Some(pos_handle),
-                        None,
-                    ))
-                }
-            };
-        }
-    }
-
-    Ok((
-        ReaderKind::Gzip(BufReader::new(MultiGzDecoder::new(file))),
-        Some(pos_handle),
-        None,
-    ))
-}
-
-/// Whether the rapidgzip backend should be used for gzip inputs.
-///
-/// Controlled by the `FASTQC_GZIP_BACKEND` environment variable so that
-/// benchmarks can compare backends with a single binary. Recognised values
-/// (case-insensitive): `flate2`, `off`, `none`, `0` disable it; anything else
-/// (or unset) selects rapidgzip when the feature is compiled in.
-#[cfg(feature = "rapidgzip")]
-fn rapidgzip_selected() -> bool {
-    match std::env::var("FASTQC_GZIP_BACKEND") {
-        Ok(value) => !matches!(
-            value.trim().to_ascii_lowercase().as_str(),
-            "flate2" | "off" | "none" | "0"
-        ),
-        Err(_) => true,
-    }
-}
 
 /// Resolve the per-file rapidgzip worker budget.
 ///
@@ -178,26 +98,21 @@ fn rapidgzip_selected() -> bool {
 /// parallelism. `runner::run` normalises this ahead of time to spread the
 /// budget across the files processed concurrently; a direct caller (e.g. a
 /// unit test) instead gets the full machine width.
-#[cfg(feature = "rapidgzip")]
 fn resolve_decompress_threads(config: &FastQCConfig) -> usize {
     if config.decompress_threads > 0 {
         config.decompress_threads
     } else {
-        std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1)
+        crate::utils::available_parallelism()
     }
 }
 
 /// A [`rapidgzip_core::ReadAt`] source that counts the compressed bytes served,
 /// so the FASTQ reader can report progress while rapidgzip owns the file.
-#[cfg(feature = "rapidgzip")]
 struct CountingReadAt {
     file: File,
     counter: Arc<AtomicU64>,
 }
 
-#[cfg(feature = "rapidgzip")]
 impl rapidgzip_core::ReadAt for CountingReadAt {
     fn len(&self) -> io::Result<u64> {
         self.file.metadata().map(|metadata| metadata.len())
@@ -215,7 +130,6 @@ impl rapidgzip_core::ReadAt for CountingReadAt {
 /// The returned counter is shared with the decoder's positional reads for
 /// progress tracking. The decoder streams with backpressure, so peak memory is
 /// bounded by the in-flight-chunk budget regardless of input size.
-#[cfg(feature = "rapidgzip")]
 fn open_rapidgzip(
     file: File,
     threads: usize,
@@ -250,14 +164,14 @@ pub struct FastQFile {
     file_size: u64,
     /// Cloned file handle used solely to query the compressed byte position
     /// via seek(Current). Java does this with fis.getChannel().position().
-    /// None for stdin (no file to track), and None when the rapidgzip backend
-    /// owns the file (progress is tracked via `compressed_counter` instead).
+    /// `Some` for the bzip2 and plain-text readers; `None` for gzip (which is
+    /// tracked via `compressed_counter`) and stdin (no file to track).
     position_handle: Option<File>,
 
-    /// Compressed bytes physically read so far, for progress tracking on the
-    /// rapidgzip backend (which owns the file and reads it positionally, so
-    /// there is no single seekable cursor to query). `None` for every other
-    /// reader kind. See `percent_complete`.
+    /// Compressed bytes physically read so far, for progress tracking on gzip
+    /// inputs. The rapidgzip decoder owns the file and reads it positionally on
+    /// worker threads, so there is no single seekable cursor to query. `None`
+    /// for every other reader kind. See `percent_complete`.
     compressed_counter: Option<Arc<AtomicU64>>,
 
     /// The next sequence ready to be returned (look-ahead buffer).
@@ -322,22 +236,37 @@ impl FastQFile {
             };
 
             let file = File::open(path)?;
-            let pos_handle = file.try_clone()?;
 
             match compression {
-                // gzip decompression may use the parallel rapidgzip backend;
-                // the helper handles backend selection and flate2 fallback.
-                "gz" => open_gz_reader(config, path, file, pos_handle)?,
-                "bz2" => (
-                    ReaderKind::Bzip2(Box::new(BufReader::new(DecoderReader::new(file)))),
-                    Some(pos_handle),
-                    None,
-                ),
-                _ => (
-                    ReaderKind::Plain(BufReader::new(file)),
-                    Some(pos_handle),
-                    None,
-                ),
+                // .gz is decompressed in parallel by rapidgzip; progress is
+                // tracked by the compressed-byte counter it returns.
+                "gz" => {
+                    let threads = resolve_decompress_threads(config);
+                    let (reader, counter) = open_rapidgzip(file, threads)?;
+                    (
+                        ReaderKind::Gzip(BufReader::new(reader)),
+                        None,
+                        Some(counter),
+                    )
+                }
+                // bzip2 and plain text are read on this thread; progress uses a
+                // cloned handle to query the compressed file position.
+                "bz2" => {
+                    let pos_handle = file.try_clone()?;
+                    (
+                        ReaderKind::Bzip2(Box::new(BufReader::new(DecoderReader::new(file)))),
+                        Some(pos_handle),
+                        None,
+                    )
+                }
+                _ => {
+                    let pos_handle = file.try_clone()?;
+                    (
+                        ReaderKind::Plain(BufReader::new(file)),
+                        Some(pos_handle),
+                        None,
+                    )
+                }
             }
         };
 
@@ -543,11 +472,11 @@ impl SequenceFile for FastQFile {
         if self.name.starts_with("stdin") {
             return 0.0;
         }
-        // rapidgzip backend: the file is owned by the decoder and read
-        // positionally on background threads, so there is no single cursor to
-        // seek. Estimate progress from the compressed bytes physically read so
-        // far (bounded read-ahead keeps this close to what the parser has
-        // consumed). Same intent as Java's compressed-position / file-size.
+        // gzip: the rapidgzip decoder owns the file and reads it positionally on
+        // background threads, so there is no single cursor to seek. Estimate
+        // progress from the compressed bytes physically read so far (bounded
+        // read-ahead keeps this close to what the parser has consumed). Same
+        // intent as Java's compressed-position / file-size.
         if let Some(ref counter) = self.compressed_counter {
             if self.file_size == 0 {
                 return 0.0;
@@ -820,27 +749,24 @@ mod tests {
         assert_eq!(seq.sequence, b"ACGTACGT");
     }
 
-    // ---- rapidgzip backend ----
+    // ---- gzip decoding (rapidgzip) ----
 
-    /// The rapidgzip backend must produce byte-identical records to the plain
-    /// reader. With the `rapidgzip` feature compiled in, opening a `.gz` file
-    /// goes through the parallel decoder by default, so this compares the
-    /// gzipped fixture (rapidgzip) against its plaintext twin (flate2 is not
-    /// even involved on the plaintext side).
-    #[cfg(feature = "rapidgzip")]
+    /// Decoding a `.gz` file must produce byte-identical records to reading its
+    /// plaintext twin. Opening a `.gz` goes through the parallel rapidgzip
+    /// decoder; the plaintext side involves no decompression at all.
     #[test]
-    fn test_rapidgzip_matches_plaintext() {
+    fn test_gzip_matches_plaintext() {
         let config = FastQCConfig::default();
         let base = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/");
 
         let mut plain = FastQFile::open(&config, format!("{base}minimal.fastq")).unwrap();
         let mut gz = FastQFile::open(&config, format!("{base}minimal.fastq.gz")).unwrap();
 
-        // Opening the .gz file must actually engage the rapidgzip backend
-        // (compressed_counter is set only on that path), not silently fall back.
+        // Opening the .gz file must engage the gzip path (compressed_counter is
+        // set only there).
         assert!(
             gz.compressed_counter.is_some(),
-            "expected rapidgzip backend for .gz input"
+            "expected the gzip reader for .gz input"
         );
 
         loop {
@@ -853,16 +779,15 @@ mod tests {
                     assert_eq!(a.quality, b.quality);
                 }
                 (None, None) => break,
-                _ => panic!("record count mismatch between plaintext and rapidgzip"),
+                _ => panic!("record count mismatch between plaintext and gzip"),
             }
         }
     }
 
-    /// The rapidgzip backend must decode a real (dynamic-Huffman) gzip stream
+    /// The gzip reader must decode a real (dynamic-Huffman) gzip stream
     /// correctly: the realistic fixture has 1009 records.
-    #[cfg(feature = "rapidgzip")]
     #[test]
-    fn test_rapidgzip_reads_realistic() {
+    fn test_gzip_reads_realistic() {
         let config = FastQCConfig::default();
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/realistic.fastq.gz");
         let mut reader = FastQFile::open(&config, path).unwrap();

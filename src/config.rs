@@ -50,8 +50,7 @@ pub struct FastQCConfig {
     ///
     /// `0` means "auto": the runner derives a value from the available
     /// parallelism and the number of file groups processed concurrently.
-    /// Only has an effect when the `rapidgzip` feature is compiled in and the
-    /// rapidgzip backend is selected for a `.gz` input.
+    /// Applies to the parallel gzip decompression of `.gz` inputs.
     pub decompress_threads: usize,
 }
 

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-### Additional features
+### Changes
 
 - **Live progress display.** The `Approx N% complete for <file>` lines inherited
   from Java FastQC are replaced by a rich terminal display: a version banner,
@@ -59,13 +59,19 @@
   default modules); the order-dependent modules (overrepresented sequences,
   per-sequence GC) can't be split without changing output, so beyond that extra
   cores are best spent on more files at once, which scales linearly.
-- **Optional parallel gzip decompression** via the `rapidgzip` build feature
-  (off by default), backed by [rapidgzip-rust](https://github.com/COMBINE-lab/rapidgzip-rust).
-  Decompresses `.fastq.gz` on background threads and overlaps it with analysis,
-  giving a meaningful end-to-end speedup on large gzipped inputs while producing
-  byte-identical output. Pure Rust (zlib-rs), so it also works in the
-  fully-static `--no-default-features` build. New `--decompress-threads N`
-  option; backend selectable at runtime via `FASTQC_GZIP_BACKEND`.
+- **Parallel gzip decompression is now the default** (and only) gzip reader,
+  backed by [`rapidgzip-core`](https://crates.io/crates/rapidgzip-core).
+  `.fastq.gz` is decompressed on a pool of background threads and overlapped
+  with the analysis, giving a meaningful end-to-end speedup on large gzipped
+  inputs (~1.5× end-to-end, up to ~4× on decompression alone in local tests)
+  while producing byte-identical output. New `--decompress-threads N` option
+  (default `0` = auto).
+- **Removed the flate2/system-zlib gzip path**, the `rapidgzip`/`native-zlib`
+  Cargo features, and the `FASTQC_GZIP_BACKEND` switch. The binary is now pure
+  Rust (zlib-rs) with no C toolchain or system-library dependency, so builds are
+  fully static by default. As a side effect, BAM/BGZF and Fast5 decompression
+  (via `noodles`/`hdf5-pure`) now use the pure-Rust `miniz_oxide` backend rather
+  than system zlib.
 
 ### Bug fixes
 

@@ -61,36 +61,6 @@ cargo build --release
 ./target/release/fastqc sample.fastq.gz
 ```
 
-### Parallel gzip decompression (optional)
-
-For large `.fastq.gz` inputs, gzip decompression is single-threaded and often
-the bottleneck. The optional `rapidgzip` feature decompresses gzip on a pool of
-background threads using [rapidgzip-rust](https://github.com/COMBINE-lab/rapidgzip-rust)
-(pure Rust, no C toolchain), overlapping decompression with the analysis on the
-main thread:
-
-```bash
-# System-zlib fallback for stdin/pipes + parallel rapidgzip for .fastq.gz files
-cargo build --release --features rapidgzip
-
-# Fully static, pure-Rust build with parallel gzip (no C deps at all)
-cargo build --release --no-default-features --features rapidgzip
-```
-
-When compiled in, rapidgzip is used automatically for seekable `.fastq.gz`
-inputs (stdin and bzip2 keep the single-threaded readers). Output is
-byte-identical to the flate2 backend. Two knobs control it:
-
-- `--decompress-threads N` — worker budget per file (`0` = auto: spread the
-  machine's cores across the files processed concurrently).
-- `FASTQC_GZIP_BACKEND=flate2` — force the original single-threaded backend
-  (useful for A/B comparison).
-
-> [!NOTE]
-> The feature is off by default so standard builds stay lean and byte-for-byte
-> unchanged; enable it explicitly with `--features rapidgzip`. It pulls in the
-> [`rapidgzip-core`](https://crates.io/crates/rapidgzip-core) crate (pure Rust).
-
 ## Usage
 
 ```bash
