@@ -3,6 +3,7 @@
 
 use std::io;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::config::Limits;
 use crate::modules::QCModule;
@@ -10,11 +11,17 @@ use crate::sequence::Sequence;
 use crate::utils::base_counts::{BASE_INDEX, IDX_A, IDX_C, IDX_G, IDX_N, IDX_T};
 use crate::utils::phred;
 
-/// How many sequences to process between publications to the live snapshot.
-/// Publishing is a single mutex-guarded copy of a small `Copy` struct, so at
-/// this interval its cost is far below the noise floor of the analysis itself
-/// while still giving the progress display several updates per second.
-const PUBLISH_INTERVAL: u32 = 8192;
+/// How often to publish counters to the live snapshot.
+///
+/// A time rather than a sequence count: what the display wants is a refresh
+/// rate, and the number of reads that corresponds to depends entirely on the
+/// data — 8192 Illumina reads pass in a blink, 8192 nanopore reads can take
+/// long enough for the table to look frozen.
+const PUBLISH_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Sequences between checks of the clock. Reading the clock is cheap but not
+/// free, and this sits in the per-read path, so amortise it.
+const PUBLISH_CHECK_INTERVAL: u32 = 256;
 
 /// What kind of base calls the file holds, as reported in the "File type" row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -41,25 +48,27 @@ impl FileType {
 ///
 /// Kept separate from [`BasicStats`] so that exactly the same numbers can be
 /// formatted for the text/HTML report and for the live terminal table, with
-/// [`BasicStatsCounters::rows`] as the single source of truth for both. It is
-/// `Copy` so a consistent snapshot can be handed to the progress display
-/// without holding a lock while rendering.
+/// [`BasicStatsCounters::rows`] as the single source of truth for both — which
+/// is also why the counters themselves are private: everything outside this
+/// module wants the formatted rows, not the raw tallies. It is `Copy` so a
+/// consistent snapshot can be handed to the progress display without holding a
+/// lock while rendering.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BasicStatsCounters {
-    pub actual_count: u64,
-    pub filtered_count: u64,
-    pub min_length: usize,
-    pub max_length: usize,
-    pub total_bases: u64,
-    pub g_count: u64,
-    pub c_count: u64,
-    pub a_count: u64,
-    pub t_count: u64,
-    pub n_count: u64,
+    actual_count: u64,
+    filtered_count: u64,
+    min_length: usize,
+    max_length: usize,
+    total_bases: u64,
+    g_count: u64,
+    c_count: u64,
+    a_count: u64,
+    t_count: u64,
+    n_count: u64,
     /// Lowest quality character seen. Java initialises this to 126 (the
     /// highest printable ASCII) and lowers it as sequences are read.
-    pub lowest_char: u8,
-    pub file_type: FileType,
+    lowest_char: u8,
+    file_type: FileType,
 }
 
 impl BasicStatsCounters {
@@ -70,6 +79,18 @@ impl BasicStatsCounters {
             ..Default::default()
         }
     }
+
+    /// The measures reported, in report order, minus the leading "Filename"
+    /// row. [`Self::rows`] returns a value for each of these, in this order.
+    pub const MEASURES: [&'static str; 7] = [
+        "File type",
+        "Encoding",
+        "Total Sequences",
+        "Total Bases",
+        "Sequences flagged as poor quality",
+        "Sequence length",
+        "%GC",
+    ];
 
     /// The Basic Statistics rows, minus the leading "Filename" row, in report
     /// order. Both the text report and the live progress table render from
@@ -92,18 +113,16 @@ impl BasicStatsCounters {
             .checked_div(total)
             .unwrap_or(0);
 
-        vec![
-            ("File type", self.file_type.label().to_string()),
-            ("Encoding", encoding),
-            ("Total Sequences", self.actual_count.to_string()),
-            ("Total Bases", format_length(self.total_bases)),
-            (
-                "Sequences flagged as poor quality",
-                self.filtered_count.to_string(),
-            ),
-            ("Sequence length", sequence_length),
-            ("%GC", gc.to_string()),
-        ]
+        let values = [
+            self.file_type.label().to_string(),
+            encoding,
+            self.actual_count.to_string(),
+            format_length(self.total_bases),
+            self.filtered_count.to_string(),
+            sequence_length,
+            gc.to_string(),
+        ];
+        Self::MEASURES.into_iter().zip(values).collect()
     }
 }
 
@@ -188,8 +207,10 @@ pub struct BasicStats {
     counters: BasicStatsCounters,
     /// Optional live snapshot sink for the terminal progress table.
     live: Option<Arc<LiveStats>>,
-    /// Sequences processed since the last publication to `live`.
-    since_publish: u32,
+    /// Sequences processed since the clock was last consulted.
+    since_check: u32,
+    /// When the counters were last published.
+    last_publish: Instant,
 }
 
 impl BasicStats {
@@ -198,7 +219,8 @@ impl BasicStats {
             name: None,
             counters: BasicStatsCounters::new(),
             live: None,
-            since_publish: 0,
+            since_check: 0,
+            last_publish: Instant::now(),
         }
     }
 
@@ -210,17 +232,9 @@ impl BasicStats {
         self.name = Some(name.to_string());
     }
 
-    /// Format a base count into a human-readable string.
-    ///
-    /// Kept as an associated function for callers that already have a
-    /// `BasicStats` in scope; see the free [`format_length`] function.
-    pub fn format_length(original_length: u64) -> String {
-        format_length(original_length)
-    }
-
     /// Push the current counters to the live snapshot, if one is attached.
     fn publish(&mut self) {
-        self.since_publish = 0;
+        self.last_publish = Instant::now();
         if let Some(ref live) = self.live {
             live.publish(self.counters);
         }
@@ -235,9 +249,12 @@ impl QCModule for BasicStats {
     fn process_sequence(&mut self, sequence: &Sequence) {
         // Publish a snapshot for the live progress table every so often. Done
         // first so the counter is advanced even for filtered sequences.
-        self.since_publish += 1;
-        if self.since_publish >= PUBLISH_INTERVAL && self.live.is_some() {
-            self.publish();
+        self.since_check += 1;
+        if self.since_check >= PUBLISH_CHECK_INTERVAL {
+            self.since_check = 0;
+            if self.last_publish.elapsed() >= PUBLISH_INTERVAL {
+                self.publish();
+            }
         }
 
         // Java counts filtered sequences separately
@@ -293,9 +310,7 @@ impl QCModule for BasicStats {
     /// Publish the final counters so the progress table ends on exactly the
     /// values that go into the report.
     fn finalize(&mut self) {
-        if self.live.is_some() {
-            self.publish();
-        }
+        self.publish();
     }
 
     fn set_filename(&mut self, name: &str) {
@@ -361,27 +376,27 @@ mod tests {
 
     #[test]
     fn test_format_length_bp() {
-        assert_eq!(BasicStats::format_length(16), "16 bp");
-        assert_eq!(BasicStats::format_length(80), "80 bp");
-        assert_eq!(BasicStats::format_length(999), "999 bp");
+        assert_eq!(format_length(16), "16 bp");
+        assert_eq!(format_length(80), "80 bp");
+        assert_eq!(format_length(999), "999 bp");
     }
 
     #[test]
     fn test_format_length_kbp() {
-        assert_eq!(BasicStats::format_length(1000), "1 kbp");
-        assert_eq!(BasicStats::format_length(1500), "1.5 kbp");
-        assert_eq!(BasicStats::format_length(10000), "10 kbp");
+        assert_eq!(format_length(1000), "1 kbp");
+        assert_eq!(format_length(1500), "1.5 kbp");
+        assert_eq!(format_length(10000), "10 kbp");
     }
 
     #[test]
     fn test_format_length_mbp() {
-        assert_eq!(BasicStats::format_length(1_000_000), "1 Mbp");
-        assert_eq!(BasicStats::format_length(1_200_000), "1.2 Mbp");
+        assert_eq!(format_length(1_000_000), "1 Mbp");
+        assert_eq!(format_length(1_200_000), "1.2 Mbp");
     }
 
     #[test]
     fn test_format_length_gbp() {
-        assert_eq!(BasicStats::format_length(1_000_000_000), "1 Gbp");
+        assert_eq!(format_length(1_000_000_000), "1 Gbp");
     }
 
     fn sequences(count: usize) -> Vec<Sequence> {
@@ -423,9 +438,13 @@ mod tests {
         // can show "-" rather than a misleading row of zeroes.
         assert!(live.snapshot().is_none());
 
-        // Enough sequences to cross the publication interval more than once.
-        let seqs = sequences(PUBLISH_INTERVAL as usize * 2 + 17);
-        for seq in &seqs {
+        // Enough sequences to cross the check interval several times, with a
+        // pause so at least one of those checks is past the publish interval.
+        let seqs = sequences(PUBLISH_CHECK_INTERVAL as usize * 4);
+        for (i, seq) in seqs.iter().enumerate() {
+            if i == PUBLISH_CHECK_INTERVAL as usize {
+                std::thread::sleep(PUBLISH_INTERVAL);
+            }
             module.process_sequence(seq);
         }
 

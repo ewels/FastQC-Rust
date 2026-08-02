@@ -142,6 +142,9 @@ impl When {
 /// completed files.
 const MAX_FILE_BARS: usize = 10;
 
+/// Widest a value column grows before the extra room is left as margin.
+const MAX_VALUE_WIDTH: usize = 28;
+
 /// Narrowest a statistics-table value column may be and still be worth reading.
 /// Whether the table is shown at all is decided by whether every column can
 /// have at least this much room (see [`table_fits`]), so a wide terminal shows
@@ -245,7 +248,7 @@ enum Mode {
     /// No redrawn display: one plain line per file at start and finish. Still
     /// colour-aware, because a CI log viewer renders escape sequences happily
     /// even though it is not a terminal.
-    Plain { colors: bool },
+    Plain,
     /// A terminal: live bars, and optionally a live statistics table.
     Live(Box<Live>),
 }
@@ -256,13 +259,15 @@ struct Live {
     /// The closing summary, drawn as the last line of the region so it always
     /// lands below the bars and the table. Empty until the run finishes.
     summary: ProgressBar,
+    /// The label last written to each bar's message, so an unchanged one is
+    /// not re-sent through indicatif.
+    labelled: Vec<Mutex<String>>,
     /// Blank line kept at the bottom of the redrawn region.
     trailer: ProgressBar,
     /// Where log lines go: above the display, as ordinary scrollback.
     log: Arc<LogSink>,
     ticker: Mutex<Option<JoinHandle<()>>>,
     stop: Arc<AtomicBool>,
-    colors: bool,
     /// Progress bar style applied to a file once it has finished cleanly.
     done_style: ProgressStyle,
     failed_style: ProgressStyle,
@@ -283,7 +288,11 @@ enum Bars {
 enum ModeChoice {
     Silent,
     Plain,
-    Live,
+    /// `forced` when the display was asked for regardless of what the terminal
+    /// looks like, which is the one thing `Live::new` needs to know.
+    Live {
+        forced: bool,
+    },
 }
 
 /// Decide how to report progress.
@@ -308,9 +317,9 @@ fn choose_mode(
         return ModeChoice::Silent;
     }
     match progress.forced() {
-        Some(true) => ModeChoice::Live,
+        Some(true) => ModeChoice::Live { forced: true },
         Some(false) => ModeChoice::Plain,
-        None if stderr_is_terminal && !dumb_terminal => ModeChoice::Live,
+        None if stderr_is_terminal && !dumb_terminal => ModeChoice::Live { forced: false },
         None => ModeChoice::Plain,
     }
 }
@@ -320,7 +329,6 @@ impl ProgressReporter {
     /// in command-line order).
     pub fn new(names: &[String], quiet: bool) -> Self {
         let progress = When::from_env(PROGRESS_ENV);
-        let forced_display = progress == When::Always;
         let choice = choose_mode(
             quiet,
             progress,
@@ -329,10 +337,8 @@ impl ProgressReporter {
         );
         let mode = match choice {
             ModeChoice::Silent => Mode::Silent,
-            ModeChoice::Plain => Mode::Plain {
-                colors: console::colors_enabled_stderr(),
-            },
-            ModeChoice::Live => Mode::Live(Box::new(Live::new(names, forced_display))),
+            ModeChoice::Plain => Mode::Plain,
+            ModeChoice::Live { forced } => Mode::Live(Box::new(Live::new(names, forced))),
         };
         ProgressReporter {
             mode,
@@ -358,26 +364,12 @@ impl ProgressReporter {
         }
     }
 
-    /// The live statistics sink for a file group, if the table is being shown.
-    /// Attached to the file's BasicStats module so it can publish partial
-    /// results as it works.
-    pub fn live_stats(&self, index: usize) -> Option<Arc<LiveStats>> {
-        match &self.mode {
-            Mode::Live(live) => live
-                .table
-                .as_ref()
-                .and_then(|t| t.columns.get(index))
-                .map(|c| Arc::clone(&c.live)),
-            _ => None,
-        }
-    }
-
     /// Print an error line above the display. Shown even under `--quiet`,
     /// matching the previous behaviour of the runner.
     pub fn error(&self, message: &str) {
         match &self.mode {
-            Mode::Live(live) => live.log.print(&paint_error(live.colors, message)),
-            Mode::Plain { colors } => eprintln!("{}", paint_error(*colors, message)),
+            Mode::Live(live) => live.log.print(&paint_error(message)),
+            Mode::Plain => eprintln!("{}", paint_error(message)),
             // Silent still reports errors, but has no colour context to use.
             Mode::Silent => eprintln!("{}", message),
         }
@@ -390,7 +382,7 @@ impl ProgressReporter {
     /// anything that failed has already been reported as an error line.
     pub fn finish(&self, analysed: usize) {
         let summary = format!(
-            "Complete. Analysed {} {} in {}",
+            "Analysed {} {} in {}",
             analysed,
             if analysed == 1 { "file" } else { "files" },
             clock_duration(self.started.elapsed()),
@@ -399,62 +391,17 @@ impl ProgressReporter {
             // --quiet stays quiet: the run said nothing, so it ends saying
             // nothing.
             Mode::Silent => {}
-            Mode::Plain { colors } => eprintln!(
-                "{} {}",
-                paint(*colors, "Complete.", |s| s.green().bold()),
-                summary.trim_start_matches("Complete. "),
-            ),
+            Mode::Plain => eprintln!("{} {}", paint("Complete.", |s| s.green().bold()), summary),
             Mode::Live(live) => {
                 // The last line of the redrawn region, so it lands below the
                 // bars and the table rather than scrolling past above them.
                 live.summary.set_message(format!(
                     "{} {}",
-                    paint(live.colors, "Complete.", |s| s.green().bold()),
-                    paint(live.colors, summary.trim_start_matches("Complete. "), |s| {
-                        s.dim()
-                    }),
+                    paint("Complete.", |s| s.green().bold()),
+                    paint(&summary, |s| s.dim()),
                 ));
                 live.finish();
             }
-        }
-    }
-
-    fn on_start(&self, index: usize, name: &str) {
-        match &self.mode {
-            Mode::Silent => {}
-            Mode::Plain { colors } => {
-                eprintln!("Started analysis of {}", paint(*colors, name, |s| s.bold()))
-            }
-            Mode::Live(live) => live.start(index),
-        }
-    }
-
-    fn on_progress(&self, index: usize, fraction: f64, reads: u64) {
-        if let Mode::Live(live) = &self.mode {
-            live.progress(index, fraction, reads);
-        }
-    }
-
-    fn on_stage(&self, index: usize, stage: &str) {
-        if let Mode::Live(live) = &self.mode {
-            live.stage(index, stage);
-        }
-    }
-
-    fn on_finish(&self, index: usize, name: &str, reads: u64) {
-        match &self.mode {
-            Mode::Silent => {}
-            Mode::Plain { colors } => eprintln!(
-                "Analysis complete for {}",
-                paint(*colors, name, |s| s.bold())
-            ),
-            Mode::Live(live) => live.finish_file(index, reads),
-        }
-    }
-
-    fn on_fail(&self, index: usize) {
-        if let Mode::Live(live) = &self.mode {
-            live.fail_file(index);
         }
     }
 }
@@ -468,37 +415,67 @@ pub struct FileProgress<'a> {
 
 impl FileProgress<'_> {
     /// The live statistics sink for this file, if the table is being shown.
+    /// Attached to the file's BasicStats module so it can publish partial
+    /// results as it works.
     pub fn live_stats(&self) -> Option<Arc<LiveStats>> {
-        self.reporter.live_stats(self.index)
+        match &self.reporter.mode {
+            Mode::Live(live) => live
+                .table
+                .as_ref()
+                .and_then(|t| t.columns.get(self.index))
+                .map(|c| Arc::clone(&c.live)),
+            _ => None,
+        }
+    }
+
+    /// Whether anything would be done with a position report. Reading one costs
+    /// a seek on the input file, so the reader should not pay for it when the
+    /// display has no bar to move — under `--quiet`, without a terminal, or
+    /// when many files share a single completion-counting bar.
+    pub fn wants_position(&self) -> bool {
+        matches!(&self.reporter.mode, Mode::Live(live) if live.bar(self.index).is_some())
     }
 
     /// Announce that analysis of this file has begun.
     pub fn start(&self, name: &str) {
-        self.reporter.on_start(self.index, name);
+        match &self.reporter.mode {
+            Mode::Silent => {}
+            Mode::Plain => eprintln!("Started analysis of {}", paint(name, |s| s.bold())),
+            Mode::Live(live) => live.start(self.index),
+        }
     }
 
     /// Report how far through the file the reader is. `percent` is the value
     /// from `SequenceFile::percent_complete`; `reads` is the number of records
     /// handed to the modules so far.
     pub fn update(&self, percent: f64, reads: u64) {
-        self.reporter
-            .on_progress(self.index, percent / 100.0, reads);
+        if let Mode::Live(live) = &self.reporter.mode {
+            live.progress(self.index, percent / 100.0, reads);
+        }
     }
 
     /// Note that the file has been read and the run has moved on to another
     /// phase (rendering charts, writing the report).
     pub fn stage(&self, stage: &str) {
-        self.reporter.on_stage(self.index, stage);
+        if let Mode::Live(live) = &self.reporter.mode {
+            live.stage(self.index, stage);
+        }
     }
 
     /// Mark the file finished.
     pub fn finish(&self, name: &str, reads: u64) {
-        self.reporter.on_finish(self.index, name, reads);
+        match &self.reporter.mode {
+            Mode::Silent => {}
+            Mode::Plain => eprintln!("Analysis complete for {}", paint(name, |s| s.bold())),
+            Mode::Live(live) => live.finish_file(self.index, reads),
+        }
     }
 
     /// Mark the file failed.
     pub fn fail(&self) {
-        self.reporter.on_fail(self.index);
+        if let Mode::Live(live) = &self.reporter.mode {
+            live.fail_file(self.index);
+        }
     }
 }
 
@@ -506,11 +483,6 @@ impl Live {
     /// `forced` is set by `--progress always`, meaning the display must be
     /// drawn even though the environment says it should not be.
     fn new(names: &[String], forced: bool) -> Self {
-        // Honours NO_COLOR, CLICOLOR/CLICOLOR_FORCE and TERM=dumb, plus any
-        // `--color` override already applied. indicatif resolves the
-        // `.cyan`/`.green` parts of its templates against the same function, so
-        // this single flag covers the entire display.
-        let colors = console::colors_enabled_stderr();
         let term = ForcedTerm::new();
         let term_width = term.width() as usize;
 
@@ -537,8 +509,8 @@ impl Live {
         let line_ending = if forced { "\r\n" } else { "\n" };
         eprint!(
             "{} {}{line_ending}{line_ending}",
-            paint(colors, "FastQC-Rust", |s| s.cyan().bold()),
-            paint(colors, &format!("v{}", crate::RUST_VERSION), |s| s.dim()),
+            paint("FastQC-Rust", |s| s.cyan().bold()),
+            paint(&format!("v{}", crate::RUST_VERSION), |s| s.dim()),
         );
 
         let log = Arc::new(LogSink {
@@ -553,7 +525,7 @@ impl Live {
 
         let label_width = names
             .iter()
-            .map(|n| display_width(n))
+            .map(|n| console::measure_text_width(n))
             .max()
             .unwrap_or(0)
             .min(MAX_NAME_WIDTH)
@@ -562,27 +534,18 @@ impl Live {
         let bars = if names.len() > MAX_FILE_BARS {
             // Too many files for a bar each: count completed files instead.
             let bar = multi.add(ProgressBar::new(names.len() as u64));
-            bar.set_style(aggregate_style(colors));
-            bar.set_prefix(pad_label(
-                &paint(colors, "FastQ files", |s| s.bold()),
-                "FastQ files",
-                label_width,
-            ));
-            bar.enable_steady_tick(SPINNER_TICK);
+            bar.set_style(aggregate_style());
+            bar.set_prefix(pad_cell(&paint("FastQ files", |s| s.bold()), label_width));
             Bars::Aggregate(bar)
         } else {
-            let running = running_style(colors);
+            let running = running_style();
             let bars = names
                 .iter()
                 .map(|name| {
                     let bar = multi.add(ProgressBar::new(SCALE));
                     let shown = truncate_str(name, label_width, "…").into_owned();
                     bar.set_style(running.clone());
-                    bar.set_prefix(pad_label(
-                        &paint(colors, &shown, |s| s.bold()),
-                        &shown,
-                        label_width,
-                    ));
+                    bar.set_prefix(pad_cell(&paint(&shown, |s| s.bold()), label_width));
                     bar.set_message("waiting");
                     bar.tick();
                     bar
@@ -595,7 +558,7 @@ impl Live {
         // give every column room to be read. The table itself is unchanged
         // either way: this decides whether it appears, not how it looks.
         let table = if table_fits(names.len(), term_width) {
-            Some(Arc::new(Table::new(&multi, names, term_width, colors)))
+            Some(Arc::new(Table::new(&multi, names, term_width)))
         } else {
             None
         };
@@ -611,6 +574,9 @@ impl Live {
         trailer.set_message(" ");
 
         let live = Live {
+            labelled: (0..names.len())
+                .map(|_| Mutex::new(String::new()))
+                .collect(),
             bars,
             table,
             summary,
@@ -618,30 +584,51 @@ impl Live {
             log,
             ticker: Mutex::new(None),
             stop: Arc::new(AtomicBool::new(false)),
-            colors,
-            done_style: done_style(colors),
-            failed_style: failed_style(colors),
+            done_style: done_style(),
+            failed_style: failed_style(),
         };
         live.start_ticker();
         live
     }
 
-    /// Drive the statistics table from a background thread: the analysis
-    /// threads only ever publish counters, they never render.
+    /// Animate the display from a single background thread: the analysis threads
+    /// only ever publish counters and positions, they never render.
+    ///
+    /// indicatif's own `enable_steady_tick` spawns a thread per bar, which for
+    /// a ten-file run means ten threads competing for the same draw lock purely
+    /// to advance a spinner. One thread does both jobs.
     fn start_ticker(&self) {
-        let Some(table) = self.table.as_ref().map(Arc::clone) else {
-            return;
+        let table = self.table.as_ref().map(Arc::clone);
+        let spinners: Vec<ProgressBar> = match &self.bars {
+            Bars::PerFile(bars) => bars.clone(),
+            Bars::Aggregate(bar) => vec![bar.clone()],
         };
         let stop = Arc::clone(&self.stop);
         let handle = std::thread::Builder::new()
             .name("fastqc-progress".into())
             .spawn(move || {
+                // Table refreshes are slower than spinner frames, so count
+                // ticks rather than running two threads.
+                let per_refresh = (TABLE_REFRESH.as_millis() / SPINNER_TICK.as_millis()).max(1);
+                let mut tick: u128 = 0;
                 while !stop.load(Ordering::Relaxed) {
-                    table.refresh();
-                    std::thread::sleep(TABLE_REFRESH);
+                    for bar in &spinners {
+                        if !bar.is_finished() {
+                            bar.tick();
+                        }
+                    }
+                    if tick.is_multiple_of(per_refresh) {
+                        if let Some(table) = &table {
+                            table.refresh();
+                        }
+                    }
+                    tick += 1;
+                    std::thread::sleep(SPINNER_TICK);
                 }
                 // One last render so the table shows the finished values.
-                table.refresh();
+                if let Some(table) = &table {
+                    table.refresh();
+                }
             });
         if let Ok(handle) = handle {
             *self.ticker.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
@@ -658,14 +645,28 @@ impl Live {
     fn start(&self, index: usize) {
         if let Some(bar) = self.bar(index) {
             bar.set_message("reading");
-            bar.enable_steady_tick(SPINNER_TICK);
         }
     }
 
     fn progress(&self, index: usize, fraction: f64, reads: u64) {
-        if let Some(bar) = self.bar(index) {
-            bar.set_position((fraction.clamp(0.0, 1.0) * SCALE as f64) as u64);
-            bar.set_message(format!("{} reads", human_count(reads)));
+        let Some(bar) = self.bar(index) else {
+            return;
+        };
+        bar.set_position((fraction.clamp(0.0, 1.0) * SCALE as f64) as u64);
+
+        // `human_count` is coarse, so past a million reads the same label is
+        // produced for a hundred consecutive updates. Re-sending it is not
+        // free: unlike `set_position`, `set_message` takes indicatif's global
+        // draw lock before any rate limiting, and this runs once per thousand
+        // reads on every file at once. Compare against what was last written —
+        // an uncontended per-bar lock — and only then reach for the global one.
+        let label = format!("{} reads", human_count(reads));
+        let mut last = self.labelled[index]
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if *last != label {
+            bar.set_message(label.clone());
+            *last = label;
         }
     }
 
@@ -714,7 +715,7 @@ impl Live {
 
     fn finish(&self) {
         if let Bars::Aggregate(bar) = &self.bars {
-            bar.set_style(aggregate_done_style(self.colors));
+            bar.set_style(aggregate_done_style());
             bar.finish();
         }
         self.stop.store(true, Ordering::Relaxed);
@@ -845,17 +846,36 @@ struct Table {
     columns: Vec<Column>,
     /// Row labels, in report order.
     measures: Vec<&'static str>,
-    label_width: usize,
     value_width: usize,
-    colors: bool,
+    /// The fixed furniture, rendered once: the three borders, the styled
+    /// vertical rule, the heading row's label cell and each measure's label
+    /// cell. None of it changes during a run, and the table is re-rendered
+    /// several times a second.
+    top: String,
+    divider: String,
+    bottom: String,
+    pipe: String,
+    heading_label: String,
+    row_labels: Vec<String>,
+    /// The last frame rendered, so an unchanged one can be dropped rather than
+    /// pushed through indicatif and out to the terminal again.
+    last: Mutex<String>,
 }
 
 struct Column {
-    /// File name as shown in the header, already truncated to the column width.
-    heading: String,
     live: Arc<LiveStats>,
+    /// The heading pre-rendered in each state, indexed by [`FileState`]: the
+    /// colour is the only thing that varies, and re-styling it per frame would
+    /// be pure waste.
+    headings: [String; 3],
     /// Drives the heading colour, kept in step with the file's bar.
     state: AtomicU8,
+}
+
+impl Column {
+    fn styled_heading(&self) -> &str {
+        &self.headings[FileState::from_u8(self.state.load(Ordering::Relaxed)) as usize]
+    }
 }
 
 /// How a file is doing, for colouring its column heading the same way its
@@ -879,27 +899,54 @@ impl FileState {
 }
 
 impl Table {
-    fn new(multi: &MultiProgress, names: &[String], term_width: usize, colors: bool) -> Self {
+    fn new(multi: &MultiProgress, names: &[String], term_width: usize) -> Self {
         let measures = measure_labels();
-
-        let (label_width, value_width) = layout(&measures, names.len(), term_width);
+        let (label_width, value_width) = layout(&measures, names.len(), term_width)
+            .expect("only constructed when the table fits");
 
         let columns = names
             .iter()
-            .map(|name| Column {
-                heading: truncate_str(name, value_width, "…").into_owned(),
-                live: Arc::new(LiveStats::new()),
-                state: AtomicU8::new(FileState::Running as u8),
+            .map(|name| {
+                let heading = truncate_str(name, value_width, "…").into_owned();
+                // The heading tracks the file's bar: accent while it is
+                // running, green once analysed, red if it failed.
+                let headings = [
+                    pad_cell(&paint(&heading, |s| s.cyan().bold()), value_width),
+                    pad_cell(&paint(&heading, |s| s.green().bold()), value_width),
+                    pad_cell(&paint(&heading, |s| s.red().bold()), value_width),
+                ];
+                Column {
+                    live: Arc::new(LiveStats::new()),
+                    headings,
+                    state: AtomicU8::new(FileState::Running as u8),
+                }
             })
-            .collect();
+            .collect::<Vec<_>>();
+
+        let rule = |left: char, mid: char, right: char| {
+            let mut s = String::from("  ");
+            s.push(left);
+            s.push_str(&"─".repeat(label_width + 2));
+            for _ in &columns {
+                s.push(mid);
+                s.push_str(&"─".repeat(value_width + 2));
+            }
+            s.push(right);
+            paint(&s, |st| st.dim())
+        };
 
         let table = Table {
             line: static_line(multi),
+            top: rule('┌', '┬', '┐'),
+            divider: rule('├', '┼', '┤'),
+            bottom: rule('└', '┴', '┘'),
+            pipe: paint("│", |s| s.dim()),
+            heading_label: pad_cell(&paint("Measure", |s| s.dim()), label_width),
+            row_labels: measures.iter().map(|m| pad_cell(m, label_width)).collect(),
             columns,
             measures,
-            label_width,
             value_width,
-            colors,
+            last: Mutex::new(String::new()),
         };
         table.refresh();
         table
@@ -911,11 +958,28 @@ impl Table {
         self.line.finish();
     }
 
-    /// Re-render every line from the latest published counters.
+    /// Re-render the table from the latest published counters.
+    ///
+    /// Only the value cells are built here: the borders, the measure labels and
+    /// the three styled forms of each heading are fixed for the run and were
+    /// rendered once in `new`. The result is compared against the last frame
+    /// and dropped if identical, which is the common case — columns only change
+    /// every few thousand reads, and nothing changes at all while the reports
+    /// are being written.
     fn refresh(&self) {
-        // One formatted set of values per column. A column that has not
-        // published yet shows "-" everywhere, so an idle file reads as idle
-        // rather than as a file of zero reads.
+        let mut out: Vec<String> = Vec::with_capacity(self.measures.len() + 5);
+        // A single space rather than an empty string: indicatif skips lines
+        // that render to nothing, and the spacer is wanted.
+        out.push(" ".to_string());
+        out.push(self.top.clone());
+        out.push(self.row(
+            &self.heading_label,
+            self.columns.iter().map(|c| c.styled_heading()),
+        ));
+        out.push(self.divider.clone());
+
+        // A column that has not published yet shows "-" everywhere, so an idle
+        // file reads as idle rather than as a file of zero reads.
         let values: Vec<Vec<String>> = self
             .columns
             .iter()
@@ -925,83 +989,48 @@ impl Table {
             })
             .collect();
 
-        let mut out: Vec<String> = Vec::with_capacity(self.measures.len() + 5);
-        // A single space rather than an empty string: indicatif skips lines
-        // that render to nothing, and the spacer is wanted.
-        out.push(" ".to_string());
-        out.push(self.rule('┌', '┬', '┐'));
-        out.push(
-            self.row(
-                &paint(self.colors, "Measure", |s| s.dim()),
-                "Measure",
-                self.columns
-                    .iter()
-                    .map(|c| {
-                        // The heading tracks the file's bar: accent while it is
-                        // running, green once analysed, red if it failed.
-                        let state = FileState::from_u8(c.state.load(Ordering::Relaxed));
-                        let styled = match state {
-                            FileState::Running => {
-                                paint(self.colors, &c.heading, |s| s.cyan().bold())
-                            }
-                            FileState::Analysed => {
-                                paint(self.colors, &c.heading, |s| s.green().bold())
-                            }
-                            FileState::Failed => paint(self.colors, &c.heading, |s| s.red().bold()),
-                        };
-                        (styled, c.heading.clone())
-                    })
-                    .collect(),
-            ),
-        );
-        out.push(self.rule('├', '┼', '┤'));
-
         // Row labels and ordering come straight from the report's own table.
-        for (index, measure) in self.measures.iter().enumerate() {
-            let cells = values
+        for (index, label) in self.row_labels.iter().enumerate() {
+            let cells: Vec<String> = values
                 .iter()
-                .map(|column| {
-                    let shown = truncate_str(&column[index], self.value_width, "…").into_owned();
-                    (paint(self.colors, &shown, |s| s.white()), shown)
-                })
+                .map(|column| self.value_cell(&column[index]))
                 .collect();
-            out.push(self.row(measure, measure, cells));
+            out.push(self.row(label, cells.iter().map(String::as_str)));
         }
-        out.push(self.rule('└', '┴', '┘'));
+        out.push(self.bottom.clone());
 
+        let rendered = out.join("\n");
+        let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
+        if *last == rendered {
+            return;
+        }
         // One update, one redraw.
-        self.line.set_message(out.join("\n"));
+        self.line.set_message(rendered.clone());
+        *last = rendered;
     }
 
-    /// A horizontal border line.
-    fn rule(&self, left: char, mid: char, right: char) -> String {
-        let mut s = String::from("  ");
-        s.push(left);
-        s.push_str(&"─".repeat(self.label_width + 2));
-        for _ in &self.columns {
-            s.push(mid);
-            s.push_str(&"─".repeat(self.value_width + 2));
-        }
-        s.push(right);
-        paint(self.colors, &s, |st| st.dim())
+    /// A value cell: truncated to the column, styled, padded.
+    fn value_cell(&self, value: &str) -> String {
+        pad_cell(
+            &paint(&truncate_str(value, self.value_width, "…"), |s| s.white()),
+            self.value_width,
+        )
     }
 
-    /// A content line. Cells are passed as `(styled, plain)` pairs because the
-    /// styled form carries ANSI escapes that must not be counted when padding.
-    fn row(&self, label: &str, label_plain: &str, cells: Vec<(String, String)>) -> String {
-        let bar = paint(self.colors, "│", |s| s.dim());
+    /// A content line, from cells that are already styled and padded.
+    fn row<'a>(&self, label_cell: &str, cells: impl Iterator<Item = &'a str>) -> String {
         let mut s = String::from("  ");
-        s.push_str(&bar);
+        s.push_str(&self.pipe);
         s.push(' ');
-        s.push_str(&pad_label(label, label_plain, self.label_width));
+        s.push_str(label_cell);
         s.push(' ');
-        for (styled, plain) in cells {
-            s.push_str(&bar);
+        for cell in cells {
+            s.push_str(&self.pipe);
             s.push(' ');
-            s.push_str(&pad_label(&styled, &plain, self.value_width));
+            s.push_str(cell);
             s.push(' ');
         }
-        s.push_str(&bar);
+        s.push_str(&self.pipe);
         s
     }
 }
@@ -1009,11 +1038,7 @@ impl Table {
 /// The measure labels, in report order. Used for both the table itself and the
 /// width arithmetic that decides whether to show it.
 fn measure_labels() -> Vec<&'static str> {
-    BasicStatsCounters::default()
-        .rows()
-        .into_iter()
-        .map(|(measure, _)| measure)
-        .collect()
+    BasicStatsCounters::MEASURES.to_vec()
 }
 
 /// Terminal columns consumed by a table of `columns` files that are not cell
@@ -1023,82 +1048,70 @@ fn table_overhead(columns: usize) -> usize {
     2 + (columns + 2) + 2 * (columns + 1)
 }
 
-/// Whether a statistics table for `columns` files is worth drawing at this
-/// terminal width — that is, whether the measure column can have its natural
-/// width and every value column at least [`MIN_VALUE_WIDTH`].
-fn table_fits(columns: usize, term_width: usize) -> bool {
-    if columns == 0 {
-        return false;
-    }
-    let labels = measure_labels();
-    let natural_label = labels.iter().map(|m| display_width(m)).max().unwrap_or(8);
-    table_overhead(columns) + natural_label + columns * MIN_VALUE_WIDTH <= term_width
-}
-
-/// Work out the column widths for a table of `columns` files, given the
-/// measure labels and the terminal width.
+/// Column widths for a table of `columns` files at this terminal width, or
+/// `None` when it is not worth drawing — which is when the measure column
+/// cannot have its natural width or a value column would be narrower than
+/// [`MIN_VALUE_WIDTH`].
 ///
-/// The measure column gets its natural width when there is room; otherwise the
-/// value columns are squeezed first, then the measure column, so that the table
-/// stays inside the terminal instead of wrapping.
-fn layout(measures: &[&str], columns: usize, term_width: usize) -> (usize, usize) {
-    let natural_label = measures.iter().map(|m| display_width(m)).max().unwrap_or(8);
-    let columns = columns.max(1);
-    let overhead = table_overhead(columns);
-    let available = term_width.saturating_sub(overhead);
-
-    let mut label_width = natural_label;
-    let mut value_width = available.saturating_sub(label_width) / columns;
-    value_width = value_width.clamp(MIN_VALUE_WIDTH, 28);
-
-    // Still too wide? Take it out of the measure column, down to a floor where
-    // the labels are at least recognisable.
-    let total = label_width + value_width * columns;
-    if total > available {
-        label_width = available.saturating_sub(value_width * columns).max(10);
+/// This is the single place the geometry is decided: `table_fits` asks whether
+/// there is an answer, `Table::new` uses it.
+fn layout(measures: &[&str], columns: usize, term_width: usize) -> Option<(usize, usize)> {
+    if columns == 0 {
+        return None;
     }
-    (label_width, value_width)
+    let label_width = measures
+        .iter()
+        .map(|m| console::measure_text_width(m))
+        .max()
+        .unwrap_or(8);
+    let available = term_width
+        .saturating_sub(table_overhead(columns))
+        .checked_sub(label_width)?;
+
+    let value_width = (available / columns).min(MAX_VALUE_WIDTH);
+    (value_width >= MIN_VALUE_WIDTH).then_some((label_width, value_width))
 }
 
-/// Pad `styled` (which may contain ANSI escapes) to `width` columns, measuring
-/// with the escape-free `plain` form.
-fn pad_label(styled: &str, plain: &str, width: usize) -> String {
-    let used = display_width(plain);
-    let mut out = String::from(styled);
-    out.push_str(&" ".repeat(width.saturating_sub(used)));
-    out
+/// Whether a statistics table for `columns` files is worth drawing at this
+/// terminal width.
+fn table_fits(columns: usize, term_width: usize) -> bool {
+    layout(&measure_labels(), columns, term_width).is_some()
 }
 
-fn display_width(s: &str) -> usize {
-    console::measure_text_width(s)
+/// Pad a cell to `width` columns. `console::pad_str` measures with
+/// `measure_text_width`, which skips ANSI escapes, so a styled cell lines up
+/// with a plain one.
+fn pad_cell(text: &str, width: usize) -> String {
+    console::pad_str(text, width, console::Alignment::Left, None).into_owned()
 }
 
-/// Apply terminal styling, but only when the destination supports colour.
+/// Style an error line red for stderr.
+fn paint_error(text: &str) -> String {
+    paint(text, |s| s.red())
+}
+
+/// Style text for stderr.
+///
+/// `for_stderr` makes console resolve the escape codes against
+/// `colors_enabled_stderr()` when the value is rendered, which is the same
+/// signal indicatif's template styling uses — so there is nothing for this
+/// module to decide or thread around.
 fn paint(
-    colors: bool,
     text: &str,
     apply: impl FnOnce(console::StyledObject<&str>) -> console::StyledObject<&str>,
 ) -> String {
-    if !colors {
-        return text.to_string();
-    }
-    apply(style(text).force_styling(true)).to_string()
-}
-
-fn paint_error(colors: bool, text: &str) -> String {
-    paint(colors, text, |s| s.red())
+    apply(style(text).for_stderr()).to_string()
 }
 
 /// Template key rendering the elapsed time compactly and dimmed, shared by
 /// every bar style so the last column always looks the same.
 fn elapsed_key(
-    colors: bool,
 ) -> impl Fn(&indicatif::ProgressState, &mut dyn std::fmt::Write) + Clone + Send + Sync + 'static {
     move |state: &indicatif::ProgressState, w: &mut dyn std::fmt::Write| {
         let _ = write!(
             w,
             "{}",
-            paint(colors, &short_duration(state.elapsed()), |s| s.dim())
+            paint(&short_duration(state.elapsed()), |s| s.dim())
         );
     }
 }
@@ -1106,58 +1119,58 @@ fn elapsed_key(
 /// Bar characters chosen to match the heavy-line look of Python's `rich`.
 const PROGRESS_CHARS: &str = "━╸━";
 
-fn running_style(colors: bool) -> ProgressStyle {
-    ProgressStyle::with_template(
-        "  {prefix} {spinner:.cyan} {wide_bar:.cyan/238} {percent:>3}% {msg:<12} {elapsed:>5}",
-    )
-    .expect("static template")
-    .progress_chars(PROGRESS_CHARS)
-    .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ ")
-    .with_key("elapsed", elapsed_key(colors))
-}
+/// Spinner frames. Inert for the styles whose template has no `{spinner}`.
+const TICK_CHARS: &str = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ ";
 
-fn done_style(colors: bool) -> ProgressStyle {
+/// Build a bar style. The five the display uses differ only in the marker
+/// before the bar, the bar's colour, and the field between the bar and the
+/// elapsed time; everything else — the column layout, the bar characters and
+/// the elapsed-time key — is shared, so that a change to the layout is made
+/// once rather than five times.
+///
+/// `marker` and `middle` are substituted into the template, and `format!` does
+/// not re-scan a substituted value for braces, so both can carry placeholders
+/// of their own.
+fn bar_style(marker: &str, color: &str, middle: &str) -> ProgressStyle {
     ProgressStyle::with_template(&format!(
-        "  {{prefix}} {} {{wide_bar:.green/238}} {{percent:>3}}% {{msg:<12}} {{elapsed:>5}}",
-        paint(colors, "✔", |s| s.green().bold())
+        "  {{prefix}} {marker} {{wide_bar:.{color}/238}} {middle} {{elapsed:>5}}"
     ))
     .expect("static template")
     .progress_chars(PROGRESS_CHARS)
-    .with_key("elapsed", elapsed_key(colors))
+    .tick_chars(TICK_CHARS)
+    .with_key("elapsed", elapsed_key())
 }
 
-fn failed_style(colors: bool) -> ProgressStyle {
+/// The per-file fields: percentage, then a short status or read count.
+const FILE_FIELDS: &str = "{percent:>3}% {msg:<12}";
+/// The aggregate bar counts files rather than tracking one.
+const AGGREGATE_FIELDS: &str = "{pos}/{len} files";
+
+fn running_style() -> ProgressStyle {
+    bar_style("{spinner:.cyan}", "cyan", FILE_FIELDS)
+}
+
+fn done_style() -> ProgressStyle {
+    bar_style(&paint("✔", |s| s.green().bold()), "green", FILE_FIELDS)
+}
+
+fn failed_style() -> ProgressStyle {
     // Same column layout as the running and finished styles so a failed file
     // does not knock the other bars out of alignment. The bar is left at
     // whatever fraction of the file had been read when the error hit.
-    ProgressStyle::with_template(&format!(
-        "  {{prefix}} {} {{wide_bar:.red/238}} {{percent:>3}}% {} {{elapsed:>5}}",
-        paint(colors, "✘", |s| s.red().bold()),
-        paint(colors, "{msg:<12}", |s| s.red()),
-    ))
-    .expect("static template")
-    .progress_chars(PROGRESS_CHARS)
-    .with_key("elapsed", elapsed_key(colors))
-}
-
-fn aggregate_style(colors: bool) -> ProgressStyle {
-    ProgressStyle::with_template(
-        "  {prefix} {spinner:.cyan} {wide_bar:.cyan/238} {pos}/{len} files {elapsed:>5}",
+    bar_style(
+        &paint("✘", |s| s.red().bold()),
+        "red",
+        &format!("{{percent:>3}}% {}", paint("{msg:<12}", |s| s.red())),
     )
-    .expect("static template")
-    .progress_chars(PROGRESS_CHARS)
-    .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ ")
-    .with_key("elapsed", elapsed_key(colors))
 }
 
-fn aggregate_done_style(colors: bool) -> ProgressStyle {
-    ProgressStyle::with_template(&format!(
-        "  {{prefix}} {} {{wide_bar:.green/238}} {{pos}}/{{len}} files {{elapsed:>5}}",
-        paint(colors, "✔", |s| s.green().bold())
-    ))
-    .expect("static template")
-    .progress_chars(PROGRESS_CHARS)
-    .with_key("elapsed", elapsed_key(colors))
+fn aggregate_style() -> ProgressStyle {
+    bar_style("{spinner:.cyan}", "cyan", AGGREGATE_FIELDS)
+}
+
+fn aggregate_done_style() -> ProgressStyle {
+    bar_style(&paint("✔", |s| s.green().bold()), "green", AGGREGATE_FIELDS)
 }
 
 /// Wall-clock elapsed time for the closing summary: `mm:ss`, widening to
@@ -1200,16 +1213,6 @@ fn human_count(n: u64) -> String {
 mod tests {
     use super::*;
 
-    const MEASURES: [&str; 7] = [
-        "File type",
-        "Encoding",
-        "Total Sequences",
-        "Total Bases",
-        "Sequences flagged as poor quality",
-        "Sequence length",
-        "%GC",
-    ];
-
     #[test]
     fn test_human_count() {
         assert_eq!(human_count(0), "0");
@@ -1226,17 +1229,107 @@ mod tests {
         assert_eq!(short_duration(Duration::from_secs(3840)), "1h04m");
     }
 
+    #[test]
+    fn test_when_forced() {
+        assert_eq!(When::Auto.forced(), None);
+        assert_eq!(When::Always.forced(), Some(true));
+        assert_eq!(When::Never.forced(), Some(false));
+    }
+
+    #[test]
+    fn test_when_parse() {
+        for on in [
+            "always", "ALWAYS", " always ", "force", "1", "yes", "true", "on",
+        ] {
+            assert_eq!(When::parse(on), When::Always, "{on:?}");
+        }
+        for off in ["never", "Never", "none", "0", "no", "false", "off"] {
+            assert_eq!(When::parse(off), When::Never, "{off:?}");
+        }
+        // Anything unrecognised falls back to detection rather than failing the
+        // run over a display preference.
+        for other in ["", "auto", "maybe", "yes please"] {
+            assert_eq!(When::parse(other), When::Auto, "{other:?}");
+        }
+    }
+
+    /// Auto-detection: the live display needs both a tty and a terminal that
+    /// can be redrawn.
+    #[test]
+    fn test_choose_mode_auto() {
+        let auto = When::Auto;
+        // is_terminal, dumb
+        assert_eq!(
+            choose_mode(false, auto, true, false),
+            ModeChoice::Live { forced: false }
+        );
+        // Piped or redirected stderr: plain lines, never bars.
+        assert_eq!(choose_mode(false, auto, false, false), ModeChoice::Plain);
+        // A tty that cannot redraw (TERM=dumb, or unset on Unix): indicatif
+        // would hide the bars, so fall back rather than going silent.
+        assert_eq!(choose_mode(false, auto, true, true), ModeChoice::Plain);
+        assert_eq!(choose_mode(false, auto, false, true), ModeChoice::Plain);
+    }
+
+    /// `FASTQC_PROGRESS=always|never` overrides the detection in both
+    /// directions, and `always` records that the display must be forced through
+    /// a draw target that would otherwise hide itself.
+    #[test]
+    fn test_choose_mode_forced() {
+        for &is_terminal in &[true, false] {
+            for &dumb in &[true, false] {
+                assert_eq!(
+                    choose_mode(false, When::Always, is_terminal, dumb),
+                    ModeChoice::Live { forced: true },
+                    "always must draw the display (tty={is_terminal}, dumb={dumb})"
+                );
+                assert_eq!(
+                    choose_mode(false, When::Never, is_terminal, dumb),
+                    ModeChoice::Plain,
+                    "never must not draw the display (tty={is_terminal}, dumb={dumb})"
+                );
+            }
+        }
+    }
+
+    /// `--quiet` is the stronger statement and beats an explicit `always`.
+    #[test]
+    fn test_quiet_beats_forced_progress() {
+        for progress in [When::Auto, When::Always, When::Never] {
+            for &is_terminal in &[true, false] {
+                assert_eq!(
+                    choose_mode(true, progress, is_terminal, false),
+                    ModeChoice::Silent,
+                    "--quiet must win over {progress:?}"
+                );
+            }
+        }
+    }
+
+    /// With no display active, a log line still reaches stderr rather than
+    /// being swallowed.
+    #[test]
+    fn test_log_line_without_a_display() {
+        assert!(ACTIVE_LOG
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_none());
+        log_line("no display active, so this goes straight to stderr");
+    }
+
     /// Whenever the table is shown, it must fit inside the terminal, with the
     /// measure column at its natural width and every value column readable.
     #[test]
     fn test_table_fits_implies_it_renders_inside_the_terminal() {
-        let natural_label = MEASURES.iter().map(|m| m.len()).max().unwrap();
+        let natural_label = measure_labels().iter().map(|m| m.len()).max().unwrap();
         for term_width in [40usize, 60, 72, 80, 100, 120, 160, 200, 400] {
             for columns in 1..=12 {
                 if !table_fits(columns, term_width) {
                     continue;
                 }
-                let (label_width, value_width) = layout(&MEASURES, columns, term_width);
+                let measures = measure_labels();
+                let (label_width, value_width) =
+                    layout(&measures, columns, term_width).expect("table_fits said it fits");
                 let total = table_overhead(columns) + label_width + value_width * columns;
                 assert!(
                     total <= term_width,
@@ -1288,11 +1381,13 @@ mod tests {
         assert!(!table_fits(1, 24));
     }
 
+    /// Padding measures display width, so a styled cell occupies the same
+    /// columns as a plain one.
     #[test]
-    fn test_pad_label_ignores_ansi() {
-        let styled = paint(true, "abc", |s| s.red());
-        let padded = pad_label(&styled, "abc", 6);
-        assert_eq!(display_width(&padded), 6);
+    fn test_pad_cell_ignores_ansi() {
+        let styled = style("abc").red().force_styling(true).to_string();
+        let padded = pad_cell(&styled, 6);
+        assert_eq!(console::measure_text_width(&padded), 6);
         assert!(padded.starts_with(&styled));
     }
 
@@ -1332,7 +1427,7 @@ mod tests {
         file.stage("writing report");
         file.finish("a.fastq", 2000);
         file.fail();
-        assert!(reporter.live_stats(0).is_none());
+        assert!(file.live_stats().is_none());
         reporter.finish(1);
     }
 }

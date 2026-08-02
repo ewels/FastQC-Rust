@@ -3,7 +3,9 @@
 //! These tests verify byte-identical text output (fastqc_data.txt and summary.txt)
 //! against the approved files from the Java test suite.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+use console::AnsiCodeIterator;
 
 use fastqc_rust::config::FastQCConfig;
 use fastqc_rust::modules;
@@ -274,7 +276,14 @@ fn test_zip_archive_structure() {
 
 /// Run the `fastqc` binary with stderr captured — so stderr is a pipe, never a
 /// terminal — and return what it wrote there.
-fn run_binary_stderr(extra_args: &[&str], env: &[(&str, &str)]) -> String {
+///
+/// `inputs` is called with the run's own output directory so a test can write a
+/// malformed input into it; it returns the paths to analyse.
+fn run_binary(
+    inputs: impl FnOnce(&Path) -> Vec<PathBuf>,
+    extra_args: &[&str],
+    env: &[(&str, &str)],
+) -> String {
     // A counter, not the arguments: these run in parallel and two cases can
     // easily share an argument list, which would have them deleting each
     // other's output directory mid-run.
@@ -287,55 +296,48 @@ fn run_binary_stderr(extra_args: &[&str], env: &[(&str, &str)]) -> String {
     std::fs::create_dir_all(&tmp_dir).expect("Failed to create temp dir");
 
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"));
-    command
-        .args(extra_args)
-        .arg("-o")
-        .arg(&tmp_dir)
-        .arg("tests/data/minimal.fastq");
+    command.args(extra_args).arg("-o").arg(&tmp_dir);
+    command.args(inputs(&tmp_dir));
     for (key, value) in env {
         command.env(key, value);
     }
     let output = command.output().expect("Failed to run fastqc");
 
     std::fs::remove_dir_all(&tmp_dir).ok();
-    assert!(
-        output.status.success(),
-        "fastqc exited with {:?}",
-        output.status
-    );
     String::from_utf8(output.stderr).expect("stderr is not UTF-8")
 }
 
+/// The common case: analyse `tests/data/minimal.fastq`.
+fn run_binary_stderr(extra_args: &[&str], env: &[(&str, &str)]) -> String {
+    run_binary(|_| vec![PathBuf::from(MINIMAL)], extra_args, env)
+}
+
+/// Write a file that is not FASTQ into `dir`, so the run reports it and
+/// carries on with whatever else it was given.
+fn broken_input(dir: &Path) -> PathBuf {
+    let path = dir.join("broken.fastq");
+    std::fs::write(&path, "not a fastq file at all\n").expect("write");
+    path
+}
+
+const MINIMAL: &str = "tests/data/minimal.fastq";
+const COMPLEX: &str = "tests/data/complex.fastq";
+
+/// The ANSI escape sequences in `stderr`, parsed by console rather than by
+/// hand — searching forward for a terminator turns the `m` in "minimal.fastq"
+/// into a false colour match.
+fn escapes(stderr: &str) -> impl Iterator<Item = &str> {
+    AnsiCodeIterator::new(stderr).filter_map(|(s, is_ansi)| is_ansi.then_some(s))
+}
+
 /// Does the output contain colour (SGR) escape sequences other than a reset?
-///
-/// An SGR sequence is `ESC [ <digits and semicolons> m`. The parameter run has
-/// to be validated rather than just searching forward for an `m`, or the `m` in
-/// a word like "minimal.fastq" turns a cursor escape into a false positive.
 fn has_color(stderr: &str) -> bool {
-    stderr
-        .split('\u{1b}')
-        .skip(1)
-        .filter_map(|s| s.strip_prefix('['))
-        .filter_map(|s| {
-            let params: String = s
-                .chars()
-                .take_while(|c| c.is_ascii_digit() || *c == ';')
-                .collect();
-            s[params.len()..].starts_with('m').then_some(params)
-        })
-        .any(|params| !params.is_empty() && params != "0")
+    escapes(stderr).any(|s| s.ends_with('m') && s != "\u{1b}[0m")
 }
 
 /// Does the output redraw in place? Cursor-up is the giveaway.
 fn has_redraw(stderr: &str) -> bool {
-    stderr
-        .split('\u{1b}')
-        .skip(1)
-        .filter_map(|s| s.strip_prefix('['))
-        .any(|s| {
-            s.trim_start_matches(|c: char| c.is_ascii_digit())
-                .starts_with('A')
-        })
+    escapes(stderr).any(|s| s.ends_with('A'))
 }
 
 /// With colour auto-detected, nothing should reach a captured stream: piped
@@ -529,70 +531,63 @@ fn test_quiet_beats_everything() {
 }
 
 /// A log line emitted while the display is live must end up *above* it, as
-/// ordinary scrollback, with the display redrawn intact underneath and the
-/// message not broken up. The version banner is itself a log line, so it stays
-/// above everything the run goes on to say; the closing summary is part of the
+/// ordinary scrollback: written once, never redrawn, with the display drawn
+/// again beneath it. The version banner is itself a log line, so it stays above
+/// everything the run goes on to say; the closing summary is part of the
 /// region, so it stays below the bars and the table.
 ///
 /// Checked on the forced display so the assertion does not need a terminal.
 #[test]
 fn test_log_lines_scroll_above_the_display() {
-    let tmp_dir = std::env::temp_dir().join(format!("fastqc_logline_{}", std::process::id()));
-    std::fs::create_dir_all(&tmp_dir).expect("temp dir");
+    let stderr = run_binary(
+        |dir| vec![broken_input(dir), PathBuf::from(COMPLEX)],
+        &[],
+        &[
+            ("FASTQC_PROGRESS", "always"),
+            ("COLUMNS", "100"),
+            ("LINES", "40"),
+        ],
+    );
 
-    let bad = tmp_dir.join("broken.fastq");
-    std::fs::write(&bad, "not a fastq file at all\n").expect("write");
-
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
-        .env("FASTQC_PROGRESS", "always")
-        .env("COLUMNS", "100")
-        .env("LINES", "40")
-        .arg("-o")
-        .arg(&tmp_dir)
-        .arg(&bad)
-        .arg("tests/data/complex.fastq")
-        .output()
-        .expect("run fastqc");
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    std::fs::remove_dir_all(&tmp_dir).ok();
-
-    let message = "Failed to process broken.fastq";
+    // The whole message survives contiguously — no redraw cut into it.
+    let message = "Failed to process broken.fastq: ID line didn't start with '@' at line 1";
     assert!(
         stderr.contains(message),
-        "error line missing entirely: {:?}",
+        "error line missing or broken up: {:?}",
         stderr
     );
 
-    // The whole message survives contiguously — no redraw cut into the middle
-    // of it. (It is a line of the display now, so it is width-padded and
-    // followed by the next frame's escapes, like every other line.)
-    let whole = "Failed to process broken.fastq: ID line didn't start with '@' at line 1";
-    assert!(
-        stderr.contains(whole),
-        "log line was broken up by a redraw: {:?}",
-        stderr
+    // Written once, as scrollback: unlike the bars, it is never redrawn.
+    assert_eq!(
+        stderr.matches(message).count(),
+        1,
+        "a log line should be emitted once, not redrawn with the display"
     );
 
-    // In the final frame the message sits below the header, the bars and the
-    // table. Compare positions within the last frame only, since earlier frames
-    // are erased and redrawn.
-    let final_frame = stderr
-        .rfind("FastQC-Rust")
-        .map(|i| &stderr[i..])
-        .expect("no header drawn");
-    let header_at = final_frame.find("FastQC-Rust").expect("header");
-    let table_at = final_frame.find("Total Sequences").expect("table");
-    let message_at = final_frame.find(message).expect("message in final frame");
-    let summary_at = final_frame
-        .find("Complete.")
-        .expect("summary in final frame");
+    // The banner precedes everything else the run says.
     assert!(
-        header_at < table_at && table_at < message_at && message_at < summary_at,
-        "expected header < table < message < summary, got {} {} {} {}",
-        header_at,
-        table_at,
-        message_at,
-        summary_at
+        stderr.find("FastQC-Rust") < stderr.find(message),
+        "the banner must come before the log lines"
+    );
+
+    // The display is redrawn *below* the message: the last frame comes after
+    // it, is whole, and does not contain it.
+    let last_frame = &stderr[stderr.rfind('┌').expect("no table drawn")..];
+    assert!(
+        stderr.rfind('┌') > stderr.find(message),
+        "the display was not redrawn beneath the log line"
+    );
+    assert!(
+        !last_frame.contains("Failed to process"),
+        "the log line was pulled into the redrawn region: {:?}",
+        last_frame
+    );
+
+    // ...and the summary is the last line of that frame, below the table.
+    assert!(
+        last_frame.find("Total Sequences") < last_frame.find("Complete."),
+        "the summary must come after the table: {:?}",
+        last_frame
     );
 }
 
@@ -600,20 +595,11 @@ fn test_log_lines_scroll_above_the_display() {
 #[test]
 fn test_completion_summary() {
     // One file analysed, one rejected: the count reports what actually worked.
-    let tmp_dir = std::env::temp_dir().join(format!("fastqc_summary_{}", std::process::id()));
-    std::fs::create_dir_all(&tmp_dir).expect("temp dir");
-    let bad = tmp_dir.join("broken.fastq");
-    std::fs::write(&bad, "nope\n").expect("write");
-
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
-        .arg("-o")
-        .arg(&tmp_dir)
-        .arg("tests/data/minimal.fastq")
-        .arg(&bad)
-        .output()
-        .expect("run fastqc");
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    std::fs::remove_dir_all(&tmp_dir).ok();
+    let stderr = run_binary(
+        |dir| vec![PathBuf::from(MINIMAL), broken_input(dir)],
+        &[],
+        &[],
+    );
 
     // Singular for one file, and mm:ss for the duration.
     assert!(
@@ -628,17 +614,11 @@ fn test_completion_summary() {
     assert!(minutes.parse::<u32>().is_ok() && seconds.parse::<u32>().is_ok());
 
     // Two files, plural.
-    let tmp_dir = std::env::temp_dir().join(format!("fastqc_summary2_{}", std::process::id()));
-    std::fs::create_dir_all(&tmp_dir).expect("temp dir");
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
-        .arg("-o")
-        .arg(&tmp_dir)
-        .arg("tests/data/minimal.fastq")
-        .arg("tests/data/complex.fastq")
-        .output()
-        .expect("run fastqc");
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    std::fs::remove_dir_all(&tmp_dir).ok();
+    let stderr = run_binary(
+        |_| vec![PathBuf::from(MINIMAL), PathBuf::from(COMPLEX)],
+        &[],
+        &[],
+    );
     assert!(
         stderr.contains("Complete. Analysed 2 files in "),
         "unexpected summary: {:?}",
@@ -659,36 +639,24 @@ fn test_quiet_suppresses_the_completion_summary() {
 /// old four-column cap allowed.
 #[test]
 fn test_table_visibility_follows_terminal_width() {
-    fn run(files: &[&str], columns: &str) -> String {
-        let tmp_dir = std::env::temp_dir().join(format!(
-            "fastqc_width_{}_{}_{}",
-            std::process::id(),
-            files.len(),
-            columns
-        ));
-        std::fs::create_dir_all(&tmp_dir).expect("temp dir");
-        let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
-            .env("FASTQC_PROGRESS", "always")
-            .env("COLUMNS", columns)
-            .env("LINES", "60")
-            .arg("-o")
-            .arg(&tmp_dir)
-            .args(files)
-            .output()
-            .expect("run fastqc");
-        std::fs::remove_dir_all(&tmp_dir).ok();
-        String::from_utf8_lossy(&output.stderr).into_owned()
-    }
+    let run = |files: &[&str], columns: &str| {
+        let files: Vec<PathBuf> = files.iter().map(PathBuf::from).collect();
+        run_binary(
+            |_| files,
+            &[],
+            &[
+                ("FASTQC_PROGRESS", "always"),
+                ("COLUMNS", columns),
+                ("LINES", "60"),
+            ],
+        )
+    };
 
     // "Total Sequences" is a table row label and appears nowhere else.
     let shows_table = |s: &str| s.contains("Total Sequences");
 
-    let one = ["tests/data/minimal.fastq"];
-    let three = [
-        "tests/data/minimal.fastq",
-        "tests/data/complex.fastq",
-        "tests/data/minimal.fastq.gz",
-    ];
+    let one = [MINIMAL];
+    let three = [MINIMAL, COMPLEX, "tests/data/minimal.fastq.gz"];
 
     // One file fits on a normal terminal but not a cramped one.
     assert!(shows_table(&run(&one, "80")));
@@ -711,24 +679,16 @@ fn test_table_visibility_follows_terminal_width() {
 /// while it runs, green once analysed, red if it failed.
 #[test]
 fn test_table_headings_are_coloured_by_progress() {
-    let tmp_dir = std::env::temp_dir().join(format!("fastqc_heading_{}", std::process::id()));
-    std::fs::create_dir_all(&tmp_dir).expect("temp dir");
-    let bad = tmp_dir.join("broken.fastq");
-    std::fs::write(&bad, "nope\n").expect("write");
-
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
-        .env("FASTQC_PROGRESS", "always")
-        .env("CLICOLOR_FORCE", "1")
-        .env("COLUMNS", "120")
-        .env("LINES", "40")
-        .arg("-o")
-        .arg(&tmp_dir)
-        .arg("tests/data/minimal.fastq")
-        .arg(&bad)
-        .output()
-        .expect("run fastqc");
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    std::fs::remove_dir_all(&tmp_dir).ok();
+    let stderr = run_binary(
+        |dir| vec![PathBuf::from(MINIMAL), broken_input(dir)],
+        &[],
+        &[
+            ("FASTQC_PROGRESS", "always"),
+            ("CLICOLOR_FORCE", "1"),
+            ("COLUMNS", "120"),
+            ("LINES", "40"),
+        ],
+    );
 
     // The last heading row drawn is the final state: one analysed, one failed.
     let heading = stderr

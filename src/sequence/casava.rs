@@ -137,8 +137,10 @@ pub fn get_nanopore_basename(original_name: &str) -> Result<String, NameFormatEr
     // Java joins first 3 components: `subNames[0]+"_"+subNames[1]+"_"+subNames[2]`
     let basename = format!("{}_{}_{}", sub_names[0], sub_names[1], sub_names[2]);
 
-    // Java prints basename to stderr for debugging
-    eprintln!("Basename is {}", basename);
+    // Java prints basename to stderr for debugging. Through the progress
+    // logger like every other message from inside a run, so it can never land
+    // in the middle of the display.
+    crate::progress::log_line(&format!("Basename is {}", basename));
 
     Ok(basename)
 }
