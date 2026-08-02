@@ -487,12 +487,24 @@ fn test_header_is_styled() {
             ("COLUMNS", "100"),
         ],
     );
+    // Not `contains("FastQC-Rust")`: the name is split across two colours, so
+    // it is no longer one contiguous run of text.
     let header = stderr
         .lines()
-        .find(|l| l.contains("FastQC-Rust"))
+        .find(|l| l.contains("FastQC"))
         .unwrap_or_else(|| panic!("no header line in {:?}", stderr));
-    // SGR 36 = cyan, 1 = bold, 2 = dim (the version).
-    for code in ["\u{1b}[36m", "\u{1b}[1m", "\u{1b}[2m"] {
+    assert!(
+        header.contains("FastQC") && header.contains("-Rust"),
+        "header is not the product name: {:?}",
+        header
+    );
+    // The logo's blue and red (256-colour), bold, with a dim version.
+    for code in [
+        "\u{1b}[38;5;69m",
+        "\u{1b}[38;5;167m",
+        "\u{1b}[1m",
+        "\u{1b}[2m",
+    ] {
         assert!(
             header.contains(code),
             "header missing {:?}: {:?}",

@@ -507,9 +507,12 @@ impl Live {
         // them in the order it happened. Written directly because nothing has
         // been drawn yet: there is no region to clear, and no padding to add.
         let line_ending = if forced { "\r\n" } else { "\n" };
+        // Coloured after the logo: the name in its blue, the `-Rust` suffix in
+        // its red, the version dim.
         eprint!(
-            "{} {}{line_ending}{line_ending}",
-            paint("FastQC-Rust", |s| s.cyan().bold()),
+            "{}{} {}{line_ending}{line_ending}",
+            paint("FastQC", |s| s.color256(LOGO_BLUE).bold()),
+            paint("-Rust", |s| s.color256(LOGO_RED).bold()),
             paint(&format!("v{}", crate::RUST_VERSION), |s| s.dim()),
         );
 
@@ -1134,6 +1137,20 @@ fn elapsed_key(
         );
     }
 }
+
+/// The FastQC logo's two colours, as the nearest xterm-256 entries.
+///
+/// Taken from the dark-background variant of the logo
+/// (`docs/public/images/fastqc_logo_darkbg.svg`, `#659BFF` and `#AE3939`)
+/// rather than the light-background one, whose navy `#000080` all but
+/// disappears against a dark terminal. These mid-tones read on either.
+///
+/// Both are the closest entries in the 6x6x6 cube by CIELAB distance —
+/// `#5f87ff` and `#d75f5f`. 256-colour rather than truecolor so that the one
+/// code path works on every terminal; console emits 24-bit escapes without
+/// checking whether the terminal can render them.
+const LOGO_BLUE: u8 = 69;
+const LOGO_RED: u8 = 167;
 
 /// Bar characters chosen to match the heavy-line look of Python's `rich`.
 const PROGRESS_CHARS: &str = "━╸━";
