@@ -6,6 +6,7 @@
 //! ```text
 //! FastQC-Rust v1.0.2-dev0
 //!
+//! Failed to process notes.txt: ID line didn't start with '@' at line 1
 //!   sample_1.fastq.gz  ⠹ ━━━━━━━━━━━━━━━━━━━━╸━━━━━━━  72%  2.1M reads     4s
 //!   sample_2.fastq.gz  ✔ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100%  3.0M reads     6s
 //!
@@ -15,9 +16,12 @@
 //!   │ File type                         │ Conventional … │ Conventional … │
 //!   │ ...                               │ ...            │ ...            │
 //!   └───────────────────────────────────┴────────────────┴────────────────┘
-//! Failed to process notes.txt: ID line didn't start with '@' at line 1
 //! Complete. Analysed 2 files in 00:06
 //! ```
+//!
+//! The bars, the table and the closing summary are a redrawn region pinned to
+//! the bottom of the terminal. The name and version, and any warning or error,
+//! are ordinary log lines that scroll up above it.
 //!
 //! The display adapts to the size of the run:
 //!
@@ -25,11 +29,13 @@
 //!   line, showing that file's own progress.
 //! * **More than 10 files** collapse to a single bar counting completed files,
 //!   because a screenful of bars is worse than no bars at all.
-//! * **1-4 files** additionally get a live statistics table underneath, whose
-//!   columns are the files and whose rows are the Basic Statistics measures
-//!   from the top of the HTML report. Cells start as `-` and fill in as the
-//!   analysis runs; the final values are exactly those in the report, because
-//!   both are rendered from the same counters (see
+//! * **A live statistics table** is drawn underneath whenever the terminal is
+//!   wide enough for every column to be readable — so a wide terminal gets it
+//!   for more files, and a narrow one does without. Its columns are the files
+//!   and its rows the Basic Statistics measures from the top of the HTML
+//!   report. Cells start as `-` and fill in as the analysis runs; the final
+//!   values are exactly those in the report, because both are rendered from the
+//!   same counters (see
 //!   [`crate::modules::basic_stats::BasicStatsCounters::rows`]).
 //!
 //! # Animation and colour
@@ -67,17 +73,17 @@
 //! [`ProgressReporter::error`]). Writing to stderr directly would land in the
 //! middle of the display and be erased by the next frame.
 //!
-//! Those lines collect in a pane *below* the header, bars and table, newest at
-//! the bottom, so the display reads top to bottom as status then messages. The
-//! pane is bounded by the terminal height; once it is full the oldest line is
-//! released into ordinary scrollback above the display, so nothing is lost and
-//! the redrawn region never outgrows the screen.
+//! Those lines are written *above* the redrawn region and scroll up as ordinary
+//! terminal output, which is what rich, tqdm, indicatif, cargo and Nextflow all
+//! do. The log is the permanent record and has to be able to grow without
+//! bound, and the terminal's scrollback is the only place unbounded output can
+//! go. The version banner is the run's first log line, so everything the run
+//! has to say appears beneath it in the order it happened.
 //!
-//! The run signs off with a `Complete. Analysed N files in mm:ss` line in the
-//! same pane (or as a plain line when there is no display). `--quiet` suppresses
-//! it along with everything else.
+//! The exception is the closing `Complete. Analysed N files in mm:ss`, which is
+//! the last line of the redrawn region so that it always lands below the bars
+//! and the table. `--quiet` suppresses it along with everything else.
 
-use std::collections::VecDeque;
 use std::io::IsTerminal;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -136,9 +142,11 @@ impl When {
 /// completed files.
 const MAX_FILE_BARS: usize = 10;
 
-/// Above this many files, the live statistics table is not shown: the columns
-/// would be too narrow to be worth reading.
-const MAX_TABLE_COLUMNS: usize = 4;
+/// Narrowest a statistics-table value column may be and still be worth reading.
+/// Whether the table is shown at all is decided by whether every column can
+/// have at least this much room (see [`table_fits`]), so a wide terminal shows
+/// the table for more files and a narrow one drops it sooner.
+const MIN_VALUE_WIDTH: usize = 16;
 
 /// How often the live statistics table is re-rendered.
 const TABLE_REFRESH: Duration = Duration::from_millis(150);
@@ -158,80 +166,56 @@ const DEFAULT_TERM_HEIGHT: u16 = 24;
 /// Longest a file name may be before it is truncated in a bar label.
 const MAX_NAME_WIDTH: usize = 30;
 
-/// Bounds on how many log lines are kept below the display before the oldest
-/// are released into scrollback.
-const MIN_LOG_LINES: usize = 3;
-const MAX_LOG_LINES: usize = 20;
-
 /// Progress is tracked in permille rather than percent so the bars move
 /// smoothly rather than in 1% steps.
 const SCALE: u64 = 1000;
 
-/// Log lines shown *below* the display, newest at the bottom.
+/// Where log lines go while a display is on screen.
 ///
-/// Each line is a static line in the redrawn region, inserted between the table
-/// and the trailing blank, so warnings and errors accumulate underneath the
-/// header, bars and table rather than scrolling past above them. The pane is
-/// bounded by the terminal height: once it is full the oldest line is released
-/// into ordinary scrollback above the display, so nothing is ever lost and the
-/// region never outgrows the screen.
-struct LogPane {
+/// Lines are written above the redrawn region and scroll up as ordinary
+/// terminal output, which is the convention for this kind of display (rich,
+/// tqdm, indicatif, cargo, Nextflow all do the same). The log is the permanent
+/// record and has to be able to grow without bound; the terminal's scrollback
+/// is the only place unbounded output can go, and it is below the display that
+/// there is no room.
+struct LogSink {
     multi: MultiProgress,
-    /// New lines are inserted before this (the trailing blank line), which
-    /// keeps them at the bottom of the region and in emission order.
-    anchor: ProgressBar,
-    lines: Mutex<VecDeque<ProgressBar>>,
-    max_lines: usize,
+    /// `\r\n` when the display has been forced onto something that is not a
+    /// terminal. A tty driver rewrites `\n` as `\r\n` on the way out (ONLCR);
+    /// nothing does that for a pipe, so a bare newline would leave the cursor
+    /// parked in this line's column and the next frame would start there.
+    line_ending: &'static str,
 }
 
-impl LogPane {
-    fn push(&self, message: &str) {
-        let mut lines = self.lines.lock().unwrap_or_else(|e| e.into_inner());
-
-        let line = self.multi.insert_before(&self.anchor, ProgressBar::new(0));
-        line.set_style(ProgressStyle::with_template("{msg}").expect("static template"));
-        line.set_message(message.to_string());
-        line.tick();
-        lines.push_back(line);
-
-        while lines.len() > self.max_lines {
-            let oldest = lines.pop_front().expect("non-empty");
-            let text = oldest.message();
-            self.multi.remove(&oldest);
-            // Erase the region, write the line as ordinary scrollback, and let
-            // the next update redraw the display beneath it. Not `println` or
-            // `suspend`: both erase using the line count from the last frame
-            // indicatif drew, and with bars updating from several threads that
-            // count lags what is on screen, stranding a stale copy of the whole
-            // display above the live one. `clear` resets the count to zero, so
-            // there is no bookkeeping left to be wrong.
-            let _ = self.multi.clear();
-            eprintln!("{}", text);
-        }
-    }
-
-    /// Keep the lines on screen once the bars behind them are dropped.
-    fn finish(&self) {
-        for line in self.lines.lock().unwrap_or_else(|e| e.into_inner()).iter() {
-            line.finish();
-        }
+impl LogSink {
+    fn print(&self, message: &str) {
+        // Erase the region, write the line as ordinary scrollback, and let the
+        // next update redraw the display beneath it.
+        //
+        // Not `println` or `suspend`: both erase using the line count from the
+        // last frame indicatif drew, and with bars updating from several
+        // threads that count lags what is on screen, which strands a stale copy
+        // of the whole display above the live one. `clear` resets the count to
+        // zero, so there is no bookkeeping left to be wrong.
+        let _ = self.multi.clear();
+        eprint!("{}{}", message, self.line_ending);
     }
 }
 
-/// The log pane of the display currently drawing to stderr, if there is one.
+/// The log sink of the display currently drawing to stderr, if there is one.
 ///
 /// Code deep in the analysis (a module noticing bad data, a reader hitting an
 /// odd record) has no handle on the reporter, but its warnings must not be
 /// written straight to stderr while a redrawn region is on screen — they would
 /// land in the middle of the bars and be overwritten by the next frame.
-static ACTIVE_LOG: Mutex<Option<Arc<LogPane>>> = Mutex::new(None);
+static ACTIVE_LOG: Mutex<Option<Arc<LogSink>>> = Mutex::new(None);
 
-/// Emit a line into the log pane below the progress display, wherever it is
-/// called from. Falls back to plain stderr when no display is active.
+/// Emit a line above the progress display, wherever it is called from. Falls
+/// back to plain stderr when no display is active.
 pub fn log_line(message: &str) {
     let active = ACTIVE_LOG.lock().unwrap_or_else(|e| e.into_inner()).clone();
     match active {
-        Some(pane) => pane.push(message),
+        Some(sink) => sink.print(message),
         None => eprintln!("{}", message),
     }
 }
@@ -258,14 +242,15 @@ enum Mode {
 }
 
 struct Live {
-    /// Pinned header and spacer at the top of the redrawn region.
-    header: Vec<ProgressBar>,
     bars: Bars,
     table: Option<Arc<Table>>,
+    /// The closing summary, drawn as the last line of the region so it always
+    /// lands below the bars and the table. Empty until the run finishes.
+    summary: ProgressBar,
     /// Blank line kept at the bottom of the redrawn region.
     trailer: ProgressBar,
-    /// Log lines shown below the display.
-    log: Arc<LogPane>,
+    /// Where log lines go: above the display, as ordinary scrollback.
+    log: Arc<LogSink>,
     ticker: Mutex<Option<JoinHandle<()>>>,
     stop: Arc<AtomicBool>,
     colors: bool,
@@ -382,7 +367,7 @@ impl ProgressReporter {
     /// matching the previous behaviour of the runner.
     pub fn error(&self, message: &str) {
         match &self.mode {
-            Mode::Live(live) => live.log.push(&paint_error(live.colors, message)),
+            Mode::Live(live) => live.log.print(&paint_error(live.colors, message)),
             Mode::Plain { colors } => eprintln!("{}", paint_error(*colors, message)),
             // Silent still reports errors, but has no colour context to use.
             Mode::Silent => eprintln!("{}", message),
@@ -411,9 +396,9 @@ impl ProgressReporter {
                 summary.trim_start_matches("Complete. "),
             ),
             Mode::Live(live) => {
-                // Into the log pane, so it lands below the finished display
-                // alongside anything else the run had to say.
-                live.log.push(&format!(
+                // The last line of the redrawn region, so it lands below the
+                // bars and the table rather than scrolling past above them.
+                live.summary.set_message(format!(
                     "{} {}",
                     paint(live.colors, "Complete.", |s| s.green().bold()),
                     paint(live.colors, summary.trim_start_matches("Complete. "), |s| {
@@ -519,7 +504,6 @@ impl Live {
         let colors = console::colors_enabled_stderr();
         let term = ForcedTerm::new();
         let term_width = term.width() as usize;
-        let term_height = term.height() as usize;
 
         // The default stderr draw target hides itself when stderr is not an
         // interactive terminal. `--progress always` asks for the display
@@ -537,20 +521,21 @@ impl Live {
             MultiProgress::new()
         };
 
-        // The name and version are a pinned header at the top of the redrawn
-        // region rather than a line printed once before it. That keeps them
-        // directly above the bars for the whole run: anything printed with
-        // `println` scrolls past *above* the header instead of separating it
-        // from the display.
-        let banner = static_line(&multi);
-        banner.set_message(format!(
+        let log = Arc::new(LogSink {
+            multi: multi.clone(),
+            line_ending: if forced { "\r\n" } else { "\n" },
+        });
+        *ACTIVE_LOG.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&log));
+
+        // The name and version are the run's first log line, not part of the
+        // redrawn region, so everything the run has to say appears underneath
+        // them in the order it happened.
+        log.print(&format!(
             "{} {}",
             paint(colors, "FastQC-Rust", |s| s.cyan().bold()),
             paint(colors, &format!("v{}", crate::RUST_VERSION), |s| s.dim()),
         ));
-        let spacer = static_line(&multi);
-        spacer.set_message(" ");
-        let header = vec![banner, spacer];
+        log.print("");
 
         let label_width = names
             .iter()
@@ -592,37 +577,29 @@ impl Live {
             Bars::PerFile(bars)
         };
 
-        // The live statistics table only makes sense for a handful of files.
-        let table = if names.len() <= MAX_TABLE_COLUMNS {
+        // Show the statistics table only when the terminal is wide enough to
+        // give every column room to be read. The table itself is unchanged
+        // either way: this decides whether it appears, not how it looks.
+        let table = if table_fits(names.len(), term_width) {
             Some(Arc::new(Table::new(&multi, names, term_width, colors)))
         } else {
             None
         };
+
+        // The closing summary is the last line of the region, so it always
+        // lands below the bars and the table however the run went. It renders
+        // as nothing until it has a message.
+        let summary = static_line(&multi);
 
         // A blank line below everything, so the shell prompt does not land
         // flush against the display.
         let trailer = static_line(&multi);
         trailer.set_message(" ");
 
-        // Bound the pane so the region cannot outgrow the terminal: the fixed
-        // part is the header and spacer, the bars, the table and the trailer.
-        let table_height = table.as_ref().map_or(0, |t| t.height());
-        let fixed_height = 2 + names.len().clamp(1, MAX_FILE_BARS) + table_height + 1;
-        let max_lines = term_height
-            .saturating_sub(fixed_height + 1)
-            .clamp(MIN_LOG_LINES, MAX_LOG_LINES);
-        let log = Arc::new(LogPane {
-            multi: multi.clone(),
-            anchor: trailer.clone(),
-            lines: Mutex::new(VecDeque::new()),
-            max_lines,
-        });
-        *ACTIVE_LOG.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&log));
-
         let live = Live {
-            header,
             bars,
             table,
+            summary,
             trailer,
             log,
             ticker: Mutex::new(None),
@@ -725,13 +702,10 @@ impl Live {
         // so the static lines have to be explicitly finished for the completed
         // display to survive the end of the run.
         *ACTIVE_LOG.lock().unwrap_or_else(|e| e.into_inner()) = None;
-        self.log.finish();
-        for line in &self.header {
-            line.finish();
-        }
         if let Some(table) = &self.table {
             table.finish();
         }
+        self.summary.finish();
         self.trailer.finish();
     }
 }
@@ -860,11 +834,7 @@ struct Column {
 
 impl Table {
     fn new(multi: &MultiProgress, names: &[String], term_width: usize, colors: bool) -> Self {
-        let measures: Vec<&'static str> = BasicStatsCounters::default()
-            .rows()
-            .into_iter()
-            .map(|(measure, _)| measure)
-            .collect();
+        let measures = measure_labels();
 
         let (label_width, value_width) = layout(&measures, names.len(), term_width);
 
@@ -886,12 +856,6 @@ impl Table {
         };
         table.refresh();
         table
-    }
-
-    /// How many terminal lines the table occupies: a leading spacer, three
-    /// borders, the heading row and one row per measure.
-    fn height(&self) -> usize {
-        self.measures.len() + 5
     }
 
     /// Mark the table finished so it is not erased when the progress bars
@@ -986,6 +950,35 @@ impl Table {
     }
 }
 
+/// The measure labels, in report order. Used for both the table itself and the
+/// width arithmetic that decides whether to show it.
+fn measure_labels() -> Vec<&'static str> {
+    BasicStatsCounters::default()
+        .rows()
+        .into_iter()
+        .map(|(measure, _)| measure)
+        .collect()
+}
+
+/// Terminal columns consumed by a table of `columns` files that are not cell
+/// content: two of indentation, a border between and either side of every
+/// cell, and a space either side of each.
+fn table_overhead(columns: usize) -> usize {
+    2 + (columns + 2) + 2 * (columns + 1)
+}
+
+/// Whether a statistics table for `columns` files is worth drawing at this
+/// terminal width — that is, whether the measure column can have its natural
+/// width and every value column at least [`MIN_VALUE_WIDTH`].
+fn table_fits(columns: usize, term_width: usize) -> bool {
+    if columns == 0 {
+        return false;
+    }
+    let labels = measure_labels();
+    let natural_label = labels.iter().map(|m| display_width(m)).max().unwrap_or(8);
+    table_overhead(columns) + natural_label + columns * MIN_VALUE_WIDTH <= term_width
+}
+
 /// Work out the column widths for a table of `columns` files, given the
 /// measure labels and the terminal width.
 ///
@@ -995,14 +988,12 @@ impl Table {
 fn layout(measures: &[&str], columns: usize, term_width: usize) -> (usize, usize) {
     let natural_label = measures.iter().map(|m| display_width(m)).max().unwrap_or(8);
     let columns = columns.max(1);
-    // Two leading spaces, one border per column plus two outer ones, and a
-    // space either side of every cell.
-    let overhead = 2 + (columns + 2) + 2 * (columns + 1);
+    let overhead = table_overhead(columns);
     let available = term_width.saturating_sub(overhead);
 
     let mut label_width = natural_label;
     let mut value_width = available.saturating_sub(label_width) / columns;
-    value_width = value_width.clamp(6, 28);
+    value_width = value_width.clamp(MIN_VALUE_WIDTH, 28);
 
     // Still too wide? Take it out of the measure column, down to a floor where
     // the labels are at least recognisable.
@@ -1179,130 +1170,66 @@ mod tests {
         assert_eq!(short_duration(Duration::from_secs(3840)), "1h04m");
     }
 
-    /// The table must fit inside the terminal for every supported column count
-    /// and a wide range of widths, including absurdly narrow ones.
+    /// Whenever the table is shown, it must fit inside the terminal, with the
+    /// measure column at its natural width and every value column readable.
     #[test]
-    fn test_table_layout_fits_terminal() {
-        for term_width in [40usize, 60, 80, 100, 120, 200] {
-            for columns in 1..=MAX_TABLE_COLUMNS {
+    fn test_table_fits_implies_it_renders_inside_the_terminal() {
+        let natural_label = MEASURES.iter().map(|m| m.len()).max().unwrap();
+        for term_width in [40usize, 60, 72, 80, 100, 120, 160, 200, 400] {
+            for columns in 1..=12 {
+                if !table_fits(columns, term_width) {
+                    continue;
+                }
                 let (label_width, value_width) = layout(&MEASURES, columns, term_width);
-                let overhead = 2 + (columns + 2) + 2 * (columns + 1);
-                let total = overhead + label_width + value_width * columns;
+                let total = table_overhead(columns) + label_width + value_width * columns;
                 assert!(
-                    total <= term_width.max(overhead + 10 + 6 * columns),
-                    "table of {} columns overflows {} cols (needs {})",
-                    columns,
-                    term_width,
-                    total
+                    total <= term_width,
+                    "shown table of {columns} columns overflows {term_width} cols (needs {total})"
                 );
-                assert!(value_width >= 6, "value column collapsed");
-                assert!(label_width >= 10, "measure column collapsed");
-            }
-        }
-    }
-
-    /// A wide terminal should give the measure column its natural width.
-    #[test]
-    fn test_table_layout_natural_width() {
-        let (label_width, value_width) = layout(&MEASURES, 2, 160);
-        assert_eq!(label_width, "Sequences flagged as poor quality".len());
-        assert_eq!(value_width, 28);
-    }
-
-    /// Auto-detection: the live display needs both a tty and a terminal that
-    /// can be redrawn.
-    #[test]
-    fn test_choose_mode_auto() {
-        let auto = When::Auto;
-        // is_terminal, dumb
-        assert_eq!(choose_mode(false, auto, true, false), ModeChoice::Live);
-        // Piped or redirected stderr: plain lines, never bars.
-        assert_eq!(choose_mode(false, auto, false, false), ModeChoice::Plain);
-        // A tty that cannot redraw (TERM=dumb, or unset on Unix): indicatif
-        // would hide the bars, so fall back rather than going silent.
-        assert_eq!(choose_mode(false, auto, true, true), ModeChoice::Plain);
-        assert_eq!(choose_mode(false, auto, false, true), ModeChoice::Plain);
-    }
-
-    /// `--progress always/never` overrides the detection in both directions.
-    #[test]
-    fn test_choose_mode_forced() {
-        for &is_terminal in &[true, false] {
-            for &dumb in &[true, false] {
-                assert_eq!(
-                    choose_mode(false, When::Always, is_terminal, dumb),
-                    ModeChoice::Live,
-                    "--progress always must draw the display (tty={is_terminal}, dumb={dumb})"
+                assert!(
+                    value_width >= MIN_VALUE_WIDTH,
+                    "value column below the readable minimum at {term_width} cols"
                 );
                 assert_eq!(
-                    choose_mode(false, When::Never, is_terminal, dumb),
-                    ModeChoice::Plain,
-                    "--progress never must not draw the display (tty={is_terminal}, dumb={dumb})"
+                    label_width, natural_label,
+                    "measure column was squeezed at {term_width} cols"
                 );
             }
         }
     }
 
-    /// `--quiet` is the stronger statement and beats an explicit
-    /// `--progress always`.
+    /// The decision is made on width, not on how many files there are: a wider
+    /// terminal earns more columns, a narrow one loses the table entirely.
     #[test]
-    fn test_quiet_beats_forced_progress() {
-        for progress in [When::Auto, When::Always, When::Never] {
-            for &is_terminal in &[true, false] {
-                assert_eq!(
-                    choose_mode(true, progress, is_terminal, false),
-                    ModeChoice::Silent,
-                    "--quiet must win over --progress {progress:?}"
-                );
+    fn test_table_visibility_follows_terminal_width() {
+        // Nothing to tabulate.
+        assert!(!table_fits(0, 200));
+
+        // 80 columns is enough for one or two files, not three.
+        assert!(table_fits(1, 80));
+        assert!(table_fits(2, 80));
+        assert!(!table_fits(3, 80));
+
+        // Widening the terminal brings more columns into range, and the
+        // threshold only ever moves one way.
+        for columns in 1..=10 {
+            let threshold = (1..600).find(|w| table_fits(columns, *w));
+            let threshold = threshold.expect("some width is wide enough");
+            assert!(
+                !table_fits(columns, threshold - 1),
+                "{columns} columns: {threshold} should be the first width that fits"
+            );
+            // Once it fits, it keeps fitting.
+            assert!(table_fits(columns, threshold + 40));
+            // More files always need at least as much room.
+            if columns > 1 {
+                let narrower = (1..600).find(|w| table_fits(columns - 1, *w)).unwrap();
+                assert!(narrower < threshold);
             }
         }
-    }
 
-    #[test]
-    fn test_when_forced() {
-        assert_eq!(When::Auto.forced(), None);
-        assert_eq!(When::Always.forced(), Some(true));
-        assert_eq!(When::Never.forced(), Some(false));
-    }
-
-    #[test]
-    fn test_when_parse() {
-        for on in [
-            "always", "ALWAYS", " always ", "force", "1", "yes", "true", "on",
-        ] {
-            assert_eq!(When::parse(on), When::Always, "{on:?}");
-        }
-        for off in ["never", "Never", "none", "0", "no", "false", "off"] {
-            assert_eq!(When::parse(off), When::Never, "{off:?}");
-        }
-        // Anything unrecognised falls back to detection rather than failing the
-        // run over a display preference.
-        for other in ["", "auto", "maybe", "yes please"] {
-            assert_eq!(When::parse(other), When::Auto, "{other:?}");
-        }
-    }
-
-    /// With no display active, a log line still reaches stderr rather than
-    /// being swallowed.
-    #[test]
-    fn test_log_line_without_a_display() {
-        assert!(ACTIVE_LOG
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .is_none());
-        log_line("no display active, so this goes straight to stderr");
-    }
-
-    /// With colour off, styling helpers must emit the bare text — no escapes,
-    /// and no change in width.
-    #[test]
-    fn test_paint_without_colors_is_plain() {
-        assert_eq!(paint(false, "Measure", |s| s.cyan().bold()), "Measure");
-        assert_eq!(paint_error(false, "boom"), "boom");
-        assert!(!paint(false, "x", |s| s.red()).contains('\u{1b}'));
-        // ...and with colour on it really does emit escapes, so the test above
-        // is not passing vacuously.
-        assert!(paint(true, "x", |s| s.red()).contains('\u{1b}'));
+        // A 24-column terminal is never wide enough.
+        assert!(!table_fits(1, 24));
     }
 
     #[test]

@@ -8,17 +8,18 @@
   from Java FastQC are replaced by a rich terminal display: a version banner,
   then one progress bar per input file (in command-line order) showing that
   file's own progress, read count and elapsed time. Runs of more than 10 files
-  collapse to a single bar counting completed files. For runs of up to 4 files a
-  live Basic Statistics table is drawn underneath, with a column per file and a
-  row per measure from the top of the report — cells start as `-` and fill in as
-  the analysis proceeds, ending on exactly the values written to the report
-  (both are rendered from the same counters). Built on
+  collapse to a single bar counting completed files. A live Basic Statistics
+  table is drawn underneath whenever the terminal is wide enough for every
+  column to be readable, with a column per file and a row per measure from the
+  top of the report — cells start as `-` and fill in as the analysis proceeds,
+  ending on exactly the values written to the report (both are rendered from the
+  same counters). Built on
   [indicatif](https://crates.io/crates/indicatif). The display is used only for
   an interactive stderr: when stderr is a pipe or a log file, or `TERM` is
   `dumb`/unset, it degrades to one plain line per file at start and finish so
   pipeline logs stay readable, and `--quiet` still silences everything but
-  errors. The name and version are a pinned header at the top of the display,
-  so they stay directly above the bars for the whole run.
+  errors. The name and version are the run's first log line, so everything the
+  run goes on to say appears beneath them in the order it happened.
 - **`FASTQC_PROGRESS=auto|always|never`** overrides the display auto-detection
   in either direction. `always` draws the bars even when stderr is redirected —
   for recording a demo, or a consumer that re-renders the stream — sizing itself
@@ -28,19 +29,17 @@
   for a pipe. Because the two are independent, colour off still draws the bars
   and table, and the plain fallback still colours its lines when colour is
   forced on, which is what a CI log viewer wants. `--quiet` beats both.
-- **Warnings and errors collect in a pane below the display** — under the
-  header, bars and table, newest at the bottom — rather than being written into
-  the middle of the bars and erased by the next frame, which is what happened to
-  warnings raised during analysis (a bad quality character, too many tiles, an
-  unreadable nanopore read). The pane is bounded by the terminal height; once
-  full, the oldest line is released into ordinary scrollback above the display,
-  so nothing is lost and the redrawn region never outgrows the screen. The
-  clamping warning for out-of-range quality characters is also emitted once per
-  run rather than once per base.
+- **Warnings and errors scroll above the display** as ordinary terminal output,
+  rather than being written into the middle of the bars and erased by the next
+  frame, which is what happened to warnings raised during analysis (a bad
+  quality character, too many tiles, an unreadable nanopore read). The log can
+  then grow without bound, as the log of a long run must. The clamping warning
+  for out-of-range quality characters is also emitted once per run rather than
+  once per base.
 - **A closing summary**: `Complete. Analysed N files in mm:ss`, counting the
   files that were analysed successfully and widening to `hh:mm:ss` past an hour.
-  Shown in the log pane, or as a plain line when there is no display; `--quiet`
-  suppresses it along with everything else.
+  It is the last line of the redrawn region, so it always appears below the bars
+  and the table; `--quiet` suppresses it along with everything else.
 - **Parallel analysis pipeline** for a single file. `-t/--threads` is now a total
   thread budget spread across files first and then within each file: a reader
   batches records while worker threads each run a disjoint subset of the QC

@@ -528,13 +528,15 @@ fn test_quiet_beats_everything() {
     }
 }
 
-/// A log line emitted while the display is live must end up in the pane
-/// *below* it — under the header, bars and table — with the display still whole
-/// and the message intact on one line.
+/// A log line emitted while the display is live must end up *above* it, as
+/// ordinary scrollback, with the display redrawn intact underneath and the
+/// message not broken up. The version banner is itself a log line, so it stays
+/// above everything the run goes on to say; the closing summary is part of the
+/// region, so it stays below the bars and the table.
 ///
 /// Checked on the forced display so the assertion does not need a terminal.
 #[test]
-fn test_log_lines_collect_below_the_display() {
+fn test_log_lines_scroll_above_the_display() {
     let tmp_dir = std::env::temp_dir().join(format!("fastqc_logline_{}", std::process::id()));
     std::fs::create_dir_all(&tmp_dir).expect("temp dir");
 
@@ -649,4 +651,58 @@ fn test_completion_summary() {
 fn test_quiet_suppresses_the_completion_summary() {
     let stderr = run_binary_stderr(&["--quiet"], &[]);
     assert!(stderr.is_empty(), "--quiet wrote: {:?}", stderr);
+}
+
+/// Whether the statistics table appears is decided by the terminal width, not
+/// by how many files there are: the same run gains and loses the table as the
+/// width changes, and a wide enough terminal shows it for more files than the
+/// old four-column cap allowed.
+#[test]
+fn test_table_visibility_follows_terminal_width() {
+    fn run(files: &[&str], columns: &str) -> String {
+        let tmp_dir = std::env::temp_dir().join(format!(
+            "fastqc_width_{}_{}_{}",
+            std::process::id(),
+            files.len(),
+            columns
+        ));
+        std::fs::create_dir_all(&tmp_dir).expect("temp dir");
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
+            .env("FASTQC_PROGRESS", "always")
+            .env("COLUMNS", columns)
+            .env("LINES", "60")
+            .arg("-o")
+            .arg(&tmp_dir)
+            .args(files)
+            .output()
+            .expect("run fastqc");
+        std::fs::remove_dir_all(&tmp_dir).ok();
+        String::from_utf8_lossy(&output.stderr).into_owned()
+    }
+
+    // "Total Sequences" is a table row label and appears nowhere else.
+    let shows_table = |s: &str| s.contains("Total Sequences");
+
+    let one = ["tests/data/minimal.fastq"];
+    let three = [
+        "tests/data/minimal.fastq",
+        "tests/data/complex.fastq",
+        "tests/data/minimal.fastq.gz",
+    ];
+
+    // One file fits on a normal terminal but not a cramped one.
+    assert!(shows_table(&run(&one, "80")));
+    assert!(!shows_table(&run(&one, "40")));
+
+    // Three files need more room than 80 columns can give.
+    assert!(!shows_table(&run(&three, "80")));
+    assert!(shows_table(&run(&three, "120")));
+
+    // The bars are drawn either way — only the table is switched off.
+    let cramped = run(&three, "80");
+    assert!(
+        cramped.contains('━'),
+        "bars should survive a narrow terminal: {:?}",
+        cramped
+    );
 }
