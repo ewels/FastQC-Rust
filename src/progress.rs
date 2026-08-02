@@ -85,7 +85,7 @@
 //! and the table. `--quiet` suppresses it along with everything else.
 
 use std::io::IsTerminal;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -185,10 +185,19 @@ struct LogSink {
     /// nothing does that for a pipe, so a bare newline would leave the cursor
     /// parked in this line's column and the next frame would start there.
     line_ending: &'static str,
+    /// First line of the redrawn region, blank once anything has been logged so
+    /// the bars are not flush against the messages above them. It renders as
+    /// nothing while empty, which is what keeps it out of the way on the usual
+    /// run that logs nothing at all.
+    padding: ProgressBar,
+    padded: AtomicBool,
 }
 
 impl LogSink {
     fn print(&self, message: &str) {
+        if !self.padded.swap(true, Ordering::Relaxed) {
+            self.padding.set_message(" ");
+        }
         // Erase the region, write the line as ordinary scrollback, and let the
         // next update redraw the display beneath it.
         //
@@ -521,21 +530,26 @@ impl Live {
             MultiProgress::new()
         };
 
-        let log = Arc::new(LogSink {
-            multi: multi.clone(),
-            line_ending: if forced { "\r\n" } else { "\n" },
-        });
-        *ACTIVE_LOG.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&log));
-
         // The name and version are the run's first log line, not part of the
         // redrawn region, so everything the run has to say appears underneath
-        // them in the order it happened.
-        log.print(&format!(
-            "{} {}",
+        // them in the order it happened. Written directly because nothing has
+        // been drawn yet: there is no region to clear, and no padding to add.
+        let line_ending = if forced { "\r\n" } else { "\n" };
+        eprint!(
+            "{} {}{line_ending}{line_ending}",
             paint(colors, "FastQC-Rust", |s| s.cyan().bold()),
             paint(colors, &format!("v{}", crate::RUST_VERSION), |s| s.dim()),
-        ));
-        log.print("");
+        );
+
+        let log = Arc::new(LogSink {
+            multi: multi.clone(),
+            line_ending,
+            // First line of the region, so the blank it grows lands between the
+            // messages and the bars.
+            padding: static_line(&multi),
+            padded: AtomicBool::new(false),
+        });
+        *ACTIVE_LOG.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&log));
 
         let label_width = names
             .iter()
@@ -662,7 +676,15 @@ impl Live {
         }
     }
 
+    /// Record how a file ended so the table heading can follow its bar.
+    fn set_file_state(&self, index: usize, state: FileState) {
+        if let Some(column) = self.table.as_ref().and_then(|t| t.columns.get(index)) {
+            column.state.store(state as u8, Ordering::Relaxed);
+        }
+    }
+
     fn finish_file(&self, index: usize, reads: u64) {
+        self.set_file_state(index, FileState::Analysed);
         match &self.bars {
             Bars::PerFile(bars) => {
                 if let Some(bar) = bars.get(index) {
@@ -677,6 +699,7 @@ impl Live {
     }
 
     fn fail_file(&self, index: usize) {
+        self.set_file_state(index, FileState::Failed);
         match &self.bars {
             Bars::PerFile(bars) => {
                 if let Some(bar) = bars.get(index) {
@@ -705,6 +728,7 @@ impl Live {
         if let Some(table) = &self.table {
             table.finish();
         }
+        self.log.padding.finish();
         self.summary.finish();
         self.trailer.finish();
     }
@@ -830,6 +854,28 @@ struct Column {
     /// File name as shown in the header, already truncated to the column width.
     heading: String,
     live: Arc<LiveStats>,
+    /// Drives the heading colour, kept in step with the file's bar.
+    state: AtomicU8,
+}
+
+/// How a file is doing, for colouring its column heading the same way its
+/// progress bar is coloured.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileState {
+    /// Waiting or being read.
+    Running = 0,
+    Analysed = 1,
+    Failed = 2,
+}
+
+impl FileState {
+    fn from_u8(value: u8) -> Self {
+        match value {
+            1 => FileState::Analysed,
+            2 => FileState::Failed,
+            _ => FileState::Running,
+        }
+    }
 }
 
 impl Table {
@@ -843,6 +889,7 @@ impl Table {
             .map(|name| Column {
                 heading: truncate_str(name, value_width, "…").into_owned(),
                 live: Arc::new(LiveStats::new()),
+                state: AtomicU8::new(FileState::Running as u8),
             })
             .collect();
 
@@ -890,10 +937,19 @@ impl Table {
                 self.columns
                     .iter()
                     .map(|c| {
-                        (
-                            paint(self.colors, &c.heading, |s| s.cyan().bold()),
-                            c.heading.clone(),
-                        )
+                        // The heading tracks the file's bar: accent while it is
+                        // running, green once analysed, red if it failed.
+                        let state = FileState::from_u8(c.state.load(Ordering::Relaxed));
+                        let styled = match state {
+                            FileState::Running => {
+                                paint(self.colors, &c.heading, |s| s.cyan().bold())
+                            }
+                            FileState::Analysed => {
+                                paint(self.colors, &c.heading, |s| s.green().bold())
+                            }
+                            FileState::Failed => paint(self.colors, &c.heading, |s| s.red().bold()),
+                        };
+                        (styled, c.heading.clone())
                     })
                     .collect(),
             ),
@@ -1238,6 +1294,32 @@ mod tests {
         let padded = pad_label(&styled, "abc", 6);
         assert_eq!(display_width(&padded), 6);
         assert!(padded.starts_with(&styled));
+    }
+
+    /// The blank line that separates log messages from the bars appears the
+    /// first time something is logged, and not before: a run that logs nothing
+    /// should not gain a stray gap above its bars.
+    #[test]
+    fn test_log_padding_appears_with_the_first_message() {
+        let multi = MultiProgress::with_draw_target(ProgressDrawTarget::hidden());
+        let sink = LogSink {
+            multi: multi.clone(),
+            line_ending: "\n",
+            padding: static_line(&multi),
+            padded: AtomicBool::new(false),
+        };
+        assert_eq!(
+            sink.padding.message(),
+            "",
+            "padded before anything was said"
+        );
+
+        sink.print("something happened");
+        assert_eq!(sink.padding.message(), " ", "no padding after a message");
+
+        // Still exactly one blank line, however much is logged.
+        sink.print("and again");
+        assert_eq!(sink.padding.message(), " ");
     }
 
     /// A hidden reporter must be safe to drive exactly like a live one.

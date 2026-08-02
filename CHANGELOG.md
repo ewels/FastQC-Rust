@@ -13,7 +13,8 @@
   column to be readable, with a column per file and a row per measure from the
   top of the report — cells start as `-` and fill in as the analysis proceeds,
   ending on exactly the values written to the report (both are rendered from the
-  same counters). Built on
+  same counters). Each column heading is coloured to match its file's bar:
+  accent while it runs, green once analysed, red if it failed. Built on
   [indicatif](https://crates.io/crates/indicatif). The display is used only for
   an interactive stderr: when stderr is a pipe or a log file, or `TERM` is
   `dumb`/unset, it degrades to one plain line per file at start and finish so
@@ -33,9 +34,10 @@
   rather than being written into the middle of the bars and erased by the next
   frame, which is what happened to warnings raised during analysis (a bad
   quality character, too many tiles, an unreadable nanopore read). The log can
-  then grow without bound, as the log of a long run must. The clamping warning
-  for out-of-range quality characters is also emitted once per run rather than
-  once per base.
+  then grow without bound, as the log of a long run must, and a blank line
+  separates it from the bars when there is anything to separate. The clamping
+  warning for out-of-range quality characters is also emitted once per run
+  rather than once per base.
 - **A closing summary**: `Complete. Analysed N files in mm:ss`, counting the
   files that were analysed successfully and widening to `hh:mm:ss` past an hour.
   It is the last line of the redrawn region, so it always appears below the bars
