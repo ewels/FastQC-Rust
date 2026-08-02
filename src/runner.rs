@@ -703,9 +703,9 @@ mod tests {
         seqs
     }
 
-    /// The parallel analysis pipeline must produce output that is byte-identical
-    /// to the single-threaded path for every module, across a range of processor
-    /// counts (which change how modules are distributed across worker threads).
+    /// The cost-balanced partition must keep the few expensive modules on
+    /// separate workers and place every module exactly once (preserving its
+    /// original index), whatever the worker count.
     #[test]
     fn test_partition_keeps_heavy_modules_apart() {
         let config = FastQCConfig::default();
@@ -741,6 +741,9 @@ mod tests {
         assert_eq!(indices, (0..n).collect::<Vec<_>>());
     }
 
+    /// The parallel analysis pipeline must produce output that is byte-identical
+    /// to the single-threaded path for every module, across a range of processor
+    /// counts (which change how modules are distributed across worker threads).
     #[test]
     fn test_parallel_matches_sequential() {
         let config = FastQCConfig::default();
