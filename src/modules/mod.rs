@@ -45,6 +45,17 @@ pub trait QCModule: Send {
     /// Process a single sequence record, accumulating statistics.
     fn process_sequence(&mut self, sequence: &Sequence);
 
+    /// A rough, static hint of this module's per-sequence processing cost
+    /// relative to the other modules. It is used *only* to balance the modules
+    /// across worker threads in the parallel analysis pipeline, so that the few
+    /// expensive modules don't pile onto one thread. The values are approximate
+    /// and never affect results — a wrong hint only costs a little parallel
+    /// efficiency, never correctness. The default suits a lightweight
+    /// counting/accumulating module; heavier modules override it.
+    fn cost_hint(&self) -> u32 {
+        2
+    }
+
     /// The display name of this module as shown in the report.
     fn name(&self) -> &str;
 

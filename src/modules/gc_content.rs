@@ -243,6 +243,10 @@ impl PerSequenceGCContent {
 }
 
 impl QCModule for PerSequenceGCContent {
+    fn cost_hint(&self) -> u32 {
+        10
+    }
+
     fn process_sequence(&mut self, sequence: &Sequence) {
         // Invalidate cached calculation when new data arrives
         self.deviation_percent = None;

@@ -119,6 +119,10 @@ impl PerSequenceQualityScores {
 }
 
 impl QCModule for PerSequenceQualityScores {
+    fn cost_hint(&self) -> u32 {
+        3
+    }
+
     fn process_sequence(&mut self, sequence: &Sequence) {
         let qual = &sequence.quality;
 

@@ -106,6 +106,10 @@ impl BasicStats {
 }
 
 impl QCModule for BasicStats {
+    fn cost_hint(&self) -> u32 {
+        1
+    }
+
     fn process_sequence(&mut self, sequence: &Sequence) {
         // Java counts filtered sequences separately
         if sequence.is_filtered {
