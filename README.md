@@ -81,9 +81,14 @@ budget honours cgroup quotas and CPU affinity, so a container or a
 scheduler-pinned job sees its own allowance rather than the host's core count.
 
 Leave `--threads` out and the analysis stays single-threaded while gzip
-decompression scales to the machine, which is what makes a plain
-`fastqc sample.fastq.gz` fast without being asked. `--decompress-threads N` sets
-the decompression budget per file explicitly, overriding both.
+decompression takes up to 4 threads per file — enough that a plain
+`fastqc sample.fastq.gz` is fast without being asked, without assuming the
+machine is idle. `--decompress-threads N` sets the decompression budget per file
+explicitly, overriding both.
+
+Decompression is rarely the thing to tune: one decoder already keeps up with the
+single-threaded analysis on typical Illumina data, so most of what `--threads`
+buys goes to the analysis pipeline.
 
 ### Progress display
 

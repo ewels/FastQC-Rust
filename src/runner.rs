@@ -40,6 +40,24 @@ const MAX_PROCESSORS_PER_FILE: usize = 12;
 /// Arc overhead, small enough to keep the processors fed and memory bounded.
 const BATCH_SIZE: usize = 1024;
 
+/// Decompression workers per file when `-t` was not given.
+///
+/// Without `-t` there is no statement about how much of the machine this run
+/// may take, and sizing the decoder pool to the core count assumes the machine
+/// is idle — which on a shared node, a CI runner or a laptop with a browser
+/// open it is not. So take a fixed, modest slice instead.
+///
+/// Four is chosen with headroom rather than from need. Decompression is not the
+/// bottleneck once a single zlib-rs decoder is running: on a 498 MB Illumina-like
+/// FASTQ at a 2.4x ratio, four cores, one decoder already matched reading the
+/// *uncompressed* file (5.57 s against a 5.70 s plain-text floor), and adding
+/// decoders changed nothing at `-t 1`/`-t 2` and cost 0.3 s at `-t 4`, where
+/// they compete with the analysis workers. The margin is for the cases that
+/// measurement does not cover: a machine with cores to spare and a faster
+/// analysis to feed, or a highly compressible file where one input byte becomes
+/// far more output.
+const DEFAULT_DECOMPRESS_THREADS: usize = 4;
+
 /// Byte ceiling on a single batch, applied alongside [`BATCH_SIZE`].
 ///
 /// A record count alone does not bound memory: at [`QUEUE_CAPACITY`] batches of
@@ -102,8 +120,9 @@ struct ThreadPlan {
 ///   a budget large enough to saturate the analysis (`MAX_PROCESSORS_PER_FILE`)
 ///   spends the surplus on decompression instead of leaving it idle.
 /// * **`-t` absent.** There is no such statement to honour, so decompression
-///   fills the physical cores the analysis leaves free, which is what makes a
-///   plain `fastqc sample.fastq.gz` fast.
+///   takes a fixed, modest slice of the cores the analysis leaves free — see
+///   [`DEFAULT_DECOMPRESS_THREADS`]. That is what makes a plain
+///   `fastqc sample.fastq.gz` fast without assuming the machine is idle.
 ///
 /// Either way the budget is per concurrently-analysed file, and it is only
 /// consulted when `--decompress-threads` is left at its `0` ("auto") default;
@@ -125,7 +144,7 @@ fn plan_threads(
     // the same slot. `outer_slots >= 1`.
     let per_file_budget = match requested_threads {
         Some(_) => threads_per_file,
-        None => hw_parallelism / outer_slots,
+        None => (hw_parallelism / outer_slots).min(DEFAULT_DECOMPRESS_THREADS),
     };
     let auto_decompress_threads = per_file_budget.saturating_sub(processors_per_file).max(1);
 
@@ -817,20 +836,33 @@ mod tests {
         assert_eq!(indices, (0..n).collect::<Vec<_>>());
     }
 
-    /// With no `-t`, the analysis stays single-threaded and decompression
-    /// scales to the hardware -- which is what makes a plain
-    /// `fastqc sample.fastq.gz` fast without being asked.
+    /// With no `-t`, the analysis stays single-threaded and decompression takes
+    /// a fixed, modest slice -- fast without being asked, but never assuming
+    /// the whole machine is ours.
     #[test]
     fn test_plan_threads_unspecified() {
-        // One file, all the hardware for decompression.
         let p = plan_threads(None, 1, 8);
         assert_eq!((p.outer_slots, p.processors_per_file), (1, 0));
-        assert_eq!(p.auto_decompress_threads, 8);
+        assert_eq!(p.auto_decompress_threads, DEFAULT_DECOMPRESS_THREADS);
 
         // Files are still processed one at a time, sharing nothing.
         let p = plan_threads(None, 5, 8);
         assert_eq!((p.outer_slots, p.processors_per_file), (1, 0));
-        assert_eq!(p.auto_decompress_threads, 8);
+        assert_eq!(p.auto_decompress_threads, DEFAULT_DECOMPRESS_THREADS);
+
+        // However many cores the machine has, the default does not grow to fill
+        // them: a 128-core shared node is not an invitation.
+        for hw in [64usize, 128, 256] {
+            assert_eq!(
+                plan_threads(None, 1, hw).auto_decompress_threads,
+                DEFAULT_DECOMPRESS_THREADS,
+                "default grew to fill a {hw}-core machine"
+            );
+        }
+
+        // A small machine still gets no more than it has.
+        assert_eq!(plan_threads(None, 1, 2).auto_decompress_threads, 2);
+        assert_eq!(plan_threads(None, 1, 1).auto_decompress_threads, 1);
 
         // Degenerate zeros must not divide by zero and must stay >= 1.
         let p = plan_threads(None, 0, 0);

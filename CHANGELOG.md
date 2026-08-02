@@ -62,11 +62,15 @@
 - **`-t/--threads` is a ceiling on the whole run**, decompression included. Give
   it and the run stays inside it — `-t 1` really does mean one analysis thread
   and one decoder, which is what a workflow engine passing `task.cpus` needs.
-  Leave it out and the analysis stays single-threaded while decompression scales
-  to the machine, so a plain `fastqc sample.fastq.gz` is still fast without
-  being asked. `--decompress-threads N` overrides the decompression side either
-  way. (The thread budget honours cgroup quotas and CPU affinity, so a container
-  or a scheduler-pinned job sees its own allowance, not the host's cores.)
+  Leave it out and the analysis stays single-threaded while decompression takes
+  up to **4 threads per file** — a plain `fastqc sample.fastq.gz` is still fast
+  without being asked, but a big shared machine is not treated as idle just
+  because it is big. `--decompress-threads N` overrides the decompression side
+  either way. (The thread budget honours cgroup quotas and CPU affinity, so a
+  container or a scheduler-pinned job sees its own allowance, not the host's
+  cores.) Four is a ceiling with headroom rather than a target: on a 498 MB
+  Illumina-like FASTQ at a 2.4x ratio, a single decoder already matched reading
+  the *uncompressed* file, so decompression is not what limits a run.
 - **Bounded pipeline memory on long reads.** The analysis pipeline capped its
   in-flight batches by record count alone, which is a few MB of Illumina reads
   but gigabytes of nanopore or PacBio ones. Batches are now capped by bytes as
