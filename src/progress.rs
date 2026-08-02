@@ -30,9 +30,19 @@
 //!   both are rendered from the same counters (see
 //!   [`crate::modules::basic_stats::BasicStatsCounters::rows`]).
 //!
-//! When stderr is not a terminal (a pipe, a log file, a workflow engine) the
-//! bars would be noise, so the reporter degrades to one plain line per file at
-//! start and finish. `--quiet` silences everything, as before.
+//! The display is only used for an interactive stderr. When stderr is a pipe,
+//! a log file or a workflow engine's capture — or when `TERM` says the terminal
+//! cannot handle a redrawn region (`dumb`, or unset on Unix) — the bars would be
+//! noise or outright corruption, so the reporter degrades to one plain line per
+//! file at start and finish. `--quiet` silences everything but errors.
+//!
+//! Colour is separate from that decision: an interactive run still draws bars
+//! when colour is off, just without the escape codes. Colour follows
+//! [`console::colors_enabled_stderr`], which honours `NO_COLOR`, the
+//! [clicolors spec](https://bixense.com/clicolors/) (`CLICOLOR`,
+//! `CLICOLOR_FORCE`) and `TERM=dumb`. Both this module's own styling and
+//! indicatif's template styling read that same signal, so there is one switch
+//! for the whole display.
 
 use std::io::IsTerminal;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -107,19 +117,46 @@ enum Bars {
     Aggregate(ProgressBar),
 }
 
+/// Which of the three display modes a run should use.
+///
+/// Split out from [`ProgressReporter::new`] so the decision can be tested
+/// without a terminal or environment fiddling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ModeChoice {
+    Silent,
+    Plain,
+    Live,
+}
+
+/// Decide how to report progress.
+///
+/// `--quiet` wins over everything. Otherwise the display needs a terminal it
+/// can redraw in place: stderr must be a tty *and* `TERM` must describe a
+/// terminal that can do more than accept plain text. `dumb` (and, on Unix, an
+/// unset `TERM`) fails that second test — indicatif hides its bars in exactly
+/// that case, so without this check the run would print a banner and then go
+/// completely silent.
+fn choose_mode(quiet: bool, stderr_is_terminal: bool, dumb_terminal: bool) -> ModeChoice {
+    if quiet {
+        ModeChoice::Silent
+    } else if !stderr_is_terminal || dumb_terminal {
+        ModeChoice::Plain
+    } else {
+        ModeChoice::Live
+    }
+}
+
 impl ProgressReporter {
     /// Build a reporter for a run over `names` (the file group display names,
     /// in command-line order).
     pub fn new(names: &[String], quiet: bool) -> Self {
-        if quiet {
-            return ProgressReporter { mode: Mode::Silent };
-        }
-        if !std::io::stderr().is_terminal() {
-            return ProgressReporter { mode: Mode::Plain };
-        }
-        ProgressReporter {
-            mode: Mode::Live(Box::new(Live::new(names))),
-        }
+        let choice = choose_mode(quiet, std::io::stderr().is_terminal(), console::is_dumb());
+        let mode = match choice {
+            ModeChoice::Silent => Mode::Silent,
+            ModeChoice::Plain => Mode::Plain,
+            ModeChoice::Live => Mode::Live(Box::new(Live::new(names))),
+        };
+        ProgressReporter { mode }
     }
 
     /// A reporter that displays nothing. Used by tests and by callers of the
@@ -250,6 +287,9 @@ impl FileProgress<'_> {
 
 impl Live {
     fn new(names: &[String]) -> Self {
+        // Honours NO_COLOR, CLICOLOR/CLICOLOR_FORCE and TERM=dumb. indicatif
+        // resolves the `.cyan`/`.green` parts of its templates against the same
+        // function, so this single flag covers the entire display.
         let colors = console::colors_enabled_stderr();
         let term_width = Term::stderr()
             .size_checked()
@@ -803,6 +843,37 @@ mod tests {
         let (label_width, value_width) = layout(&MEASURES, 2, 160);
         assert_eq!(label_width, "Sequences flagged as poor quality".len());
         assert_eq!(value_width, 28);
+    }
+
+    /// `--quiet` beats everything; the live display needs both a tty and a
+    /// terminal that can be redrawn.
+    #[test]
+    fn test_choose_mode() {
+        // quiet, is_terminal, dumb
+        assert_eq!(choose_mode(true, true, false), ModeChoice::Silent);
+        assert_eq!(choose_mode(true, false, false), ModeChoice::Silent);
+        assert_eq!(choose_mode(true, true, true), ModeChoice::Silent);
+
+        assert_eq!(choose_mode(false, true, false), ModeChoice::Live);
+
+        // Piped or redirected stderr: plain lines, never bars.
+        assert_eq!(choose_mode(false, false, false), ModeChoice::Plain);
+        // A tty that cannot redraw (TERM=dumb, or unset on Unix): indicatif
+        // would hide the bars, so fall back rather than going silent.
+        assert_eq!(choose_mode(false, true, true), ModeChoice::Plain);
+        assert_eq!(choose_mode(false, false, true), ModeChoice::Plain);
+    }
+
+    /// With colour off, styling helpers must emit the bare text — no escapes,
+    /// and no change in width.
+    #[test]
+    fn test_paint_without_colors_is_plain() {
+        assert_eq!(paint(false, "Measure", |s| s.cyan().bold()), "Measure");
+        assert_eq!(paint_error(false, "boom"), "boom");
+        assert!(!paint(false, "x", |s| s.red()).contains('\u{1b}'));
+        // ...and with colour on it really does emit escapes, so the test above
+        // is not passing vacuously.
+        assert!(paint(true, "x", |s| s.red()).contains('\u{1b}'));
     }
 
     #[test]

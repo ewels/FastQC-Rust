@@ -13,9 +13,14 @@
   row per measure from the top of the report — cells start as `-` and fill in as
   the analysis proceeds, ending on exactly the values written to the report
   (both are rendered from the same counters). Built on
-  [indicatif](https://crates.io/crates/indicatif). When stderr is not a terminal
-  the display degrades to one plain line per file at start and finish, so
-  pipeline logs stay readable; `--quiet` still silences everything.
+  [indicatif](https://crates.io/crates/indicatif). The display is used only for
+  an interactive stderr: when stderr is a pipe or a log file, or `TERM` is
+  `dumb`/unset, it degrades to one plain line per file at start and finish so
+  pipeline logs stay readable, and `--quiet` still silences everything but
+  errors. Colour follows `NO_COLOR` and the
+  [clicolors spec](https://bixense.com/clicolors/) (`CLICOLOR`,
+  `CLICOLOR_FORCE`) — with colour off the bars and table are still drawn, just
+  without escape codes.
 - **Parallel analysis pipeline** for a single file. `-t/--threads` is now a total
   thread budget spread across files first and then within each file: a reader
   batches records while worker threads each run a disjoint subset of the QC
@@ -38,6 +43,13 @@
   byte-identical output. Pure Rust (zlib-rs), so it also works in the
   fully-static `--no-default-features` build. New `--decompress-threads N`
   option; backend selectable at runtime via `FASTQC_GZIP_BACKEND`.
+
+### Bug fixes
+
+- `--template` no longer claims the short flag `-t`, which is `--threads` (as in
+  Java FastQC). Two arguments sharing a short name makes clap abort at startup —
+  release builds skip that assertion so it only showed up in debug builds, but
+  `-t` was ambiguous either way. Use the long `--template` form.
 
 ## v1.0.1
 

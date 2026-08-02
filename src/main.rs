@@ -128,7 +128,9 @@ struct Cli {
     /// Select the HTML report template.
     /// "classic" produces the original FastQC report layout.
     /// "modern" uses a redesigned layout with responsive sidebar and help text.
-    #[arg(short = 't', long, value_name = "NAME", default_value = "classic")]
+    // No short form: `-t` is --threads in Java FastQC, and claiming it here made
+    // clap panic on startup in debug builds ("Short option names must be unique").
+    #[arg(long, value_name = "NAME", default_value = "classic")]
     template: TemplateName,
 
     /// Input files (one or more FastQ, BAM, or SAM files).

@@ -271,3 +271,94 @@ fn test_zip_archive_structure() {
     // Cleanup
     std::fs::remove_dir_all(&tmp_dir).ok();
 }
+
+/// Run the `fastqc` binary with stderr captured (so it is a pipe, never a
+/// terminal) and return what it wrote there.
+fn run_binary_stderr(extra_args: &[&str], env: &[(&str, &str)]) -> String {
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "fastqc_progress_test_{}_{}",
+        std::process::id(),
+        extra_args.join("_")
+    ));
+    std::fs::create_dir_all(&tmp_dir).expect("Failed to create temp dir");
+
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"));
+    command
+        .args(extra_args)
+        .arg("-o")
+        .arg(&tmp_dir)
+        .arg("tests/data/minimal.fastq");
+    for (key, value) in env {
+        command.env(key, value);
+    }
+    let output = command.output().expect("Failed to run fastqc");
+
+    std::fs::remove_dir_all(&tmp_dir).ok();
+    assert!(
+        output.status.success(),
+        "fastqc exited with {:?}",
+        output.status
+    );
+    String::from_utf8(output.stderr).expect("stderr is not UTF-8")
+}
+
+/// Progress output must never carry ANSI escape sequences into a captured
+/// stream: piped stderr is not a terminal, so the display falls back to plain
+/// lines. This is what keeps workflow-engine logs readable.
+#[test]
+fn test_no_ansi_escapes_when_stderr_is_piped() {
+    for env in [
+        &[][..],
+        &[("NO_COLOR", "1")][..],
+        &[("CLICOLOR", "0")][..],
+        &[("CLICOLOR_FORCE", "1")][..],
+        &[("TERM", "dumb")][..],
+        &[("TERM", "xterm-256color")][..],
+    ] {
+        let stderr = run_binary_stderr(&[], env);
+        assert!(
+            !stderr.contains('\u{1b}'),
+            "escape sequence in piped stderr with env {:?}: {:?}",
+            env,
+            stderr
+        );
+        // The fallback still says what it is doing, rather than going quiet.
+        assert!(
+            stderr.contains("Started analysis of minimal.fastq"),
+            "missing start line with env {:?}: {:?}",
+            env,
+            stderr
+        );
+        assert!(
+            stderr.contains("Analysis complete for minimal.fastq"),
+            "missing completion line with env {:?}: {:?}",
+            env,
+            stderr
+        );
+        // The percentage lines the display replaced must not come back.
+        assert!(
+            !stderr.contains("Approx"),
+            "percentage progress line resurfaced with env {:?}: {:?}",
+            env,
+            stderr
+        );
+    }
+}
+
+/// `--quiet` means silent: no progress, no plain lines, no escapes.
+#[test]
+fn test_quiet_produces_no_progress_output() {
+    for env in [
+        &[][..],
+        &[("NO_COLOR", "1")][..],
+        &[("CLICOLOR_FORCE", "1")][..],
+    ] {
+        let stderr = run_binary_stderr(&["--quiet"], env);
+        assert!(
+            stderr.is_empty(),
+            "--quiet wrote to stderr with env {:?}: {:?}",
+            env,
+            stderr
+        );
+    }
+}
