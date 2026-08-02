@@ -30,19 +30,34 @@
 //!   both are rendered from the same counters (see
 //!   [`crate::modules::basic_stats::BasicStatsCounters::rows`]).
 //!
-//! The display is only used for an interactive stderr. When stderr is a pipe,
-//! a log file or a workflow engine's capture — or when `TERM` says the terminal
-//! cannot handle a redrawn region (`dumb`, or unset on Unix) — the bars would be
-//! noise or outright corruption, so the reporter degrades to one plain line per
-//! file at start and finish. `--quiet` silences everything but errors.
+//! # Animation and colour
 //!
-//! Colour is separate from that decision: an interactive run still draws bars
-//! when colour is off, just without the escape codes. Colour follows
+//! These are two independent switches, each auto-detected and each forceable in
+//! both directions. `--quiet` beats both and says nothing but errors.
+//!
+//! **Animation** (`--progress auto|always|never`) — `auto` draws the display
+//! only for an interactive stderr. When stderr is a pipe, a log file or a
+//! workflow engine's capture, or when `TERM` says the terminal cannot handle a
+//! redrawn region (`dumb`, or unset on Unix), a redrawn region would be noise
+//! or outright corruption, so the reporter degrades to one plain line per file
+//! at start and finish. `always` draws it regardless — for recording a demo, or
+//! writing a transcript to a file — by handing indicatif the terminal directly
+//! instead of its self-hiding stderr draw target. `never` always takes the
+//! plain path. A forced run has no terminal to measure, so it sizes itself from
+//! `COLUMNS`/`LINES`, falling back to a sensible default.
+//!
+//! **Colour** (`--color auto|always|never`) — `auto` follows
 //! [`console::colors_enabled_stderr`], which honours `NO_COLOR`, the
 //! [clicolors spec](https://bixense.com/clicolors/) (`CLICOLOR`,
-//! `CLICOLOR_FORCE`) and `TERM=dumb`. Both this module's own styling and
-//! indicatif's template styling read that same signal, so there is one switch
-//! for the whole display.
+//! `CLICOLOR_FORCE`), whether stderr is a tty, and `TERM=dumb`. `always` and
+//! `never` override that via `console::set_colors_enabled_stderr`, which is
+//! also what indicatif's template styling reads, so one call covers this
+//! module's own styling and the bars alike.
+//!
+//! Because they are independent: colour off still draws the bars, just without
+//! escape codes; and the plain fallback still colours its lines when colour is
+//! on, which is what a CI log viewer wants — it renders escape sequences
+//! happily while not being a terminal.
 
 use std::io::IsTerminal;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -51,8 +66,9 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use console::{style, truncate_str, Term};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle, TermLike};
 
+use crate::config::{FastQCConfig, When};
 use crate::modules::basic_stats::{BasicStatsCounters, LiveStats};
 
 /// Above this many files, per-file bars are replaced by a single bar counting
@@ -66,11 +82,17 @@ const MAX_TABLE_COLUMNS: usize = 4;
 /// How often the live statistics table is re-rendered.
 const TABLE_REFRESH: Duration = Duration::from_millis(150);
 
+/// Redraw rate for a forced display, matching indicatif's own default for its
+/// stderr draw target.
+const DRAW_RATE_HZ: u8 = 20;
+
 /// Spinner animation period for the running bars.
 const SPINNER_TICK: Duration = Duration::from_millis(90);
 
-/// Fallback terminal width when the size cannot be determined.
+/// Fallback terminal size when it cannot be measured and the environment does
+/// not say (`--progress always` over a pipe, for instance).
 const DEFAULT_TERM_WIDTH: usize = 100;
+const DEFAULT_TERM_HEIGHT: u16 = 24;
 
 /// Longest a file name may be before it is truncated in a bar label.
 const MAX_NAME_WIDTH: usize = 30;
@@ -90,8 +112,10 @@ pub struct ProgressReporter {
 enum Mode {
     /// `--quiet`: say nothing at all.
     Silent,
-    /// Not a terminal: one plain line per file at start and finish.
-    Plain,
+    /// No redrawn display: one plain line per file at start and finish. Still
+    /// colour-aware, because a CI log viewer renders escape sequences happily
+    /// even though it is not a terminal.
+    Plain { colors: bool },
     /// A terminal: live bars, and optionally a live statistics table.
     Live(Box<Live>),
 }
@@ -130,31 +154,58 @@ enum ModeChoice {
 
 /// Decide how to report progress.
 ///
-/// `--quiet` wins over everything. Otherwise the display needs a terminal it
-/// can redraw in place: stderr must be a tty *and* `TERM` must describe a
-/// terminal that can do more than accept plain text. `dumb` (and, on Unix, an
-/// unset `TERM`) fails that second test — indicatif hides its bars in exactly
-/// that case, so without this check the run would print a banner and then go
-/// completely silent.
-fn choose_mode(quiet: bool, stderr_is_terminal: bool, dumb_terminal: bool) -> ModeChoice {
+/// `--quiet` wins over everything: it is the stronger statement, so
+/// `--quiet --progress always` is still silent. Otherwise `--progress`
+/// decides if it was given explicitly, and only `auto` consults the
+/// environment.
+///
+/// Auto-detection needs a terminal the display can redraw in place: stderr must
+/// be a tty *and* `TERM` must describe a terminal that can do more than accept
+/// plain text. `dumb` (and, on Unix, an unset `TERM`) fails that second test —
+/// indicatif hides its bars in exactly that case, so without the check a run
+/// would print a banner and then go completely silent.
+fn choose_mode(
+    quiet: bool,
+    progress: When,
+    stderr_is_terminal: bool,
+    dumb_terminal: bool,
+) -> ModeChoice {
     if quiet {
-        ModeChoice::Silent
-    } else if !stderr_is_terminal || dumb_terminal {
-        ModeChoice::Plain
-    } else {
-        ModeChoice::Live
+        return ModeChoice::Silent;
+    }
+    match progress.forced() {
+        Some(true) => ModeChoice::Live,
+        Some(false) => ModeChoice::Plain,
+        None if stderr_is_terminal && !dumb_terminal => ModeChoice::Live,
+        None => ModeChoice::Plain,
     }
 }
 
 impl ProgressReporter {
     /// Build a reporter for a run over `names` (the file group display names,
-    /// in command-line order).
-    pub fn new(names: &[String], quiet: bool) -> Self {
-        let choice = choose_mode(quiet, std::io::stderr().is_terminal(), console::is_dumb());
+    /// in command-line order), honouring the run's `--quiet`, `--progress` and
+    /// `--color` settings.
+    pub fn new(names: &[String], config: &FastQCConfig) -> Self {
+        // `--color always/never` overrides the environment for everything that
+        // follows: console caches the answer behind this same flag, and
+        // indicatif's template styling reads it too.
+        if let Some(forced) = config.color.forced() {
+            console::set_colors_enabled_stderr(forced);
+        }
+
+        let forced_display = config.progress == When::Always;
+        let choice = choose_mode(
+            config.quiet,
+            config.progress,
+            std::io::stderr().is_terminal(),
+            console::is_dumb(),
+        );
         let mode = match choice {
             ModeChoice::Silent => Mode::Silent,
-            ModeChoice::Plain => Mode::Plain,
-            ModeChoice::Live => Mode::Live(Box::new(Live::new(names))),
+            ModeChoice::Plain => Mode::Plain {
+                colors: console::colors_enabled_stderr(),
+            },
+            ModeChoice::Live => Mode::Live(Box::new(Live::new(names, forced_display))),
         };
         ProgressReporter { mode }
     }
@@ -195,7 +246,9 @@ impl ProgressReporter {
             Mode::Live(live) => {
                 let _ = live.multi.println(paint_error(live.colors, message));
             }
-            _ => eprintln!("{}", message),
+            Mode::Plain { colors } => eprintln!("{}", paint_error(*colors, message)),
+            // Silent still reports errors, but has no colour context to use.
+            Mode::Silent => eprintln!("{}", message),
         }
     }
 
@@ -210,7 +263,9 @@ impl ProgressReporter {
     fn on_start(&self, index: usize, name: &str) {
         match &self.mode {
             Mode::Silent => {}
-            Mode::Plain => eprintln!("Started analysis of {}", name),
+            Mode::Plain { colors } => {
+                eprintln!("Started analysis of {}", paint(*colors, name, |s| s.bold()))
+            }
             Mode::Live(live) => live.start(index),
         }
     }
@@ -230,7 +285,10 @@ impl ProgressReporter {
     fn on_finish(&self, index: usize, name: &str, reads: u64) {
         match &self.mode {
             Mode::Silent => {}
-            Mode::Plain => eprintln!("Analysis complete for {}", name),
+            Mode::Plain { colors } => eprintln!(
+                "Analysis complete for {}",
+                paint(*colors, name, |s| s.bold())
+            ),
             Mode::Live(live) => live.finish_file(index, reads),
         }
     }
@@ -286,26 +344,49 @@ impl FileProgress<'_> {
 }
 
 impl Live {
-    fn new(names: &[String]) -> Self {
-        // Honours NO_COLOR, CLICOLOR/CLICOLOR_FORCE and TERM=dumb. indicatif
-        // resolves the `.cyan`/`.green` parts of its templates against the same
-        // function, so this single flag covers the entire display.
+    /// `forced` is set by `--progress always`, meaning the display must be
+    /// drawn even though the environment says it should not be.
+    fn new(names: &[String], forced: bool) -> Self {
+        // Honours NO_COLOR, CLICOLOR/CLICOLOR_FORCE and TERM=dumb, plus any
+        // `--color` override already applied. indicatif resolves the
+        // `.cyan`/`.green` parts of its templates against the same function, so
+        // this single flag covers the entire display.
         let colors = console::colors_enabled_stderr();
-        let term_width = Term::stderr()
-            .size_checked()
-            .map(|(_, cols)| cols as usize)
-            .unwrap_or(DEFAULT_TERM_WIDTH);
+        let term = ForcedTerm::new();
+        let term_width = term.width() as usize;
 
         // The version banner sits above the bars as an ordinary log line, so
         // it scrolls with the rest of the output rather than being redrawn.
-        eprintln!(
-            "{} {}",
+        //
+        // A terminal driver rewrites `\n` as `\r\n` on the way out (ONLCR). A
+        // forced display is deliberately writing terminal control output to
+        // something that is *not* a terminal, so nothing performs that
+        // translation, and a bare newline would leave the cursor parked in the
+        // banner's column for whatever re-renders the stream — putting the
+        // first frame of the display 23 columns to the right. Emit the carriage
+        // return ourselves in that case; on a real terminal it is a no-op.
+        let newline = if forced { "\r\n" } else { "\n" };
+        eprint!(
+            "{} {}{newline}{newline}",
             paint(colors, "FastQC-Rust", |s| s.cyan().bold()),
             paint(colors, &format!("v{}", crate::RUST_VERSION), |s| s.dim()),
         );
-        eprintln!();
 
-        let multi = MultiProgress::new();
+        // The default stderr draw target hides itself when stderr is not an
+        // interactive terminal. `--progress always` asks for the display
+        // anyway, so bypass that check by handing indicatif the terminal
+        // directly: `term_like` performs no detection of its own. It also
+        // applies no rate limiting unless one is given, which would redraw the
+        // whole display on every single position update, so pass the same
+        // refresh rate `ProgressDrawTarget::stderr` uses.
+        let multi = if forced {
+            MultiProgress::with_draw_target(ProgressDrawTarget::term_like_with_hz(
+                Box::new(term),
+                DRAW_RATE_HZ,
+            ))
+        } else {
+            MultiProgress::new()
+        };
 
         let label_width = names
             .iter()
@@ -478,6 +559,94 @@ fn static_line(multi: &MultiProgress) -> ProgressBar {
     line.set_style(ProgressStyle::with_template("{msg}").expect("static template"));
     line.tick();
     line
+}
+
+/// A stderr terminal that reports a usable size even when stderr is not a tty.
+///
+/// `console::Term` writes its cursor-movement and clear-line escapes
+/// unconditionally, so it drives the display fine over a pipe; what it cannot
+/// do is measure a pipe, and it falls back to a hardcoded 80 columns. That
+/// would leave `{wide_bar}` sized differently from the statistics table, which
+/// measures itself. Both go through this type instead, so they agree — and
+/// `COLUMNS`/`LINES` give a forced run (a recording, a CI job) a way to say how
+/// wide the output should be.
+#[derive(Debug)]
+struct ForcedTerm {
+    inner: Term,
+    width: u16,
+    height: u16,
+}
+
+impl ForcedTerm {
+    fn new() -> Self {
+        // Buffered, like the `Term` behind indicatif's own stderr draw target.
+        // It matters: indicatif emits a frame as a run of writes and flushes at
+        // the end, and with an unbuffered terminal a concurrent draw can land
+        // in the middle of one, running two bar lines onto the same row.
+        let inner = Term::buffered_stderr();
+        let measured = inner.size_checked();
+        ForcedTerm {
+            width: measured
+                .map(|(_, cols)| cols)
+                .or_else(|| env_dimension("COLUMNS"))
+                .unwrap_or(DEFAULT_TERM_WIDTH as u16),
+            height: measured
+                .map(|(rows, _)| rows)
+                .or_else(|| env_dimension("LINES"))
+                .unwrap_or(DEFAULT_TERM_HEIGHT),
+            inner,
+        }
+    }
+}
+
+fn env_dimension(name: &str) -> Option<u16> {
+    std::env::var(name)
+        .ok()?
+        .parse::<u16>()
+        .ok()
+        .filter(|n| *n > 0)
+}
+
+impl TermLike for ForcedTerm {
+    fn width(&self) -> u16 {
+        self.width
+    }
+
+    fn height(&self) -> u16 {
+        self.height
+    }
+
+    fn move_cursor_up(&self, n: usize) -> std::io::Result<()> {
+        self.inner.move_cursor_up(n)
+    }
+
+    fn move_cursor_down(&self, n: usize) -> std::io::Result<()> {
+        self.inner.move_cursor_down(n)
+    }
+
+    fn move_cursor_right(&self, n: usize) -> std::io::Result<()> {
+        self.inner.move_cursor_right(n)
+    }
+
+    fn move_cursor_left(&self, n: usize) -> std::io::Result<()> {
+        self.inner.move_cursor_left(n)
+    }
+
+    fn write_line(&self, s: &str) -> std::io::Result<()> {
+        self.inner.write_line(s)
+    }
+
+    fn write_str(&self, s: &str) -> std::io::Result<()> {
+        self.inner.write_str(s)
+    }
+
+    fn clear_line(&self) -> std::io::Result<()> {
+        self.inner.clear_line()
+    }
+
+    fn flush(&self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
 }
 
 /// The live Basic Statistics table shown underneath the progress bars.
@@ -845,23 +1014,60 @@ mod tests {
         assert_eq!(value_width, 28);
     }
 
-    /// `--quiet` beats everything; the live display needs both a tty and a
-    /// terminal that can be redrawn.
+    /// Auto-detection: the live display needs both a tty and a terminal that
+    /// can be redrawn.
     #[test]
-    fn test_choose_mode() {
-        // quiet, is_terminal, dumb
-        assert_eq!(choose_mode(true, true, false), ModeChoice::Silent);
-        assert_eq!(choose_mode(true, false, false), ModeChoice::Silent);
-        assert_eq!(choose_mode(true, true, true), ModeChoice::Silent);
-
-        assert_eq!(choose_mode(false, true, false), ModeChoice::Live);
-
+    fn test_choose_mode_auto() {
+        let auto = When::Auto;
+        // is_terminal, dumb
+        assert_eq!(choose_mode(false, auto, true, false), ModeChoice::Live);
         // Piped or redirected stderr: plain lines, never bars.
-        assert_eq!(choose_mode(false, false, false), ModeChoice::Plain);
+        assert_eq!(choose_mode(false, auto, false, false), ModeChoice::Plain);
         // A tty that cannot redraw (TERM=dumb, or unset on Unix): indicatif
         // would hide the bars, so fall back rather than going silent.
-        assert_eq!(choose_mode(false, true, true), ModeChoice::Plain);
-        assert_eq!(choose_mode(false, false, true), ModeChoice::Plain);
+        assert_eq!(choose_mode(false, auto, true, true), ModeChoice::Plain);
+        assert_eq!(choose_mode(false, auto, false, true), ModeChoice::Plain);
+    }
+
+    /// `--progress always/never` overrides the detection in both directions.
+    #[test]
+    fn test_choose_mode_forced() {
+        for &is_terminal in &[true, false] {
+            for &dumb in &[true, false] {
+                assert_eq!(
+                    choose_mode(false, When::Always, is_terminal, dumb),
+                    ModeChoice::Live,
+                    "--progress always must draw the display (tty={is_terminal}, dumb={dumb})"
+                );
+                assert_eq!(
+                    choose_mode(false, When::Never, is_terminal, dumb),
+                    ModeChoice::Plain,
+                    "--progress never must not draw the display (tty={is_terminal}, dumb={dumb})"
+                );
+            }
+        }
+    }
+
+    /// `--quiet` is the stronger statement and beats an explicit
+    /// `--progress always`.
+    #[test]
+    fn test_quiet_beats_forced_progress() {
+        for progress in [When::Auto, When::Always, When::Never] {
+            for &is_terminal in &[true, false] {
+                assert_eq!(
+                    choose_mode(true, progress, is_terminal, false),
+                    ModeChoice::Silent,
+                    "--quiet must win over --progress {progress:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_when_forced() {
+        assert_eq!(When::Auto.forced(), None);
+        assert_eq!(When::Always.forced(), Some(true));
+        assert_eq!(When::Never.forced(), Some(false));
     }
 
     /// With colour off, styling helpers must emit the bare text — no escapes,

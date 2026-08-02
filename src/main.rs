@@ -3,7 +3,7 @@ use std::process;
 
 use clap::Parser;
 
-use fastqc_rust::config::{FastQCConfig, TemplateName};
+use fastqc_rust::config::{FastQCConfig, TemplateName, When};
 use fastqc_rust::runner;
 
 /// FastQC - A high throughput sequence QC analysis tool
@@ -92,6 +92,19 @@ struct Cli {
     /// Suppress all progress messages on stdout and only report errors.
     #[arg(short, long)]
     quiet: bool,
+
+    /// When to draw the live progress bars and statistics table.
+    /// "auto" (default) uses them only on an interactive terminal;
+    /// "always" forces them even when stderr is redirected;
+    /// "never" prints a plain line per file instead. --quiet overrides this.
+    #[arg(long, value_name = "WHEN", default_value = "auto")]
+    progress: When,
+
+    /// When to colour terminal output.
+    /// "auto" (default) honours NO_COLOR, CLICOLOR and CLICOLOR_FORCE;
+    /// "always" and "never" override that. Independent of --progress.
+    #[arg(long, alias = "colour", value_name = "WHEN", default_value = "auto")]
+    color: When,
 
     /// Selects a directory to be used for temporary files written when
     /// generating report images. Defaults to system temp dir.
@@ -206,6 +219,8 @@ fn main() {
         svg_output: cli.svg,
         temp_dir: cli.dir,
         template: cli.template,
+        progress: cli.progress,
+        color: cli.color,
         decompress_threads: cli.decompress_threads,
     };
 

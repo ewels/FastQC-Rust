@@ -17,10 +17,18 @@
   an interactive stderr: when stderr is a pipe or a log file, or `TERM` is
   `dumb`/unset, it degrades to one plain line per file at start and finish so
   pipeline logs stay readable, and `--quiet` still silences everything but
-  errors. Colour follows `NO_COLOR` and the
+  errors.
+- **`--progress auto|always|never` and `--color auto|always|never`** (also
+  spelled `--colour`) override that auto-detection in either direction, as two
+  independent switches. `--progress always` draws the display even when stderr
+  is redirected — for recording a demo, or a consumer that re-renders the
+  stream — sizing itself from `COLUMNS`/`LINES`; `--progress never` always takes
+  the plain path. `--color` defaults to honouring `NO_COLOR` and the
   [clicolors spec](https://bixense.com/clicolors/) (`CLICOLOR`,
-  `CLICOLOR_FORCE`) — with colour off the bars and table are still drawn, just
-  without escape codes.
+  `CLICOLOR_FORCE`), and overrides them when given explicitly. Because the two
+  are independent, colour off still draws the bars and table (just without
+  escape codes), and the plain fallback still colours its lines when colour is
+  on, which is what a CI log viewer wants. `--quiet` beats both.
 - **Parallel analysis pipeline** for a single file. `-t/--threads` is now a total
   thread budget spread across files first and then within each file: a reader
   batches records while worker threads each run a disjoint subset of the QC

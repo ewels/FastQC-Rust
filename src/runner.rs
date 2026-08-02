@@ -172,9 +172,9 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
     // The live terminal display: a progress bar per file (or one bar counting
     // files when there are many), plus a live statistics table for small runs.
     // It is inert under --quiet and degrades to plain start/finish lines when
-    // stderr is not a terminal.
+    // stderr is not a terminal, unless --progress/--color say otherwise.
     let names: Vec<String> = file_groups.iter().map(|g| g.name.clone()).collect();
-    let progress = progress::ProgressReporter::new(&names, config.quiet);
+    let progress = progress::ProgressReporter::new(&names, config);
 
     pool.install(|| {
         file_groups

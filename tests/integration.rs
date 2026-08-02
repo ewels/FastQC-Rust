@@ -272,13 +272,17 @@ fn test_zip_archive_structure() {
     std::fs::remove_dir_all(&tmp_dir).ok();
 }
 
-/// Run the `fastqc` binary with stderr captured (so it is a pipe, never a
-/// terminal) and return what it wrote there.
+/// Run the `fastqc` binary with stderr captured — so stderr is a pipe, never a
+/// terminal — and return what it wrote there.
 fn run_binary_stderr(extra_args: &[&str], env: &[(&str, &str)]) -> String {
+    // A counter, not the arguments: these run in parallel and two cases can
+    // easily share an argument list, which would have them deleting each
+    // other's output directory mid-run.
+    static NEXT_DIR: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let tmp_dir = std::env::temp_dir().join(format!(
         "fastqc_progress_test_{}_{}",
         std::process::id(),
-        extra_args.join("_")
+        NEXT_DIR.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
     ));
     std::fs::create_dir_all(&tmp_dir).expect("Failed to create temp dir");
 
@@ -302,16 +306,46 @@ fn run_binary_stderr(extra_args: &[&str], env: &[(&str, &str)]) -> String {
     String::from_utf8(output.stderr).expect("stderr is not UTF-8")
 }
 
-/// Progress output must never carry ANSI escape sequences into a captured
-/// stream: piped stderr is not a terminal, so the display falls back to plain
-/// lines. This is what keeps workflow-engine logs readable.
+/// Does the output contain colour (SGR) escape sequences other than a reset?
+///
+/// An SGR sequence is `ESC [ <digits and semicolons> m`. The parameter run has
+/// to be validated rather than just searching forward for an `m`, or the `m` in
+/// a word like "minimal.fastq" turns a cursor escape into a false positive.
+fn has_color(stderr: &str) -> bool {
+    stderr
+        .split('\u{1b}')
+        .skip(1)
+        .filter_map(|s| s.strip_prefix('['))
+        .filter_map(|s| {
+            let params: String = s
+                .chars()
+                .take_while(|c| c.is_ascii_digit() || *c == ';')
+                .collect();
+            s[params.len()..].starts_with('m').then_some(params)
+        })
+        .any(|params| !params.is_empty() && params != "0")
+}
+
+/// Does the output redraw in place? Cursor-up is the giveaway.
+fn has_redraw(stderr: &str) -> bool {
+    stderr
+        .split('\u{1b}')
+        .skip(1)
+        .filter_map(|s| s.strip_prefix('['))
+        .any(|s| {
+            s.trim_start_matches(|c: char| c.is_ascii_digit())
+                .starts_with('A')
+        })
+}
+
+/// With colour auto-detected, nothing should reach a captured stream: piped
+/// stderr is not a terminal. This is what keeps workflow-engine logs readable.
 #[test]
 fn test_no_ansi_escapes_when_stderr_is_piped() {
     for env in [
         &[][..],
         &[("NO_COLOR", "1")][..],
         &[("CLICOLOR", "0")][..],
-        &[("CLICOLOR_FORCE", "1")][..],
         &[("TERM", "dumb")][..],
         &[("TERM", "xterm-256color")][..],
     ] {
@@ -345,18 +379,103 @@ fn test_no_ansi_escapes_when_stderr_is_piped() {
     }
 }
 
-/// `--quiet` means silent: no progress, no plain lines, no escapes.
+/// Colour can be forced back on for a pipe — a CI log viewer renders escape
+/// sequences happily despite not being a terminal. Forcing colour must *not*
+/// drag the animated display along with it.
 #[test]
-fn test_quiet_produces_no_progress_output() {
-    for env in [
-        &[][..],
-        &[("NO_COLOR", "1")][..],
-        &[("CLICOLOR_FORCE", "1")][..],
+fn test_colour_can_be_forced_on_a_pipe() {
+    for (args, env) in [
+        (&["--color", "always"][..], &[][..]),
+        // The clicolors spec's own override, with no flag at all.
+        (&[][..], &[("CLICOLOR_FORCE", "1")][..]),
+        // An explicit flag beats a conflicting environment in both directions.
+        (&["--color", "always"][..], &[("NO_COLOR", "1")][..]),
     ] {
-        let stderr = run_binary_stderr(&["--quiet"], env);
+        let stderr = run_binary_stderr(args, env);
+        assert!(
+            has_color(&stderr),
+            "expected colour for {:?} {:?}: {:?}",
+            args,
+            env,
+            stderr
+        );
+        assert!(
+            !has_redraw(&stderr),
+            "colour must not imply the animated display for {:?} {:?}",
+            args,
+            env
+        );
+    }
+
+    // ...and `--color never` wins over an environment asking for colour.
+    let stderr = run_binary_stderr(&["--color", "never"], &[("CLICOLOR_FORCE", "1")]);
+    assert!(
+        !stderr.contains('\u{1b}'),
+        "--color never must beat CLICOLOR_FORCE: {:?}",
+        stderr
+    );
+}
+
+/// The animated display can be forced onto a pipe (for recording a demo, or a
+/// consumer that re-renders the stream), and forced off on any stream.
+#[test]
+fn test_progress_display_can_be_forced_on_a_pipe() {
+    let forced = run_binary_stderr(&["--progress", "always"], &[("COLUMNS", "100")]);
+    assert!(
+        has_redraw(&forced),
+        "--progress always must redraw in place: {:?}",
+        forced
+    );
+    assert!(
+        forced.contains('━'),
+        "--progress always must draw the bar: {:?}",
+        forced
+    );
+    // Every line the display emits has to be positioned from column zero, so a
+    // bare newline would leave the first frame indented by the banner's width.
+    assert!(
+        !forced.contains("dev0\n"),
+        "banner must end with a carriage return when forced onto a pipe"
+    );
+
+    // Forced off, a pipe stays exactly as it was.
+    let never = run_binary_stderr(&["--progress", "never"], &[]);
+    assert!(!has_redraw(&never), "--progress never redrew: {:?}", never);
+    assert!(never.contains("Started analysis of minimal.fastq"));
+
+    // Colour and animation are independent switches.
+    let both = run_binary_stderr(
+        &["--progress", "always", "--color", "always"],
+        &[("COLUMNS", "100")],
+    );
+    assert!(has_redraw(&both) && has_color(&both));
+    let mono = run_binary_stderr(
+        &["--progress", "always", "--color", "never"],
+        &[("COLUMNS", "100")],
+    );
+    assert!(
+        has_redraw(&mono) && !has_color(&mono),
+        "--color never must strip colour from a forced display"
+    );
+}
+
+/// `--quiet` means silent, and beats every force flag and environment override.
+#[test]
+fn test_quiet_beats_everything() {
+    for (args, env) in [
+        (&["--quiet"][..], &[][..]),
+        (&["--quiet"][..], &[("NO_COLOR", "1")][..]),
+        (&["--quiet"][..], &[("CLICOLOR_FORCE", "1")][..]),
+        (
+            &["--quiet", "--progress", "always", "--color", "always"][..],
+            &[][..],
+        ),
+    ] {
+        let stderr = run_binary_stderr(args, env);
         assert!(
             stderr.is_empty(),
-            "--quiet wrote to stderr with env {:?}: {:?}",
+            "--quiet wrote to stderr for {:?} {:?}: {:?}",
+            args,
             env,
             stderr
         );
