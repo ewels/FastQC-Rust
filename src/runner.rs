@@ -1,6 +1,6 @@
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::sync_channel;
 use std::sync::Arc;
 use std::thread;
@@ -168,6 +168,7 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
         })?;
 
     let failed = AtomicBool::new(something_failed);
+    let analysed = AtomicUsize::new(0);
 
     // The live terminal display: a progress bar per file (or one bar counting
     // files when there are many), plus a live statistics table for small runs.
@@ -185,7 +186,10 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
                 file_progress.start(&group.name);
 
                 match process_group(config, &limits, group, processors_per_file, file_progress) {
-                    Ok(reads) => file_progress.finish(&group.name, reads),
+                    Ok(reads) => {
+                        analysed.fetch_add(1, Ordering::Relaxed);
+                        file_progress.finish(&group.name, reads);
+                    }
                     Err(e) => {
                         file_progress.fail();
                         progress.error(&format!("Failed to process {}: {}", group.name, e));
@@ -195,7 +199,7 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
             });
     });
 
-    progress.finish();
+    progress.finish(analysed.load(Ordering::Relaxed));
 
     if failed.load(Ordering::Relaxed) {
         Err(1)

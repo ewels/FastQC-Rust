@@ -15,6 +15,8 @@
 //!   │ File type                         │ Conventional … │ Conventional … │
 //!   │ ...                               │ ...            │ ...            │
 //!   └───────────────────────────────────┴────────────────┴────────────────┘
+//! Failed to process notes.txt: ID line didn't start with '@' at line 1
+//! Complete. Analysed 2 files in 00:06
 //! ```
 //!
 //! The display adapts to the size of the run:
@@ -61,18 +63,26 @@
 //!
 //! # Log lines
 //!
-//! Anything printed while the display is up has to go through
-//! [`log_line`] (or [`ProgressReporter::error`]), which hands it to indicatif to
-//! print *above* the redrawn region. The line then scrolls up as ordinary
-//! output and the display stays pinned below it, so nothing is overwritten and
-//! nothing overwrites the bars. Writing to stderr directly would land in the
+//! Anything printed while the display is up has to go through [`log_line`] (or
+//! [`ProgressReporter::error`]). Writing to stderr directly would land in the
 //! middle of the display and be erased by the next frame.
+//!
+//! Those lines collect in a pane *below* the header, bars and table, newest at
+//! the bottom, so the display reads top to bottom as status then messages. The
+//! pane is bounded by the terminal height; once it is full the oldest line is
+//! released into ordinary scrollback above the display, so nothing is lost and
+//! the redrawn region never outgrows the screen.
+//!
+//! The run signs off with a `Complete. Analysed N files in mm:ss` line in the
+//! same pane (or as a plain line when there is no display). `--quiet` suppresses
+//! it along with everything else.
 
+use std::collections::VecDeque;
 use std::io::IsTerminal;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use console::{style, truncate_str, Term};
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle, TermLike};
@@ -148,50 +158,82 @@ const DEFAULT_TERM_HEIGHT: u16 = 24;
 /// Longest a file name may be before it is truncated in a bar label.
 const MAX_NAME_WIDTH: usize = 30;
 
+/// Bounds on how many log lines are kept below the display before the oldest
+/// are released into scrollback.
+const MIN_LOG_LINES: usize = 3;
+const MAX_LOG_LINES: usize = 20;
+
 /// Progress is tracked in permille rather than percent so the bars move
 /// smoothly rather than in 1% steps.
 const SCALE: u64 = 1000;
 
-/// The display currently drawing to stderr, if there is one.
+/// Log lines shown *below* the display, newest at the bottom.
+///
+/// Each line is a static line in the redrawn region, inserted between the table
+/// and the trailing blank, so warnings and errors accumulate underneath the
+/// header, bars and table rather than scrolling past above them. The pane is
+/// bounded by the terminal height: once it is full the oldest line is released
+/// into ordinary scrollback above the display, so nothing is ever lost and the
+/// region never outgrows the screen.
+struct LogPane {
+    multi: MultiProgress,
+    /// New lines are inserted before this (the trailing blank line), which
+    /// keeps them at the bottom of the region and in emission order.
+    anchor: ProgressBar,
+    lines: Mutex<VecDeque<ProgressBar>>,
+    max_lines: usize,
+}
+
+impl LogPane {
+    fn push(&self, message: &str) {
+        let mut lines = self.lines.lock().unwrap_or_else(|e| e.into_inner());
+
+        let line = self.multi.insert_before(&self.anchor, ProgressBar::new(0));
+        line.set_style(ProgressStyle::with_template("{msg}").expect("static template"));
+        line.set_message(message.to_string());
+        line.tick();
+        lines.push_back(line);
+
+        while lines.len() > self.max_lines {
+            let oldest = lines.pop_front().expect("non-empty");
+            let text = oldest.message();
+            self.multi.remove(&oldest);
+            // Erase the region, write the line as ordinary scrollback, and let
+            // the next update redraw the display beneath it. Not `println` or
+            // `suspend`: both erase using the line count from the last frame
+            // indicatif drew, and with bars updating from several threads that
+            // count lags what is on screen, stranding a stale copy of the whole
+            // display above the live one. `clear` resets the count to zero, so
+            // there is no bookkeeping left to be wrong.
+            let _ = self.multi.clear();
+            eprintln!("{}", text);
+        }
+    }
+
+    /// Keep the lines on screen once the bars behind them are dropped.
+    fn finish(&self) {
+        for line in self.lines.lock().unwrap_or_else(|e| e.into_inner()).iter() {
+            line.finish();
+        }
+    }
+}
+
+/// The log pane of the display currently drawing to stderr, if there is one.
 ///
 /// Code deep in the analysis (a module noticing bad data, a reader hitting an
 /// odd record) has no handle on the reporter, but its warnings must not be
 /// written straight to stderr while a redrawn region is on screen — they would
-/// land in the middle of the bars and be overwritten by the next frame. Routing
-/// them through here makes them scroll away above the display instead.
-static ACTIVE_DISPLAY: Mutex<Option<MultiProgress>> = Mutex::new(None);
+/// land in the middle of the bars and be overwritten by the next frame.
+static ACTIVE_LOG: Mutex<Option<Arc<LogPane>>> = Mutex::new(None);
 
-/// Emit a line that scrolls above the progress display, wherever it is called
-/// from. Falls back to plain stderr when no display is active.
-///
-/// The line is printed exactly once and never redrawn, so it behaves like an
-/// ordinary log line: the display stays pinned below it.
+/// Emit a line into the log pane below the progress display, wherever it is
+/// called from. Falls back to plain stderr when no display is active.
 pub fn log_line(message: &str) {
-    let active = ACTIVE_DISPLAY.lock().unwrap_or_else(|e| e.into_inner());
-    match active.as_ref() {
-        Some(multi) => print_above(multi, message),
+    let active = ACTIVE_LOG.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    match active {
+        Some(pane) => pane.push(message),
         None => eprintln!("{}", message),
     }
-}
-
-/// Print `message` above the redrawn region.
-///
-/// `suspend` rather than `println`: `println` clears the display using a line
-/// count captured before it takes the lock, so a bar update landing from
-/// another thread in between leaves a stale copy of the whole display stranded
-/// on screen. `suspend` holds indicatif's lock across clear, print and redraw,
-/// which is exactly the atomicity a concurrent run needs.
-fn print_above(multi: &MultiProgress, message: &str) {
-    // Erase the whole region, write the line as ordinary scrollback, and let
-    // the next update redraw the display beneath it.
-    //
-    // Not `println` or `suspend`: both erase using the line count from the last
-    // frame indicatif drew, and with bars being updated from several threads
-    // that count can lag what is actually on screen, which strands a stale copy
-    // of the display above the live one. `clear` resets the count to zero, so
-    // there is no bookkeeping left to be wrong.
-    let _ = multi.clear();
-    eprintln!("{}", message);
 }
 
 /// The terminal progress display for a whole run.
@@ -200,6 +242,8 @@ fn print_above(multi: &MultiProgress, message: &str) {
 /// no-ops when the display is disabled.
 pub struct ProgressReporter {
     mode: Mode,
+    /// When the run started, for the closing summary.
+    started: Instant,
 }
 
 enum Mode {
@@ -214,13 +258,14 @@ enum Mode {
 }
 
 struct Live {
-    multi: MultiProgress,
     /// Pinned header and spacer at the top of the redrawn region.
     header: Vec<ProgressBar>,
     bars: Bars,
     table: Option<Arc<Table>>,
     /// Blank line kept at the bottom of the redrawn region.
     trailer: ProgressBar,
+    /// Log lines shown below the display.
+    log: Arc<LogPane>,
     ticker: Mutex<Option<JoinHandle<()>>>,
     stop: Arc<AtomicBool>,
     colors: bool,
@@ -295,13 +340,19 @@ impl ProgressReporter {
             },
             ModeChoice::Live => Mode::Live(Box::new(Live::new(names, forced_display))),
         };
-        ProgressReporter { mode }
+        ProgressReporter {
+            mode,
+            started: Instant::now(),
+        }
     }
 
     /// A reporter that displays nothing. Used by tests and by callers of the
     /// library API that drive the analysis themselves.
     pub fn hidden() -> Self {
-        ProgressReporter { mode: Mode::Silent }
+        ProgressReporter {
+            mode: Mode::Silent,
+            started: Instant::now(),
+        }
     }
 
     /// A handle scoped to one file group, for the code that actually runs the
@@ -331,7 +382,7 @@ impl ProgressReporter {
     /// matching the previous behaviour of the runner.
     pub fn error(&self, message: &str) {
         match &self.mode {
-            Mode::Live(live) => print_above(&live.multi, &paint_error(live.colors, message)),
+            Mode::Live(live) => live.log.push(&paint_error(live.colors, message)),
             Mode::Plain { colors } => eprintln!("{}", paint_error(*colors, message)),
             // Silent still reports errors, but has no colour context to use.
             Mode::Silent => eprintln!("{}", message),
@@ -339,10 +390,38 @@ impl ProgressReporter {
     }
 
     /// Tear the display down once every file is done, leaving the final state
-    /// on screen.
-    pub fn finish(&self) {
-        if let Mode::Live(live) = &self.mode {
-            live.finish();
+    /// on screen, and report what the run got through.
+    ///
+    /// `analysed` is the number of file groups that completed successfully;
+    /// anything that failed has already been reported as an error line.
+    pub fn finish(&self, analysed: usize) {
+        let summary = format!(
+            "Complete. Analysed {} {} in {}",
+            analysed,
+            if analysed == 1 { "file" } else { "files" },
+            clock_duration(self.started.elapsed()),
+        );
+        match &self.mode {
+            // --quiet stays quiet: the run said nothing, so it ends saying
+            // nothing.
+            Mode::Silent => {}
+            Mode::Plain { colors } => eprintln!(
+                "{} {}",
+                paint(*colors, "Complete.", |s| s.green().bold()),
+                summary.trim_start_matches("Complete. "),
+            ),
+            Mode::Live(live) => {
+                // Into the log pane, so it lands below the finished display
+                // alongside anything else the run had to say.
+                live.log.push(&format!(
+                    "{} {}",
+                    paint(live.colors, "Complete.", |s| s.green().bold()),
+                    paint(live.colors, summary.trim_start_matches("Complete. "), |s| {
+                        s.dim()
+                    }),
+                ));
+                live.finish();
+            }
         }
     }
 
@@ -440,6 +519,7 @@ impl Live {
         let colors = console::colors_enabled_stderr();
         let term = ForcedTerm::new();
         let term_width = term.width() as usize;
+        let term_height = term.height() as usize;
 
         // The default stderr draw target hides itself when stderr is not an
         // interactive terminal. `--progress always` asks for the display
@@ -524,14 +604,27 @@ impl Live {
         let trailer = static_line(&multi);
         trailer.set_message(" ");
 
-        *ACTIVE_DISPLAY.lock().unwrap_or_else(|e| e.into_inner()) = Some(multi.clone());
+        // Bound the pane so the region cannot outgrow the terminal: the fixed
+        // part is the header and spacer, the bars, the table and the trailer.
+        let table_height = table.as_ref().map_or(0, |t| t.height());
+        let fixed_height = 2 + names.len().clamp(1, MAX_FILE_BARS) + table_height + 1;
+        let max_lines = term_height
+            .saturating_sub(fixed_height + 1)
+            .clamp(MIN_LOG_LINES, MAX_LOG_LINES);
+        let log = Arc::new(LogPane {
+            multi: multi.clone(),
+            anchor: trailer.clone(),
+            lines: Mutex::new(VecDeque::new()),
+            max_lines,
+        });
+        *ACTIVE_LOG.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&log));
 
         let live = Live {
-            multi,
             header,
             bars,
             table,
             trailer,
+            log,
             ticker: Mutex::new(None),
             stop: Arc::new(AtomicBool::new(false)),
             colors,
@@ -631,7 +724,8 @@ impl Live {
         // indicatif erases any bar that is still unfinished when it is dropped,
         // so the static lines have to be explicitly finished for the completed
         // display to survive the end of the run.
-        *ACTIVE_DISPLAY.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *ACTIVE_LOG.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.log.finish();
         for line in &self.header {
             line.finish();
         }
@@ -792,6 +886,12 @@ impl Table {
         };
         table.refresh();
         table
+    }
+
+    /// How many terminal lines the table occupies: a leading spacer, three
+    /// borders, the heading row and one row per measure.
+    fn height(&self) -> usize {
+        self.measures.len() + 5
     }
 
     /// Mark the table finished so it is not erased when the progress bars
@@ -1013,6 +1113,17 @@ fn aggregate_done_style(colors: bool) -> ProgressStyle {
     .with_key("elapsed", elapsed_key(colors))
 }
 
+/// Wall-clock elapsed time for the closing summary: `mm:ss`, widening to
+/// `hh:mm:ss` past an hour rather than letting the minutes run past 59.
+fn clock_duration(d: Duration) -> String {
+    let secs = d.as_secs();
+    if secs < 3600 {
+        format!("{:02}:{:02}", secs / 60, secs % 60)
+    } else {
+        format!("{}:{:02}:{:02}", secs / 3600, (secs % 3600) / 60, secs % 60)
+    }
+}
+
 /// Compact elapsed time: `4.2s`, `1m12s`, `1h04m`.
 fn short_duration(d: Duration) -> String {
     let secs = d.as_secs();
@@ -1175,7 +1286,7 @@ mod tests {
     /// being swallowed.
     #[test]
     fn test_log_line_without_a_display() {
-        assert!(ACTIVE_DISPLAY
+        assert!(ACTIVE_LOG
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .is_none());
@@ -1213,6 +1324,6 @@ mod tests {
         file.finish("a.fastq", 2000);
         file.fail();
         assert!(reporter.live_stats(0).is_none());
-        reporter.finish();
+        reporter.finish(1);
     }
 }

@@ -28,11 +28,19 @@
   for a pipe. Because the two are independent, colour off still draws the bars
   and table, and the plain fallback still colours its lines when colour is
   forced on, which is what a CI log viewer wants. `--quiet` beats both.
-- **Warnings raised during analysis** (a bad quality character, too many tiles,
-  an unreadable nanopore read) now scroll above the progress display instead of
-  being written into the middle of it and erased by the next frame. The
+- **Warnings and errors collect in a pane below the display** — under the
+  header, bars and table, newest at the bottom — rather than being written into
+  the middle of the bars and erased by the next frame, which is what happened to
+  warnings raised during analysis (a bad quality character, too many tiles, an
+  unreadable nanopore read). The pane is bounded by the terminal height; once
+  full, the oldest line is released into ordinary scrollback above the display,
+  so nothing is lost and the redrawn region never outgrows the screen. The
   clamping warning for out-of-range quality characters is also emitted once per
   run rather than once per base.
+- **A closing summary**: `Complete. Analysed N files in mm:ss`, counting the
+  files that were analysed successfully and widening to `hh:mm:ss` past an hour.
+  Shown in the log pane, or as a plain line when there is no display; `--quiet`
+  suppresses it along with everything else.
 - **Parallel analysis pipeline** for a single file. `-t/--threads` is now a total
   thread budget spread across files first and then within each file: a reader
   batches records while worker threads each run a disjoint subset of the QC

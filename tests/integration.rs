@@ -528,24 +528,23 @@ fn test_quiet_beats_everything() {
     }
 }
 
-/// A log line emitted while the display is live must end up *above* it, as
-/// ordinary scrollback, with the display redrawn intact underneath — no stale
-/// copy stranded on screen and nothing of the message overwritten.
+/// A log line emitted while the display is live must end up in the pane
+/// *below* it — under the header, bars and table — with the display still whole
+/// and the message intact on one line.
 ///
 /// Checked on the forced display so the assertion does not need a terminal.
 #[test]
-fn test_log_lines_scroll_above_the_display() {
+fn test_log_lines_collect_below_the_display() {
     let tmp_dir = std::env::temp_dir().join(format!("fastqc_logline_{}", std::process::id()));
     std::fs::create_dir_all(&tmp_dir).expect("temp dir");
 
-    // A file whose second record is malformed: the run reports it and carries
-    // on with the other file, so the error is printed mid-display.
     let bad = tmp_dir.join("broken.fastq");
     std::fs::write(&bad, "not a fastq file at all\n").expect("write");
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
         .env("FASTQC_PROGRESS", "always")
         .env("COLUMNS", "100")
+        .env("LINES", "40")
         .arg("-o")
         .arg(&tmp_dir)
         .arg(&bad)
@@ -555,35 +554,99 @@ fn test_log_lines_scroll_above_the_display() {
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     std::fs::remove_dir_all(&tmp_dir).ok();
 
+    let message = "Failed to process broken.fastq";
     assert!(
-        stderr.contains("Failed to process broken.fastq"),
+        stderr.contains(message),
         "error line missing entirely: {:?}",
         stderr
     );
 
-    // The message must survive intact on one line, not be cut in half by a
-    // redraw landing in the middle of it.
-    let message = "Failed to process broken.fastq";
-    let after = &stderr[stderr.find(message).unwrap() + message.len()..];
-    let rest_of_line = after.split('\n').next().unwrap_or("");
+    // The whole message survives contiguously — no redraw cut into the middle
+    // of it. (It is a line of the display now, so it is width-padded and
+    // followed by the next frame's escapes, like every other line.)
+    let whole = "Failed to process broken.fastq: ID line didn't start with '@' at line 1";
     assert!(
-        !rest_of_line.contains('\u{1b}'),
-        "the display redrew into the middle of the log line: {:?}",
-        rest_of_line
-    );
-
-    // The display is still whole afterwards: exactly one header, and the bars
-    // and table drawn below the message rather than a stale copy above it.
-    let headers = stderr.matches("FastQC-Rust").count();
-    let after_message = &stderr[stderr.find(message).unwrap()..];
-    assert!(
-        after_message.contains("FastQC-Rust"),
-        "display was not redrawn below the log line: {:?}",
+        stderr.contains(whole),
+        "log line was broken up by a redraw: {:?}",
         stderr
     );
+
+    // In the final frame the message sits below the header, the bars and the
+    // table. Compare positions within the last frame only, since earlier frames
+    // are erased and redrawn.
+    let final_frame = stderr
+        .rfind("FastQC-Rust")
+        .map(|i| &stderr[i..])
+        .expect("no header drawn");
+    let header_at = final_frame.find("FastQC-Rust").expect("header");
+    let table_at = final_frame.find("Total Sequences").expect("table");
+    let message_at = final_frame.find(message).expect("message in final frame");
+    let summary_at = final_frame
+        .find("Complete.")
+        .expect("summary in final frame");
     assert!(
-        headers >= 1,
-        "expected the pinned header, found {}",
-        headers
+        header_at < table_at && table_at < message_at && message_at < summary_at,
+        "expected header < table < message < summary, got {} {} {} {}",
+        header_at,
+        table_at,
+        message_at,
+        summary_at
     );
+}
+
+/// Every run signs off with a count and a wall-clock duration.
+#[test]
+fn test_completion_summary() {
+    // One file analysed, one rejected: the count reports what actually worked.
+    let tmp_dir = std::env::temp_dir().join(format!("fastqc_summary_{}", std::process::id()));
+    std::fs::create_dir_all(&tmp_dir).expect("temp dir");
+    let bad = tmp_dir.join("broken.fastq");
+    std::fs::write(&bad, "nope\n").expect("write");
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
+        .arg("-o")
+        .arg(&tmp_dir)
+        .arg("tests/data/minimal.fastq")
+        .arg(&bad)
+        .output()
+        .expect("run fastqc");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    std::fs::remove_dir_all(&tmp_dir).ok();
+
+    // Singular for one file, and mm:ss for the duration.
+    assert!(
+        stderr.contains("Complete. Analysed 1 file in "),
+        "unexpected summary: {:?}",
+        stderr
+    );
+    let tail = stderr.rsplit("in ").next().unwrap_or("").trim();
+    let (minutes, seconds) = tail.split_once(':').unwrap_or_else(|| panic!("{tail:?}"));
+    assert_eq!(minutes.len(), 2, "minutes not zero-padded: {tail:?}");
+    assert_eq!(seconds.len(), 2, "seconds not zero-padded: {tail:?}");
+    assert!(minutes.parse::<u32>().is_ok() && seconds.parse::<u32>().is_ok());
+
+    // Two files, plural.
+    let tmp_dir = std::env::temp_dir().join(format!("fastqc_summary2_{}", std::process::id()));
+    std::fs::create_dir_all(&tmp_dir).expect("temp dir");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
+        .arg("-o")
+        .arg(&tmp_dir)
+        .arg("tests/data/minimal.fastq")
+        .arg("tests/data/complex.fastq")
+        .output()
+        .expect("run fastqc");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    std::fs::remove_dir_all(&tmp_dir).ok();
+    assert!(
+        stderr.contains("Complete. Analysed 2 files in "),
+        "unexpected summary: {:?}",
+        stderr
+    );
+}
+
+/// `--quiet` stays quiet right to the end: no completion line either.
+#[test]
+fn test_quiet_suppresses_the_completion_summary() {
+    let stderr = run_binary_stderr(&["--quiet"], &[]);
+    assert!(stderr.is_empty(), "--quiet wrote: {:?}", stderr);
 }
