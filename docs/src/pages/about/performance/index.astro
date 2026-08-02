@@ -83,6 +83,27 @@ const base = import.meta.env.BASE_URL;
   </section>
 
   <section style="margin-bottom: 3rem">
+    <h2>Parallel gzip decompression</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 1rem">
+      The one stage that is not single-threaded is gzip decompression. DEFLATE has no
+      separators between its blocks, and each block can reference bytes up to 32&nbsp;KB
+      earlier in the output, so a plain decoder has to work through the file in order on a
+      single core. For <code>.fastq.gz</code> input FastQC-Rust uses
+      <a href="https://crates.io/crates/rapidgzip-core">rapidgzip-core</a>, which decodes
+      chunks in parallel by treating references into not-yet-decoded data as placeholders and
+      filling them in with a cheap second pass. The inflate runs on
+      <a href="https://crates.io/crates/zlib-rs">zlib-rs</a>, and the decoder works on its
+      own threads, so decompression overlaps with the analysis rather than blocking it.
+    </p>
+    <p style="color: var(--ink-muted)">
+      Output stays byte-identical to a serial decoder. On four cores this shaves roughly a
+      third off the wall-clock time for a large gzipped FASTQ, with the decompression stage
+      itself several times faster; the end-to-end gain is bounded by the single-threaded
+      analysis and grows with core count.
+    </p>
+  </section>
+
+  <section style="margin-bottom: 3rem">
     <h2>Test dataset</h2>
     <p style="color: var(--ink-muted)">
       119 GB across 11 files: Illumina WES, Element AVITI, ONT PromethION long-read, and BAM.

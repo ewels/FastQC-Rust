@@ -61,16 +61,6 @@ cargo build --release
 ./target/release/fastqc sample.fastq.gz
 ```
 
-### Parallel gzip decompression
-
-For large `.fastq.gz` inputs, gzip decompression is often the bottleneck.
-FastQC-Rust decompresses gzip in parallel on a pool of background threads using
-[`rapidgzip-core`](https://crates.io/crates/rapidgzip-core) (pure Rust, no C
-toolchain), overlapping decompression with the analysis on the main thread — no
-configuration required. `--decompress-threads N` tunes the per-file worker
-budget; the default (`0`) auto-derives it, spreading the machine's cores across
-the files processed concurrently.
-
 ## Usage
 
 ```bash
