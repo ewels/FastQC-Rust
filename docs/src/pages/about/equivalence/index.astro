@@ -46,6 +46,9 @@ const base = import.meta.env.BASE_URL;
       (always Phred+33) instead of inferred from the data, so datasets with no base below Q31 report correct quality
       scores where Java FastQC misdetects Illumina 1.5 and reports them 31 too low
       (<a href="https://github.com/ewels/FastQC-Rust/issues/6">#6</a>).
+      Reported upstream as <a href="https://github.com/s-andrews/FastQC/issues/209">s-andrews/FastQC#209</a>
+      with a matching Java fix submitted in <a href="https://github.com/s-andrews/FastQC/pull/210">#210</a>;
+      if that merges, the two versions agree again.
     </p>
   </section>
 
