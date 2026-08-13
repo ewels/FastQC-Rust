@@ -2,7 +2,7 @@
 ///
 /// Replicates the logic from `Sequence/QualityEncoding/PhredEncoding.java`.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct PhredEncoding {
     pub name: &'static str,
     pub offset: u8,
@@ -19,12 +19,10 @@ impl PhredEncoding {
     /// This is the encoding produced by construction for BAM/SAM input:
     /// BAM stores raw Phred values which the reader converts to ASCII by
     /// adding 33, and SAM quality strings are Phred+33 by specification.
-    pub fn sanger() -> Self {
-        PhredEncoding {
-            name: "Sanger / Illumina 1.9",
-            offset: SANGER_ENCODING_OFFSET,
-        }
-    }
+    pub const SANGER: PhredEncoding = PhredEncoding {
+        name: "Sanger / Illumina 1.9",
+        offset: SANGER_ENCODING_OFFSET,
+    };
 }
 
 /// Resolve the quality encoding for a data source.
@@ -54,10 +52,7 @@ pub fn detect(lowest_char: u8) -> Result<PhredEncoding, String> {
             lowest_char as char, lowest_char
         ))
     } else if lowest_char < 64 {
-        Ok(PhredEncoding {
-            name: "Sanger / Illumina 1.9",
-            offset: SANGER_ENCODING_OFFSET,
-        })
+        Ok(PhredEncoding::SANGER)
     } else if lowest_char == ILLUMINA_1_3_ENCODING_OFFSET + 1 {
         // Java checks `== 65` (offset 64 + 1) specifically for Illumina 1.3,
         // which allowed quality value 1 (ASCII 65). From v1.5 onward the minimum was 2.
@@ -134,7 +129,7 @@ mod tests {
     fn test_resolve_known_encoding_skips_detection() {
         // A lowest char of 'I' (73, Q40 in Phred+33) would misdetect as
         // Illumina 1.5, but a known encoding must take precedence.
-        let enc = resolve(Some(PhredEncoding::sanger()), b'I').unwrap();
+        let enc = resolve(Some(PhredEncoding::SANGER), b'I').unwrap();
         assert_eq!(enc.name, "Sanger / Illumina 1.9");
         assert_eq!(enc.offset, 33);
     }

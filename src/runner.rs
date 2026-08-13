@@ -169,17 +169,16 @@ fn process_group(
     // Create module instances
     let mut modules = modules::create_modules(config, limits);
 
-    // Set the filename on all modules (BasicStats uses it for the report)
-    for module in modules.iter_mut() {
-        module.set_filename(&file_display_name);
-    }
-
     // If the input format specifies the quality encoding (BAM/SAM are
     // Phred+33 by construction), pass it to the modules so they don't
     // infer it from the lowest quality character. Inference misdetects
     // Illumina 1.5 when the data contains no base below Q31 (issue #6).
-    if let Some(encoding) = seq_file.known_phred_encoding() {
-        for module in modules.iter_mut() {
+    let known_encoding = seq_file.known_phred_encoding();
+
+    // Set the filename on all modules (BasicStats uses it for the report)
+    for module in modules.iter_mut() {
+        module.set_filename(&file_display_name);
+        if let Some(encoding) = known_encoding {
             module.set_phred_encoding(encoding);
         }
     }

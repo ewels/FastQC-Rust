@@ -24,8 +24,7 @@ pub struct PerTileQualityScores {
     nogroup: bool,
     expgroup: bool,
     min_length: usize,
-    // Encoding specified by the input format (BAM/SAM), if any.
-    // When set, it is used directly instead of detecting from the lowest char.
+    // Set by QCModule::set_phred_encoding; see the trait docs.
     known_encoding: Option<phred::PhredEncoding>,
     limits: Limits,
 }
@@ -58,10 +57,10 @@ impl PerTileQualityScores {
             .flat_map(|v| v.iter())
             .collect();
         let (min_char, _max_char) = quality_count::calculate_offsets(all_counts);
-        // If no quality data, default to Sanger offset (33).
+        // If no quality data, default to the Sanger offset.
         let offset = phred::resolve(self.known_encoding, min_char)
             .map(|e| e.offset)
-            .unwrap_or(33);
+            .unwrap_or(phred::PhredEncoding::SANGER.offset);
 
         let groups = BaseGroup::make_base_groups(
             self.current_length,

@@ -22,8 +22,7 @@ pub struct PerSequenceQualityScores {
     average_score_counts: [u64; MAX_QUALITY_SCORE],
     has_data: bool,
     lowest_char: u8,
-    // Encoding specified by the input format (BAM/SAM), if any.
-    // When set, it is used directly instead of detecting from lowest_char.
+    // Set by QCModule::set_phred_encoding; see the trait docs.
     known_encoding: Option<phred::PhredEncoding>,
     limits: Limits,
 }

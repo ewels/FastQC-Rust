@@ -24,8 +24,7 @@ pub struct BasicStats {
     // Java initialises lowestChar to 126 (char), which is the highest
     // printable ASCII. We use Option to represent "no quality chars seen yet".
     lowest_char: u8,
-    // Encoding specified by the input format (BAM/SAM), if any.
-    // When set, it is reported directly instead of detecting from lowest_char.
+    // Set by QCModule::set_phred_encoding; see the trait docs.
     known_encoding: Option<phred::PhredEncoding>,
     file_type: Option<String>,
 }

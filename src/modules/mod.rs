@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::config::{FastQCConfig, Limits, LimitsExt};
 use crate::sequence::Sequence;
+use crate::utils::phred::PhredEncoding;
 
 /// Status of a QC module after analysis, matching Java FastQC's pass/warn/fail icons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,7 +65,7 @@ pub trait QCModule: Send {
     /// Modules that would otherwise infer the encoding from the lowest quality
     /// character use this instead; other modules ignore it. Never called for
     /// formats like FASTQ where the encoding must be inferred.
-    fn set_phred_encoding(&mut self, _encoding: crate::utils::phred::PhredEncoding) {}
+    fn set_phred_encoding(&mut self, _encoding: PhredEncoding) {}
 
     /// Finalize calculations after all sequences have been processed.
     ///

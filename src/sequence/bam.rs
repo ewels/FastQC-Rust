@@ -14,6 +14,7 @@ use noodles::sam::alignment::record::Sequence as _;
 
 use super::{Sequence, SequenceFile};
 use crate::utils::dna::reverse_complement;
+use crate::utils::phred::PhredEncoding;
 
 // ---------------------------------------------------------------------------
 // Reader abstraction over BAM and SAM formats
@@ -355,8 +356,8 @@ impl SequenceFile for BAMFile {
     /// adding 33, and SAM quality strings are Phred+33 by specification.
     /// Reporting this lets downstream modules skip lowest-char detection,
     /// which would misdetect Illumina 1.5 for data with no base below Q31.
-    fn known_phred_encoding(&self) -> Option<crate::utils::phred::PhredEncoding> {
-        Some(crate::utils::phred::PhredEncoding::sanger())
+    fn known_phred_encoding(&self) -> Option<PhredEncoding> {
+        Some(PhredEncoding::SANGER)
     }
 
     /// Java tracks progress using the raw FileInputStream position

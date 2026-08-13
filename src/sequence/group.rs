@@ -66,23 +66,6 @@ impl SequenceFile for SequenceFileGroup {
         }
     }
 
-    fn known_phred_encoding(&self) -> Option<crate::utils::phred::PhredEncoding> {
-        // The encoding is only known for the group if every member file
-        // specifies the same one. In practice CASAVA groups are always
-        // FASTQ, so this returns None, but delegating keeps the group
-        // faithful to its members.
-        let first = self.files.first()?.known_phred_encoding()?;
-        if self
-            .files
-            .iter()
-            .all(|f| f.known_phred_encoding() == Some(first))
-        {
-            Some(first)
-        } else {
-            None
-        }
-    }
-
     fn percent_complete(&self) -> f64 {
         if self.files.is_empty() {
             return 100.0;
