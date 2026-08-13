@@ -7,6 +7,8 @@ pub mod group;
 pub use bam::open_sequence_file;
 pub use group::SequenceFileGroup;
 
+use crate::utils::phred::PhredEncoding;
+
 /// A single sequence record with ID, bases, quality scores, and filter status.
 ///
 /// Mirrors `Sequence.Sequence` in Java. The `sequence` field stores
@@ -66,6 +68,17 @@ pub trait SequenceFile: Send {
 
     /// Whether this file contains colorspace data (SOLiD).
     fn is_colorspace(&self) -> bool;
+
+    /// The quality encoding of this file, if the format specifies it.
+    ///
+    /// FASTQ carries no encoding information, so the default is `None` and
+    /// the encoding is inferred downstream from the lowest observed quality
+    /// character. BAM/SAM override this: their quality data is Phred+33 by
+    /// construction, so inference would be guessing at a known answer (and
+    /// guesses wrong when no base is below Q31).
+    fn known_phred_encoding(&self) -> Option<PhredEncoding> {
+        None
+    }
 
     /// Estimated percentage complete (0.0 - 100.0), for progress display.
     fn percent_complete(&self) -> f64;

@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::config::{FastQCConfig, Limits, LimitsExt};
 use crate::sequence::Sequence;
+use crate::utils::phred::PhredEncoding;
 
 /// Status of a QC module after analysis, matching Java FastQC's pass/warn/fail icons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,6 +59,13 @@ pub trait QCModule: Send {
     /// BasicStats uses this to display the filename in the report.
     /// Other modules ignore it.
     fn set_filename(&mut self, _name: &str) {}
+
+    /// Tell the module the quality encoding specified by the input format,
+    /// when there is one (BAM/SAM, where quality is Phred+33 by construction).
+    /// Modules that would otherwise infer the encoding from the lowest quality
+    /// character use this instead; other modules ignore it. Never called for
+    /// formats like FASTQ where the encoding must be inferred.
+    fn set_phred_encoding(&mut self, _encoding: PhredEncoding) {}
 
     /// Finalize calculations after all sequences have been processed.
     ///

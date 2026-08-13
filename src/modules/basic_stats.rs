@@ -24,6 +24,8 @@ pub struct BasicStats {
     // Java initialises lowestChar to 126 (char), which is the highest
     // printable ASCII. We use Option to represent "no quality chars seen yet".
     lowest_char: u8,
+    // Set by QCModule::set_phred_encoding; see the trait docs.
+    known_encoding: Option<phred::PhredEncoding>,
     file_type: Option<String>,
 }
 
@@ -43,6 +45,7 @@ impl BasicStats {
             n_count: 0,
             // Java starts at 126 (char), we mirror that
             lowest_char: 126,
+            known_encoding: None,
             file_type: None,
         }
     }
@@ -156,6 +159,10 @@ impl QCModule for BasicStats {
         self.set_file_name(name);
     }
 
+    fn set_phred_encoding(&mut self, encoding: phred::PhredEncoding) {
+        self.known_encoding = Some(encoding);
+    }
+
     fn name(&self) -> &str {
         "Basic Statistics"
     }
@@ -209,8 +216,9 @@ impl QCModule for BasicStats {
         )?;
 
         // Row 2: Encoding
-        // Uses PhredEncoding.getFastQEncodingOffset(lowestChar)
-        let encoding_name = phred::detect(self.lowest_char)
+        // Uses PhredEncoding.getFastQEncodingOffset(lowestChar), unless the
+        // input format already specifies the encoding (BAM/SAM).
+        let encoding_name = phred::resolve(self.known_encoding, self.lowest_char)
             .map(|e| e.name.to_string())
             .unwrap_or_else(|_| "Unknown".to_string());
         writeln!(writer, "Encoding\t{}", encoding_name)?;

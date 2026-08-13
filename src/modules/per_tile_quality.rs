@@ -24,6 +24,8 @@ pub struct PerTileQualityScores {
     nogroup: bool,
     expgroup: bool,
     min_length: usize,
+    // Set by QCModule::set_phred_encoding; see the trait docs.
+    known_encoding: Option<phred::PhredEncoding>,
     limits: Limits,
 }
 
@@ -38,6 +40,7 @@ impl PerTileQualityScores {
             nogroup,
             expgroup,
             min_length,
+            known_encoding: None,
             limits: limits.clone(),
         }
     }
@@ -54,8 +57,10 @@ impl PerTileQualityScores {
             .flat_map(|v| v.iter())
             .collect();
         let (min_char, _max_char) = quality_count::calculate_offsets(all_counts);
-        // If no quality data, default to Sanger offset (33).
-        let offset = phred::detect(min_char).map(|e| e.offset).unwrap_or(33);
+        // If no quality data, default to the Sanger offset.
+        let offset = phred::resolve(self.known_encoding, min_char)
+            .map(|e| e.offset)
+            .unwrap_or(phred::PhredEncoding::SANGER.offset);
 
         let groups = BaseGroup::make_base_groups(
             self.current_length,
@@ -238,6 +243,10 @@ impl QCModule for PerTileQualityScores {
         for (i, &q) in qual.iter().enumerate() {
             quality_counts[i].add_value(q);
         }
+    }
+
+    fn set_phred_encoding(&mut self, encoding: phred::PhredEncoding) {
+        self.known_encoding = Some(encoding);
     }
 
     fn name(&self) -> &str {

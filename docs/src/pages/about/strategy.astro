@@ -27,10 +27,13 @@ import Base from '../../layouts/Base.astro';
       See the <a href="../equivalence/">equivalence report</a> for details.
     </p>
     <p style="color: var(--ink-muted)">
-      The only known differences are in chart rendering: Rust bundles
+      The only known differences are in chart rendering — Rust bundles
       <a href="https://github.com/liberationfonts/liberation-fonts">Liberation Sans</a>
       instead of system Arial, and uses resvg + tiny-skia instead of Java2D for PNG output,
-      so antialiasing and text positions differ slightly.
+      so antialiasing and text positions differ slightly — plus deliberate bug fixes
+      documented in the <a href="https://github.com/ewels/FastQC-Rust/blob/main/CHANGELOG.md">changelog</a>,
+      such as using the specified Phred+33 encoding for BAM/SAM input instead of inferring it
+      (<a href="https://github.com/ewels/FastQC-Rust/issues/6">#6</a>).
     </p>
   </section>
 
@@ -44,6 +47,7 @@ import Base from '../../layouts/Base.astro';
       <li><a href="https://github.com/s-andrews/FastQC/pull/185">#185</a> — Bundle Liberation Sans font (merged). Eliminates system font dependency and aligns chart text metrics between Java and Rust.</li>
       <li><a href="https://github.com/s-andrews/FastQC/pull/186">#186</a> — Update integration test snapshots for the bundled font.</li>
       <li><a href="https://github.com/s-andrews/FastQC/pull/187">#187</a> — Trim trailing empty rows from Adapter Content when <code>--min_length</code> is used.</li>
+      <li><a href="https://github.com/s-andrews/FastQC/pull/210">#210</a> — Use the Phred+33 encoding fixed by the BAM/SAM format instead of inferring it from the data (issue <a href="https://github.com/s-andrews/FastQC/issues/209">#209</a>).</li>
     </ul>
     <p style="color: var(--ink-muted); margin-top: 1rem">
       Features ported from upstream PRs (not yet merged):

@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.2dev
+
+> [!NOTE]
+> Tracking: FastQC [v0.12.1](https://github.com/s-andrews/FastQC/releases/tag/v0.12.1)
+
+### Bug fixes
+
+- Use Sanger / Illumina 1.9 encoding for BAM/SAM input instead of inferring it from the lowest quality character ([#6](https://github.com/ewels/FastQC-Rust/issues/6), [#10](https://github.com/ewels/FastQC-Rust/pull/10)). BAM/SAM quality is Phred+33 by specification, so there is nothing to infer; inference misdetected Illumina 1.5 for datasets with no base below Q31 and reported every quality score 31 too low. **This is a deliberate divergence from Java FastQC v0.12.1**, which has the same bug; FASTQ behaviour is unchanged (the format is genuinely ambiguous there, and detection matches Java exactly). Reported upstream as [s-andrews/FastQC#209](https://github.com/s-andrews/FastQC/issues/209), with a matching Java fix submitted as [s-andrews/FastQC#210](https://github.com/s-andrews/FastQC/pull/210).
+
 ## v1.0.1
 
 > [!NOTE]

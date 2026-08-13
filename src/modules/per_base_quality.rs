@@ -17,6 +17,8 @@ pub struct PerBaseQualityScores {
     nogroup: bool,
     expgroup: bool,
     min_length: usize,
+    // Set by QCModule::set_phred_encoding; see the trait docs.
+    known_encoding: Option<phred::PhredEncoding>,
     limits: Limits,
 }
 
@@ -27,14 +29,17 @@ impl PerBaseQualityScores {
             nogroup,
             expgroup,
             min_length,
+            known_encoding: None,
             limits: limits.clone(),
         }
     }
 
     fn calculate(&self) -> CalculatedData {
         let (min_char, _max_char) = quality_count::calculate_offsets(&self.quality_counts);
-        // If no quality data, default to Sanger offset (33).
-        let offset = phred::detect(min_char).map(|e| e.offset).unwrap_or(33);
+        // If no quality data, default to the Sanger offset.
+        let offset = phred::resolve(self.known_encoding, min_char)
+            .map(|e| e.offset)
+            .unwrap_or(phred::PhredEncoding::SANGER.offset);
 
         let groups = BaseGroup::make_base_groups(
             self.quality_counts.len(),
@@ -128,9 +133,10 @@ impl PerBaseQualityScores {
     fn build_chart_svg(&self) -> String {
         let data = self.calculate();
         let (min_char, max_char) = quality_count::calculate_offsets(&self.quality_counts);
-        let (offset, encoding_name) = phred::detect(min_char)
-            .map(|e| (e.offset, e.name))
-            .unwrap_or((33, "Sanger / Illumina 1.9"));
+        // If no quality data, default to Sanger.
+        let encoding =
+            phred::resolve(self.known_encoding, min_char).unwrap_or(phred::PhredEncoding::SANGER);
+        let (offset, encoding_name) = (encoding.offset, encoding.name);
 
         // The chart title includes the encoding scheme name
         let title = format!(
@@ -177,6 +183,10 @@ impl QCModule for PerBaseQualityScores {
         for (i, &q) in qual.iter().enumerate() {
             self.quality_counts[i].add_value(q);
         }
+    }
+
+    fn set_phred_encoding(&mut self, encoding: phred::PhredEncoding) {
+        self.known_encoding = Some(encoding);
     }
 
     fn name(&self) -> &str {
