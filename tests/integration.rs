@@ -181,6 +181,109 @@ fn test_html_report_generation() {
     assert!(html.contains("</html>"), "Should end with closing html tag");
 }
 
+/// Build the read data for the encoding tests: uniform Q40 ('I' in Phred+33)
+/// with no base below Q31, which the lowest-char heuristic would misdetect
+/// as Illumina 1.5 (issue #6).
+fn high_quality_reads() -> Vec<(String, String, String)> {
+    (0..150)
+        .map(|i| {
+            (
+                format!("read{}", i),
+                "ACGTACGTACGTACGTACGTACGTACGTACGTAC".to_string(), // 34 bp
+                "I".repeat(34),                                   // Q40 throughout
+            )
+        })
+        .collect()
+}
+
+/// Run the full pipeline via runner::run with --extract and return fastqc_data.txt.
+fn run_pipeline_extracted(input_path: &Path, tmp_dir: &Path) -> String {
+    let config = FastQCConfig {
+        output_dir: Some(tmp_dir.to_path_buf()),
+        do_unzip: Some(true),
+        quiet: true,
+        threads: 1,
+        ..FastQCConfig::default()
+    };
+
+    fastqc_rust::runner::run(&config, &[input_path.to_path_buf()]).expect("Pipeline failed");
+
+    let base = input_path
+        .file_stem()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    std::fs::read_to_string(tmp_dir.join(format!("{}_fastqc", base)).join("fastqc_data.txt"))
+        .expect("Failed to read extracted fastqc_data.txt")
+}
+
+#[test]
+fn test_sam_input_uses_sanger_encoding() {
+    // SAM/BAM quality is Phred+33 by construction, so the encoding must be
+    // reported as Sanger even when no base is below Q31 — the lowest-char
+    // heuristic would misdetect Illumina 1.5 and report every score 31 too
+    // low (issue #6).
+    let tmp_dir = std::env::temp_dir().join("fastqc_test_sam_encoding");
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+
+    let sam_path = tmp_dir.join("high_q.sam");
+    let mut sam = String::from("@HD\tVN:1.6\n");
+    for (name, seq, qual) in high_quality_reads() {
+        sam.push_str(&format!(
+            "{}\t4\t*\t0\t0\t*\t*\t0\t0\t{}\t{}\n",
+            name, seq, qual
+        ));
+    }
+    std::fs::write(&sam_path, sam).unwrap();
+
+    let data = run_pipeline_extracted(&sam_path, &tmp_dir);
+
+    assert!(
+        data.contains("Encoding\tSanger / Illumina 1.9"),
+        "SAM input must report Sanger encoding, got:\n{}",
+        data.lines()
+            .find(|l| l.starts_with("Encoding"))
+            .unwrap_or("(no Encoding line)")
+    );
+    // Per-base mean must be 40.0, not 9.0 (= 40 - 31, the Illumina 1.5 offset error)
+    assert!(
+        data.contains("1\t40.0\t"),
+        "Per-base quality for base 1 should have mean 40.0"
+    );
+    // Per-sequence quality distribution: all 150 reads average Q40
+    assert!(
+        data.contains("40\t150.0"),
+        "Per-sequence quality should place all 150 reads at Q40"
+    );
+
+    std::fs::remove_dir_all(&tmp_dir).ok();
+}
+
+#[test]
+fn test_fastq_input_keeps_detection_heuristic() {
+    // For FASTQ the encoding genuinely is ambiguous, so the lowest-char
+    // heuristic must be kept to match Java FastQC: uniform Q40 data
+    // misdetects as Illumina 1.5 through the FASTQ path.
+    let tmp_dir = std::env::temp_dir().join("fastqc_test_fastq_encoding");
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+
+    let fastq_path = tmp_dir.join("high_q.fastq");
+    let mut fastq = String::new();
+    for (name, seq, qual) in high_quality_reads() {
+        fastq.push_str(&format!("@{}\n{}\n+\n{}\n", name, seq, qual));
+    }
+    std::fs::write(&fastq_path, fastq).unwrap();
+
+    let data = run_pipeline_extracted(&fastq_path, &tmp_dir);
+
+    assert!(
+        data.contains("Encoding\tIllumina 1.5"),
+        "FASTQ input must keep Java's detection heuristic"
+    );
+
+    std::fs::remove_dir_all(&tmp_dir).ok();
+}
+
 #[test]
 fn test_zip_archive_structure() {
     let config = FastQCConfig::default();

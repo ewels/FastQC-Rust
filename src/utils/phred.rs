@@ -2,7 +2,7 @@
 ///
 /// Replicates the logic from `Sequence/QualityEncoding/PhredEncoding.java`.
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PhredEncoding {
     pub name: &'static str,
     pub offset: u8,
@@ -12,6 +12,33 @@ pub struct PhredEncoding {
 // ILLUMINA_1_3_ENCODING_OFFSET fields exactly.
 const SANGER_ENCODING_OFFSET: u8 = 33;
 const ILLUMINA_1_3_ENCODING_OFFSET: u8 = 64;
+
+impl PhredEncoding {
+    /// The Sanger / Illumina 1.9 (Phred+33) encoding.
+    ///
+    /// This is the encoding produced by construction for BAM/SAM input:
+    /// BAM stores raw Phred values which the reader converts to ASCII by
+    /// adding 33, and SAM quality strings are Phred+33 by specification.
+    pub fn sanger() -> Self {
+        PhredEncoding {
+            name: "Sanger / Illumina 1.9",
+            offset: SANGER_ENCODING_OFFSET,
+        }
+    }
+}
+
+/// Resolve the quality encoding for a data source.
+///
+/// When the file format specifies the encoding (`known` is `Some`, e.g.
+/// BAM/SAM where quality is Phred+33 by construction), it is used directly.
+/// Otherwise the encoding is inferred from the lowest observed quality
+/// character via [`detect`], as for FASTQ where the format is ambiguous.
+pub fn resolve(known: Option<PhredEncoding>, lowest_char: u8) -> Result<PhredEncoding, String> {
+    match known {
+        Some(encoding) => Ok(encoding),
+        None => detect(lowest_char),
+    }
+}
 
 /// Detect the Phred encoding from the lowest ASCII character seen in quality strings.
 ///
@@ -101,5 +128,21 @@ mod tests {
     fn test_error_above_126() {
         let err = detect(127).unwrap_err();
         assert!(err.contains("> 126"));
+    }
+
+    #[test]
+    fn test_resolve_known_encoding_skips_detection() {
+        // A lowest char of 'I' (73, Q40 in Phred+33) would misdetect as
+        // Illumina 1.5, but a known encoding must take precedence.
+        let enc = resolve(Some(PhredEncoding::sanger()), b'I').unwrap();
+        assert_eq!(enc.name, "Sanger / Illumina 1.9");
+        assert_eq!(enc.offset, 33);
+    }
+
+    #[test]
+    fn test_resolve_unknown_falls_back_to_detection() {
+        let enc = resolve(None, b'I').unwrap();
+        assert_eq!(enc.name, "Illumina 1.5");
+        assert_eq!(enc.offset, 64);
     }
 }

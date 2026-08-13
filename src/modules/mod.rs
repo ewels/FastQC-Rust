@@ -59,6 +59,13 @@ pub trait QCModule: Send {
     /// Other modules ignore it.
     fn set_filename(&mut self, _name: &str) {}
 
+    /// Tell the module the quality encoding specified by the input format,
+    /// when there is one (BAM/SAM, where quality is Phred+33 by construction).
+    /// Modules that would otherwise infer the encoding from the lowest quality
+    /// character use this instead; other modules ignore it. Never called for
+    /// formats like FASTQ where the encoding must be inferred.
+    fn set_phred_encoding(&mut self, _encoding: crate::utils::phred::PhredEncoding) {}
+
     /// Finalize calculations after all sequences have been processed.
     ///
     /// In Java, modules lazily compute results in synchronized

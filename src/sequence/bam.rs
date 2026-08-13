@@ -350,6 +350,15 @@ impl SequenceFile for BAMFile {
         false
     }
 
+    /// BAM/SAM quality is Phred+33 by construction, so the encoding is known:
+    /// BAM stores raw Phred values (0-93) that `read_next()` converts by
+    /// adding 33, and SAM quality strings are Phred+33 by specification.
+    /// Reporting this lets downstream modules skip lowest-char detection,
+    /// which would misdetect Illumina 1.5 for data with no base below Q31.
+    fn known_phred_encoding(&self) -> Option<crate::utils::phred::PhredEncoding> {
+        Some(crate::utils::phred::PhredEncoding::sanger())
+    }
+
     /// Java tracks progress using the raw FileInputStream position
     /// divided by file size. For BAM files, this gives a rough estimate since
     /// the underlying file is BGZF compressed. We estimate using the record size

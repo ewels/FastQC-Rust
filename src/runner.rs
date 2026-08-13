@@ -174,6 +174,16 @@ fn process_group(
         module.set_filename(&file_display_name);
     }
 
+    // If the input format specifies the quality encoding (BAM/SAM are
+    // Phred+33 by construction), pass it to the modules so they don't
+    // infer it from the lowest quality character. Inference misdetects
+    // Illumina 1.5 when the data contains no base below Q31 (issue #6).
+    if let Some(encoding) = seq_file.known_phred_encoding() {
+        for module in modules.iter_mut() {
+            module.set_phred_encoding(encoding);
+        }
+    }
+
     // Process all sequences through all modules
     // Matches AnalysisRunner.java:64-126
     let mut sequence_count: u64 = 0;

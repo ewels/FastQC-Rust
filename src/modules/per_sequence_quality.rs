@@ -22,6 +22,9 @@ pub struct PerSequenceQualityScores {
     average_score_counts: [u64; MAX_QUALITY_SCORE],
     has_data: bool,
     lowest_char: u8,
+    // Encoding specified by the input format (BAM/SAM), if any.
+    // When set, it is used directly instead of detecting from lowest_char.
+    known_encoding: Option<phred::PhredEncoding>,
     limits: Limits,
 }
 
@@ -32,6 +35,7 @@ impl PerSequenceQualityScores {
             has_data: false,
             // Java initialises lowestChar to 126
             lowest_char: 126,
+            known_encoding: None,
             limits: limits.clone(),
         }
     }
@@ -41,7 +45,7 @@ impl PerSequenceQualityScores {
             return None;
         }
 
-        let encoding = phred::detect(self.lowest_char).unwrap();
+        let encoding = phred::resolve(self.known_encoding, self.lowest_char).unwrap();
 
         // Find the range of scores with non-zero counts
         let mut range_start: Option<usize> = None;
@@ -140,6 +144,10 @@ impl QCModule for PerSequenceQualityScores {
             self.average_score_counts[average_quality as usize] += 1;
             self.has_data = true;
         }
+    }
+
+    fn set_phred_encoding(&mut self, encoding: phred::PhredEncoding) {
+        self.known_encoding = Some(encoding);
     }
 
     fn name(&self) -> &str {
