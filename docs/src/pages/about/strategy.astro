@@ -27,10 +27,13 @@ import Base from '../../layouts/Base.astro';
       See the <a href="../equivalence/">equivalence report</a> for details.
     </p>
     <p style="color: var(--ink-muted)">
-      The only known differences are in chart rendering: Rust bundles
+      The only known differences are in chart rendering — Rust bundles
       <a href="https://github.com/liberationfonts/liberation-fonts">Liberation Sans</a>
       instead of system Arial, and uses resvg + tiny-skia instead of Java2D for PNG output,
-      so antialiasing and text positions differ slightly.
+      so antialiasing and text positions differ slightly — plus deliberate bug fixes
+      documented in the <a href="https://github.com/ewels/FastQC-Rust/blob/main/CHANGELOG.md">changelog</a>,
+      such as using the specified Phred+33 encoding for BAM/SAM input instead of inferring it
+      (<a href="https://github.com/ewels/FastQC-Rust/issues/6">#6</a>).
     </p>
   </section>
 
