@@ -213,8 +213,12 @@ fn run_pipeline_extracted(input_path: &Path, tmp_dir: &Path) -> String {
         .unwrap()
         .to_string_lossy()
         .into_owned();
-    std::fs::read_to_string(tmp_dir.join(format!("{}_fastqc", base)).join("fastqc_data.txt"))
-        .expect("Failed to read extracted fastqc_data.txt")
+    std::fs::read_to_string(
+        tmp_dir
+            .join(format!("{}_fastqc", base))
+            .join("fastqc_data.txt"),
+    )
+    .expect("Failed to read extracted fastqc_data.txt")
 }
 
 #[test]

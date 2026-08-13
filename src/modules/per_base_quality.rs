@@ -134,8 +134,8 @@ impl PerBaseQualityScores {
         let data = self.calculate();
         let (min_char, max_char) = quality_count::calculate_offsets(&self.quality_counts);
         // If no quality data, default to Sanger.
-        let encoding = phred::resolve(self.known_encoding, min_char)
-            .unwrap_or(phred::PhredEncoding::SANGER);
+        let encoding =
+            phred::resolve(self.known_encoding, min_char).unwrap_or(phred::PhredEncoding::SANGER);
         let (offset, encoding_name) = (encoding.offset, encoding.name);
 
         // The chart title includes the encoding scheme name
