@@ -1,0 +1,97 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="800" height="600" version="1.1" xmlns="http://www.w3.org/2000/svg">
+<style>text{font-family:Arial}</style>
+<rect width="800" height="600" x="0" y="0" fill="rgb(238,238,238)"/>
+<rect width="800" height="600" x="0" y="0" fill="rgb(255,255,255)"/>
+<text x="2" y="566" fill="rgb(0,0,0)" font-size="12">0</text>
+<text x="303" y="30" fill="rgb(0,0,0)" font-size="12">GC distribution over all sequences</text>
+<line x1="13" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="2"/>
+<line x1="13" y1="560" x2="13" y2="40" stroke="rgb(0,0,0)" stroke-width="2"/>
+<text x="341" y="595" fill="rgb(0,0,0)" font-size="12">Mean GC content (%)</text>
+<text x="12" y="575" fill="rgb(0,0,0)" font-size="12">0</text>
+<rect width="7" height="520" x="20" y="40" fill="rgb(230,230,230)"/>
+<text x="26" y="575" fill="rgb(0,0,0)" font-size="12">2</text>
+<rect width="7" height="520" x="34" y="40" fill="rgb(230,230,230)"/>
+<text x="40" y="575" fill="rgb(0,0,0)" font-size="12">4</text>
+<rect width="7" height="520" x="48" y="40" fill="rgb(230,230,230)"/>
+<text x="54" y="575" fill="rgb(0,0,0)" font-size="12">6</text>
+<rect width="7" height="520" x="62" y="40" fill="rgb(230,230,230)"/>
+<text x="68" y="575" fill="rgb(0,0,0)" font-size="12">8</text>
+<rect width="7" height="520" x="76" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="90" y="40" fill="rgb(230,230,230)"/>
+<text x="85" y="575" fill="rgb(0,0,0)" font-size="12">11</text>
+<rect width="7" height="520" x="104" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="118" y="40" fill="rgb(230,230,230)"/>
+<text x="113" y="575" fill="rgb(0,0,0)" font-size="12">15</text>
+<rect width="7" height="520" x="132" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="146" y="40" fill="rgb(230,230,230)"/>
+<text x="141" y="575" fill="rgb(0,0,0)" font-size="12">19</text>
+<rect width="7" height="520" x="160" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="174" y="40" fill="rgb(230,230,230)"/>
+<text x="169" y="575" fill="rgb(0,0,0)" font-size="12">23</text>
+<rect width="7" height="520" x="188" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="202" y="40" fill="rgb(230,230,230)"/>
+<text x="197" y="575" fill="rgb(0,0,0)" font-size="12">27</text>
+<rect width="7" height="520" x="216" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="230" y="40" fill="rgb(230,230,230)"/>
+<text x="225" y="575" fill="rgb(0,0,0)" font-size="12">31</text>
+<rect width="7" height="520" x="244" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="258" y="40" fill="rgb(230,230,230)"/>
+<text x="253" y="575" fill="rgb(0,0,0)" font-size="12">35</text>
+<rect width="7" height="520" x="272" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="286" y="40" fill="rgb(230,230,230)"/>
+<text x="281" y="575" fill="rgb(0,0,0)" font-size="12">39</text>
+<rect width="7" height="520" x="300" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="314" y="40" fill="rgb(230,230,230)"/>
+<text x="309" y="575" fill="rgb(0,0,0)" font-size="12">43</text>
+<rect width="7" height="520" x="328" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="342" y="40" fill="rgb(230,230,230)"/>
+<text x="337" y="575" fill="rgb(0,0,0)" font-size="12">47</text>
+<rect width="7" height="520" x="356" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="370" y="40" fill="rgb(230,230,230)"/>
+<text x="365" y="575" fill="rgb(0,0,0)" font-size="12">51</text>
+<rect width="7" height="520" x="384" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="398" y="40" fill="rgb(230,230,230)"/>
+<text x="393" y="575" fill="rgb(0,0,0)" font-size="12">55</text>
+<rect width="7" height="520" x="412" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="426" y="40" fill="rgb(230,230,230)"/>
+<text x="421" y="575" fill="rgb(0,0,0)" font-size="12">59</text>
+<rect width="7" height="520" x="440" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="454" y="40" fill="rgb(230,230,230)"/>
+<text x="449" y="575" fill="rgb(0,0,0)" font-size="12">63</text>
+<rect width="7" height="520" x="468" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="482" y="40" fill="rgb(230,230,230)"/>
+<text x="477" y="575" fill="rgb(0,0,0)" font-size="12">67</text>
+<rect width="7" height="520" x="496" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="510" y="40" fill="rgb(230,230,230)"/>
+<text x="505" y="575" fill="rgb(0,0,0)" font-size="12">71</text>
+<rect width="7" height="520" x="524" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="538" y="40" fill="rgb(230,230,230)"/>
+<text x="533" y="575" fill="rgb(0,0,0)" font-size="12">75</text>
+<rect width="7" height="520" x="552" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="566" y="40" fill="rgb(230,230,230)"/>
+<text x="561" y="575" fill="rgb(0,0,0)" font-size="12">79</text>
+<rect width="7" height="520" x="580" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="594" y="40" fill="rgb(230,230,230)"/>
+<text x="589" y="575" fill="rgb(0,0,0)" font-size="12">83</text>
+<rect width="7" height="520" x="608" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="622" y="40" fill="rgb(230,230,230)"/>
+<text x="617" y="575" fill="rgb(0,0,0)" font-size="12">87</text>
+<rect width="7" height="520" x="636" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="650" y="40" fill="rgb(230,230,230)"/>
+<text x="645" y="575" fill="rgb(0,0,0)" font-size="12">91</text>
+<rect width="7" height="520" x="664" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="678" y="40" fill="rgb(230,230,230)"/>
+<text x="673" y="575" fill="rgb(0,0,0)" font-size="12">95</text>
+<rect width="7" height="520" x="692" y="40" fill="rgb(230,230,230)"/>
+<rect width="7" height="520" x="706" y="40" fill="rgb(230,230,230)"/>
+<text x="701" y="575" fill="rgb(0,0,0)" font-size="12">99</text>
+<line x1="13" y1="560" x2="790" y2="560" stroke="rgb(180,180,180)" stroke-width="2"/>
+<polyline points="16,560 23,560 30,560 37,560 44,560 51,560 58,560 65,560 72,560 79,560 86,560 93,560 100,560 107,560 114,560 121,560 128,560 135,560 142,560 149,560 156,560 163,560 170,560 177,560 184,560 191,560 198,560 205,560 212,560 219,560 226,560 233,560 240,560 247,560 254,560 261,560 268,560 275,560 282,560 289,560 296,560 303,560 310,560 317,560 324,560 331,560 338,560 345,560 352,560 359,560 366,560 373,560 380,560 387,560 394,560 401,560 408,560 415,560 422,560 429,560 436,560 443,560 450,560 457,560 464,560 471,560 478,560 485,560 492,560 499,560 506,560 513,560 520,560 527,560 534,560 541,560 548,560 555,560 562,560 569,560 576,560 583,560 590,560 597,560 604,560 611,560 618,560 625,560 632,560 639,560 646,560 653,560 660,560 667,560 674,560 681,560 688,560 695,560 702,560 709,560 716,560" stroke="rgb(136,34,85)" stroke-width="2" fill="none"/>
+<polyline points="16,560 23,560 30,560 37,560 44,560 51,560 58,560 65,560 72,560 79,560 86,560 93,560 100,560 107,560 114,560 121,560 128,560 135,560 142,560 149,560 156,560 163,560 170,560 177,560 184,560 191,560 198,560 205,560 212,560 219,560 226,560 233,560 240,560 247,560 254,560 261,560 268,560 275,560 282,560 289,560 296,560 303,560 310,560 317,560 324,560 331,560 338,560 345,560 352,560 359,560 366,560 373,560 380,560 387,560 394,560 401,560 408,560 415,560 422,560 429,560 436,560 443,560 450,560 457,560 464,560 471,560 478,560 485,560 492,560 499,560 506,560 513,560 520,560 527,560 534,560 541,560 548,560 555,560 562,560 569,560 576,560 583,560 590,560 597,560 604,560 611,560 618,560 625,560 632,560 639,560 646,560 653,560 660,560 667,560 674,560 681,560 688,560 695,560 702,560 709,560 716,560" stroke="rgb(51,34,136)" stroke-width="2" fill="none"/>
+<rect width="155" height="43" x="635" y="40" fill="rgb(255,255,255)"/>
+<rect width="155" height="43" x="635" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
+<text x="638" y="55" fill="rgb(136,34,85)" font-size="12" font-weight="bold">GC count per read</text>
+<text x="638" y="75" fill="rgb(51,34,136)" font-size="12" font-weight="bold">Theoretical Distribution</text>
+</svg>

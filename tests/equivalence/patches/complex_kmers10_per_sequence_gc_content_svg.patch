@@ -1,28 +1,22 @@
 --- java/Images/per_sequence_gc_content.svg
 +++ rust/Images/per_sequence_gc_content.svg
-@@ -10,10 +10,10 @@
- <text x="0" y="252" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">4</text>
- <text x="0" y="173" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">5</text>
- <text x="0" y="95" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">6</text>
--<text x="290" y="30" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">GC distribution over all sequences</text>
-+<text x="300" y="30" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">GC distribution over all sequences</text>
+@@ -14,7 +14,7 @@
+ <text x="300" y="30" fill="rgb(0,0,0)" font-size="12">GC distribution over all sequences</text>
  <line x1="10" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
  <line x1="10" y1="560" x2="10" y2="40" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
--<text x="330" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Mean GC content (%)</text>
-+<text x="350" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Mean GC content (%)</text>
- <text x="10" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">0</text>
- <rect width="10" height="520" x="20" y="40" style="fill:rgb(230,230,230);stroke:none"/>
- <text x="30" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">2</text>
-@@ -299,8 +299,8 @@
- <line x1="700" y1="560" x2="700" y2="560" stroke="rgb(51,34,136)" stroke-width="[SW]"/>
- <line x1="700" y1="560" x2="710" y2="560" stroke="rgb(51,34,136)" stroke-width="[SW]"/>
- <line x1="710" y1="560" x2="720" y2="560" stroke="rgb(51,34,136)" stroke-width="[SW]"/>
--<rect width="160" height="43" x="630" y="40" style="fill:rgb(255,255,255);stroke:none"/>
--<rect width="160" height="43" x="630" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
--<text x="630" y="55" fill="rgb(136,34,85)" font-family="[FONT]" font-size="12">GC count per read</text>
--<text x="630" y="75" fill="rgb(51,34,136)" font-family="[FONT]" font-size="12">Theoretical Distribution</text>
-+<rect width="150" height="43" x="640" y="40" style="fill:rgb(255,255,255);stroke:none"/>
-+<rect width="150" height="43" x="640" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
-+<text x="640" y="55" fill="rgb(136,34,85)" font-family="[FONT]" font-size="12">GC count per read</text>
-+<text x="640" y="75" fill="rgb(51,34,136)" font-family="[FONT]" font-size="12">Theoretical Distribution</text>
+-<text x="340" y="595" fill="rgb(0,0,0)" font-size="12">Mean GC content (%)</text>
++<text x="350" y="595" fill="rgb(0,0,0)" font-size="12">Mean GC content (%)</text>
+ <text x="10" y="575" fill="rgb(0,0,0)" font-size="12">0</text>
+ <rect width="10" height="520" x="20" y="40" fill="rgb(230,230,230)"/>
+ <text x="30" y="575" fill="rgb(0,0,0)" font-size="12">2</text>
+@@ -102,8 +102,8 @@
+ <line x1="10" y1="89" x2="790" y2="89" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <polyline points="16,560 23,560 30,560 37,560 44,560 51,560 58,560 65,560 72,560 79,560 86,560 93,560 100,560 107,560 114,560 121,560 128,560 135,560 142,560 149,560 156,560 163,560 170,560 177,560 184,560 191,560 198,560 205,560 212,560 219,560 226,560 233,560 240,560 247,560 254,560 261,560 268,560 275,560 282,560 289,560 296,560 303,560 310,560 317,560 324,560 331,560 338,560 345,364 352,167 359,167 366,167 373,167 380,167 387,364 394,560 401,560 408,560 415,560 422,560 429,560 436,560 443,560 450,560 457,560 464,560 471,560 478,560 485,560 492,560 499,560 506,560 513,560 520,560 527,560 534,560 541,560 548,560 555,560 562,560 569,560 576,560 583,560 590,560 597,560 604,560 611,560 618,560 625,560 632,560 639,560 646,560 653,560 660,560 667,560 674,560 681,560 688,560 695,560 702,560 709,560 716,560" stroke="rgb(136,34,85)" stroke-width="[SW]" fill="none"/>
+ <polyline points="16,560 23,560 30,560 37,560 44,560 51,560 58,560 65,560 72,560 79,560 86,560 93,560 100,560 107,560 114,560 121,560 128,560 135,560 142,560 149,560 156,560 163,560 170,560 177,560 184,560 191,560 198,560 205,560 212,560 219,560 226,560 233,560 240,560 247,560 254,560 261,560 268,560 275,560 282,560 289,560 296,560 303,560 310,560 317,560 324,558 331,549 338,515 345,429 352,278 359,114 366,40 373,114 380,278 387,429 394,515 401,549 408,558 415,560 422,560 429,560 436,560 443,560 450,560 457,560 464,560 471,560 478,560 485,560 492,560 499,560 506,560 513,560 520,560 527,560 534,560 541,560 548,560 555,560 562,560 569,560 576,560 583,560 590,560 597,560 604,560 611,560 618,560 625,560 632,560 639,560 646,560 653,560 660,560 667,560 674,560 681,560 688,560 695,560 702,560 709,560 716,560" stroke="rgb(51,34,136)" stroke-width="[SW]" fill="none"/>
+-<rect width="160" height="43" x="640" y="40" fill="rgb(255,255,255)"/>
+-<rect width="160" height="43" x="640" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
++<rect width="150" height="43" x="640" y="40" fill="rgb(255,255,255)"/>
++<rect width="150" height="43" x="640" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
+ <text x="640" y="55" fill="rgb(136,34,85)" font-size="12">GC count per read</text>
+ <text x="640" y="75" fill="rgb(51,34,136)" font-size="12">Theoretical Distribution</text>
  </svg>

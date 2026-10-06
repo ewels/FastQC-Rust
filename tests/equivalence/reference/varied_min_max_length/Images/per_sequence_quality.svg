@@ -1,0 +1,52 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="800" height="600" version="1.1" xmlns="http://www.w3.org/2000/svg">
+<style>text{font-family:Arial}</style>
+<rect width="800" height="600" x="0" y="0" fill="rgb(238,238,238)"/>
+<rect width="800" height="600" x="0" y="0" fill="rgb(255,255,255)"/>
+<text x="2" y="566" fill="rgb(0,0,0)" font-size="12">0</text>
+<text x="2" y="496" fill="rgb(0,0,0)" font-size="12">50</text>
+<text x="2" y="425" fill="rgb(0,0,0)" font-size="12">100</text>
+<text x="2" y="354" fill="rgb(0,0,0)" font-size="12">150</text>
+<text x="2" y="283" fill="rgb(0,0,0)" font-size="12">200</text>
+<text x="2" y="212" fill="rgb(0,0,0)" font-size="12">250</text>
+<text x="2" y="141" fill="rgb(0,0,0)" font-size="12">300</text>
+<text x="2" y="71" fill="rgb(0,0,0)" font-size="12">350</text>
+<text x="282" y="30" fill="rgb(0,0,0)" font-size="12">Quality score distribution over all sequences</text>
+<line x1="29" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="2"/>
+<line x1="29" y1="560" x2="29" y2="40" stroke="rgb(0,0,0)" stroke-width="2"/>
+<text x="293" y="595" fill="rgb(0,0,0)" font-size="12">Mean Sequence Quality (Phred Score)</text>
+<text x="48" y="575" fill="rgb(0,0,0)" font-size="12">15</text>
+<rect width="54" height="520" x="83" y="40" fill="rgb(230,230,230)"/>
+<text x="102" y="575" fill="rgb(0,0,0)" font-size="12">16</text>
+<text x="156" y="575" fill="rgb(0,0,0)" font-size="12">17</text>
+<rect width="54" height="520" x="191" y="40" fill="rgb(230,230,230)"/>
+<text x="210" y="575" fill="rgb(0,0,0)" font-size="12">18</text>
+<text x="264" y="575" fill="rgb(0,0,0)" font-size="12">19</text>
+<rect width="54" height="520" x="299" y="40" fill="rgb(230,230,230)"/>
+<text x="318" y="575" fill="rgb(0,0,0)" font-size="12">20</text>
+<text x="372" y="575" fill="rgb(0,0,0)" font-size="12">21</text>
+<rect width="54" height="520" x="407" y="40" fill="rgb(230,230,230)"/>
+<text x="426" y="575" fill="rgb(0,0,0)" font-size="12">22</text>
+<text x="480" y="575" fill="rgb(0,0,0)" font-size="12">23</text>
+<rect width="54" height="520" x="515" y="40" fill="rgb(230,230,230)"/>
+<text x="534" y="575" fill="rgb(0,0,0)" font-size="12">24</text>
+<text x="588" y="575" fill="rgb(0,0,0)" font-size="12">25</text>
+<rect width="54" height="520" x="623" y="40" fill="rgb(230,230,230)"/>
+<text x="642" y="575" fill="rgb(0,0,0)" font-size="12">26</text>
+<text x="696" y="575" fill="rgb(0,0,0)" font-size="12">27</text>
+<rect width="54" height="520" x="731" y="40" fill="rgb(230,230,230)"/>
+<text x="750" y="575" fill="rgb(0,0,0)" font-size="12">28</text>
+<line x1="29" y1="560" x2="790" y2="560" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="490" x2="790" y2="490" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="419" x2="790" y2="419" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="348" x2="790" y2="348" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="277" x2="790" y2="277" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="206" x2="790" y2="206" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="135" x2="790" y2="135" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="65" x2="790" y2="65" stroke="rgb(180,180,180)" stroke-width="2"/>
+<polyline points="56,555 110,543 164,509 218,392 272,232 326,59 380,40 434,223 488,432 542,507 596,542 650,558 704,560 758,559" stroke="rgb(136,34,85)" stroke-width="2" fill="none"/>
+<rect width="160" height="23" x="630" y="40" fill="rgb(255,255,255)"/>
+<rect width="160" height="23" x="630" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
+<text x="633" y="55" fill="rgb(136,34,85)" font-size="12" font-weight="bold">Average Quality per read</text>
+</svg>

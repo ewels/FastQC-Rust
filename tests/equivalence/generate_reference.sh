@@ -3,8 +3,10 @@
 #
 # Usage: ./generate_reference.sh /path/to/java/fastqc/directory
 #
+# The directory can be an `ant build` source checkout (classes in bin/) or an
+# unpacked release zip (classes at the top level).
+#
 # Prerequisites:
-#   - Java FastQC must be built (ant build) in the specified directory
 #   - Java 11+ must be available
 
 set -uo pipefail
@@ -16,20 +18,20 @@ REF_DIR="$SCRIPT_DIR/reference"
 
 if [ $# -lt 1 ]; then
     echo "Usage: $0 /path/to/java/fastqc/directory"
-    echo "  The directory should contain bin/ with compiled classes and the JAR files."
+    echo "  The directory should be a built source checkout (bin/) or an unpacked release zip."
     exit 1
 fi
 
-JAVA_FASTQC_DIR="$1"
+JAVA_FASTQC_DIR="$(cd "$1" && pwd)"
 
-# Verify Java FastQC is built
-if [ ! -d "$JAVA_FASTQC_DIR/bin" ]; then
-    echo "Error: $JAVA_FASTQC_DIR/bin not found. Run 'ant build' first."
+if [ -d "$JAVA_FASTQC_DIR/bin/uk" ]; then
+    CLASSPATH="$JAVA_FASTQC_DIR/bin"
+elif [ -d "$JAVA_FASTQC_DIR/uk" ]; then
+    CLASSPATH="$JAVA_FASTQC_DIR"
+else
+    echo "Error: no compiled classes found in $JAVA_FASTQC_DIR (or its bin/)."
     exit 1
 fi
-
-# Build classpath
-CLASSPATH="$JAVA_FASTQC_DIR/bin"
 for jar in "$JAVA_FASTQC_DIR"/*.jar; do
     [ -f "$jar" ] && CLASSPATH="$CLASSPATH:$jar"
 done
@@ -55,6 +57,9 @@ map_args_to_java_props() {
             --nofilter)   props="$props -Dfastqc.nofilter=true" ;;
             --kmers)      i=$((i+1)); props="$props -Dfastqc.kmer_size=${args[$i]}" ;;
             --min_length) i=$((i+1)); props="$props -Dfastqc.min_length=${args[$i]}" ;;
+            --max_length) i=$((i+1)); props="$props -Dfastqc.max_length=${args[$i]}" ;;
+            --phred64)    props="$props -Dfastqc.phred64=true" ;;
+            --png)        props="$props -Dfastqc.svg=false" ;;
             --dup_length) i=$((i+1)); props="$props -Dfastqc.dup_length=${args[$i]}" ;;
             --nano)       props="$props -Dfastqc.nano=true" ;;
             --format)     i=$((i+1)); props="$props -Dfastqc.sequence_format=${args[$i]}" ;;
@@ -91,7 +96,7 @@ run_java_fastqc() {
 
     # Find the zip
     local basename
-    basename=$(basename "$input_file" | sed 's/\.[^.]*$//')
+    basename=$(basename "$input_file" | sed -E 's/\.(gz|bz2)$//; s/\.(txt|fastq|fq|sam|bam)$//')
     local zip_path="$outdir/${basename}_fastqc.zip"
 
     if [ ! -f "$zip_path" ]; then

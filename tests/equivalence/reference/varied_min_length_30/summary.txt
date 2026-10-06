@@ -1,0 +1,10 @@
+PASS	Basic Statistics	varied.fastq
+FAIL	Per base sequence quality	varied.fastq
+WARN	Per sequence quality scores	varied.fastq
+WARN	Per base sequence content	varied.fastq
+WARN	Per sequence GC content	varied.fastq
+PASS	Per base N content	varied.fastq
+WARN	Sequence Length Distribution	varied.fastq
+PASS	Sequence Duplication Levels	varied.fastq
+WARN	Overrepresented sequences	varied.fastq
+PASS	Adapter Content	varied.fastq

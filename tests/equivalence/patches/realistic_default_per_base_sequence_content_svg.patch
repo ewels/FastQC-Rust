@@ -1,22 +1,22 @@
 --- java/Images/per_base_sequence_content.svg
 +++ rust/Images/per_base_sequence_content.svg
-@@ -17,7 +17,7 @@
- <text x="310" y="30" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Sequence content across all bases</text>
+@@ -18,7 +18,7 @@
+ <text x="310" y="30" fill="rgb(0,0,0)" font-size="12">Sequence content across all bases</text>
  <line x1="30" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
  <line x1="30" y1="560" x2="30" y2="40" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
--<text x="340" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Position in read (bp)</text>
-+<text x="350" y="595" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">Position in read (bp)</text>
- <text x="30" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">1</text>
- <rect width="20" height="520" x="40" y="40" style="fill:rgb(230,230,230);stroke:none"/>
- <text x="50" y="575" fill="rgb(0,0,0)" font-family="[FONT]" font-size="12">2</text>
-@@ -279,8 +279,8 @@
- <line x1="730" y1="443" x2="740" y2="446" stroke="rgb(221,204,119)" stroke-width="[SW]"/>
- <line x1="740" y1="446" x2="760" y2="443" stroke="rgb(221,204,119)" stroke-width="[SW]"/>
- <line x1="760" y1="443" x2="770" y2="448" stroke="rgb(221,204,119)" stroke-width="[SW]"/>
--<rect width="20" height="83" x="770" y="40" style="fill:rgb(255,255,255);stroke:none"/>
--<rect width="20" height="83" x="770" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
-+<rect width="20" height="83" x="760" y="40" style="fill:rgb(255,255,255);stroke:none"/>
-+<rect width="20" height="83" x="760" y="40" rx="0" ry="0" style="fill:none;stroke-width:1;stroke:rgb(192,192,192)"/>
- <text x="770" y="55" fill="rgb(136,34,85)" font-family="[FONT]" font-size="12">%T</text>
- <text x="770" y="75" fill="rgb(51,34,136)" font-family="[FONT]" font-size="12">%C</text>
- <text x="770" y="95" fill="rgb(17,119,51)" font-family="[FONT]" font-size="12">%A</text>
+-<text x="340" y="595" fill="rgb(0,0,0)" font-size="12">Position in read (bp)</text>
++<text x="350" y="595" fill="rgb(0,0,0)" font-size="12">Position in read (bp)</text>
+ <text x="30" y="575" fill="rgb(0,0,0)" font-size="12">1</text>
+ <rect width="20" height="520" x="40" y="40" fill="rgb(230,230,230)"/>
+ <text x="50" y="575" fill="rgb(0,0,0)" font-size="12">2</text>
+@@ -88,8 +88,8 @@
+ <polyline points="36,439 51,399 66,449 81,430 96,434 111,436 126,396 141,408 156,452 171,407 186,432 201,418 216,443 231,436 246,412 261,443 276,445 291,431 306,423 321,428 336,403 351,451 366,409 381,425 396,405 411,437 426,456 441,457 456,441 471,410 486,414 501,451 516,421 531,445 546,450 561,437 576,449 591,441 606,428 621,440 636,428 651,420 666,401 681,411 696,407 711,454 726,407 741,455 756,438 771,442" stroke="rgb(51,34,136)" stroke-width="[SW]" fill="none"/>
+ <polyline points="36,447 51,449 66,385 81,437 96,432 111,383 126,462 141,451 156,430 171,438 186,442 201,402 216,446 231,387 246,449 261,423 276,430 291,451 306,408 321,446 336,461 351,387 366,446 381,440 396,408 411,439 426,423 441,425 456,403 471,446 486,447 501,453 516,392 531,388 546,423 561,387 576,447 591,394 606,437 621,447 636,444 651,410 666,457 681,445 696,433 711,424 726,436 741,381 756,383 771,386" stroke="rgb(17,119,51)" stroke-width="[SW]" fill="none"/>
+ <polyline points="36,388 51,445 66,436 81,412 96,405 111,446 126,420 141,452 156,427 171,442 186,438 201,447 216,389 231,452 246,444 261,448 276,414 291,441 306,455 321,449 336,414 351,444 366,444 381,454 396,456 411,437 426,413 441,390 456,428 471,445 486,439 501,397 516,452 531,442 546,409 561,445 576,424 591,446 606,454 621,442 636,415 651,444 666,424 681,444 696,424 711,449 726,443 741,446 756,443 771,448" stroke="rgb(221,204,119)" stroke-width="[SW]" fill="none"/>
+-<rect width="20" height="83" x="770" y="40" fill="rgb(255,255,255)"/>
+-<rect width="20" height="83" x="770" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
++<rect width="20" height="83" x="760" y="40" fill="rgb(255,255,255)"/>
++<rect width="20" height="83" x="760" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
+ <text x="770" y="55" fill="rgb(136,34,85)" font-size="12">%T</text>
+ <text x="770" y="75" fill="rgb(51,34,136)" font-size="12">%C</text>
+ <text x="770" y="95" fill="rgb(17,119,51)" font-size="12">%A</text>
