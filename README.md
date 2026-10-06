@@ -80,11 +80,10 @@ one decoder, which is what a workflow engine passing `task.cpus` expects. The
 budget honours cgroup quotas and CPU affinity, so a container or a
 scheduler-pinned job sees its own allowance rather than the host's core count.
 
-Leave `--threads` out and the analysis stays single-threaded while gzip
-decompression takes up to 4 threads per file — enough that a plain
-`fastqc sample.fastq.gz` is fast without being asked, without assuming the
-machine is idle. `--decompress-threads N` sets the decompression budget per file
-explicitly, overriding both.
+Leave `--threads` out and the budget is the available CPUs, up to 4 — enough
+that a plain `fastqc sample.fastq.gz` gets the parallel pipeline without being
+asked, without treating a big shared machine as idle. `--decompress-threads N`
+sets the decompression budget per file explicitly.
 
 Decompression is rarely the thing to tune: one decoder already keeps up with the
 single-threaded analysis on typical Illumina data, so most of what `--threads`

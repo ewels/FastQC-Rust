@@ -72,17 +72,15 @@ struct Cli {
     #[arg(short, long, value_name = "FILE")]
     limits: Option<PathBuf>,
 
-    /// Total thread budget for the run [default: 1]. Spread across the files
-    /// processed simultaneously and then within each file (a reader plus
-    /// analysis workers). Giving this explicitly also caps gzip decompression,
-    /// so the whole run stays inside the budget; left unset, decompression
-    /// takes up to 4 threads per file rather than the whole machine.
+    /// Total thread budget for the run, gzip decompression included [default:
+    /// available CPUs, up to 4]. Spread across the files processed
+    /// simultaneously and then within each file (a reader plus analysis
+    /// workers).
     #[arg(short, long, value_name = "N")]
     threads: Option<usize>,
 
     /// Worker budget for parallel gzip decompression of .fastq.gz inputs, per
-    /// file. 0 (default) derives it from --threads when that was given, and
-    /// otherwise takes up to 4 per file, whatever the core count.
+    /// file. 0 (default) derives it from the --threads budget.
     #[arg(long = "decompress-threads", value_name = "N", default_value = "0")]
     decompress_threads: usize,
 
