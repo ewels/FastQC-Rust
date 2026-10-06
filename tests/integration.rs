@@ -863,7 +863,7 @@ fn run_on_a_pty(args: &[&str], rows: u16, columns: u16) -> String {
             &mut secondary,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
-            &mut size,
+            &raw mut size,
         )
     };
     assert_eq!(opened, 0, "could not open a pty");
