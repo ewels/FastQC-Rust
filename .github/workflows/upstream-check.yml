@@ -14,7 +14,9 @@ jobs:
     name: Check for new upstream release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Get pinned version
         id: pinned
@@ -33,26 +35,32 @@ jobs:
       - name: Create issue if new version available
         if: steps.pinned.outputs.version != steps.upstream.outputs.version
         run: |
+          gh label create upstream-update --color 0E8A16 --description "New upstream FastQC release" --force
           existing=$(gh issue list --label "upstream-update" --state open --json number --jq 'length')
           if [ "$existing" = "0" ]; then
-            gh issue create \
-              --title "Upstream FastQC ${{ steps.upstream.outputs.version }} released" \
-              --label "upstream-update" \
-              --body "$(cat <<'EOF'
-          Java FastQC **${{ steps.upstream.outputs.version }}** has been released.
+            body=$(cat <<'EOF'
+          Java FastQC **__UPSTREAM__** has been released.
 
-          Current pinned version: **${{ steps.pinned.outputs.version }}**
+          Current pinned version: **__PINNED__**
 
           ## Action needed
 
-          1. Review [upstream changes](https://github.com/s-andrews/FastQC/releases/tag/v${{ steps.upstream.outputs.version }})
+          1. Review [upstream changes](https://github.com/s-andrews/FastQC/releases/tag/v__UPSTREAM__)
           2. Update `UPSTREAM.toml` with new version and commit hash
-          3. Update `Cargo.toml` version and `src/lib.rs` VERSION constant
-          4. Regenerate reference data: `bash tests/equivalence/generate_reference.sh /path/to/java/fastqc`
-          5. Update patch files in `tests/equivalence/patches/` if needed
+          3. Update the `VERSION` and `VERSION_BANNER` constants in `src/lib.rs`
+          4. Regenerate reference data from the release zip: `bash tests/equivalence/generate_reference.sh /path/to/unzipped/FastQC`
+          5. Regenerate SVG patches: `uv run tests/equivalence/update_svg_patches.py`
           6. Run equivalence tests: `uv run tests/equivalence/compare.py --binary ./target/release/fastqc`
           EOF
-          )"
+            )
+            body="${body//__UPSTREAM__/$UPSTREAM}"
+            body="${body//__PINNED__/$PINNED}"
+            gh issue create \
+              --title "Upstream FastQC $UPSTREAM released" \
+              --label "upstream-update" \
+              --body "$body"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM: ${{ steps.upstream.outputs.version }}
+          PINNED: ${{ steps.pinned.outputs.version }}

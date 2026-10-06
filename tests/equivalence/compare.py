@@ -246,7 +246,7 @@ def _img_to_png_bytes(img: Image.Image) -> bytes:
 # Files whose text diffs cause test failure (not just informational)
 STRICT_FILES = {"fastqc_data.txt", "summary.txt", "fastqc_report.html"}
 
-_BASE64_RE = re.compile(r'(data:image/png;base64,)[A-Za-z0-9+/=]+')
+_BASE64_RE = re.compile(r'(data:image/[a-z+]+;base64,)[A-Za-z0-9+/=]+')
 _BASE64_PLACEHOLDER = r'\1[BASE64_IMAGE_DATA]'
 
 

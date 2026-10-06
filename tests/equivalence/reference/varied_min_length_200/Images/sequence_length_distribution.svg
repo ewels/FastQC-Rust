@@ -1,0 +1,20 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="800" height="600" version="1.1" xmlns="http://www.w3.org/2000/svg">
+<style>text{font-family:Arial}</style>
+<rect width="800" height="600" x="0" y="0" fill="rgb(238,238,238)"/>
+<rect width="800" height="600" x="0" y="0" fill="rgb(255,255,255)"/>
+<text x="2" y="566" fill="rgb(0,0,0)" font-size="12">0</text>
+<text x="253" y="30" fill="rgb(0,0,0)" font-size="12">Distribution of sequence lengths over all sequences</text>
+<line x1="13" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="2"/>
+<line x1="13" y1="560" x2="13" y2="40" stroke="rgb(0,0,0)" stroke-width="2"/>
+<text x="338" y="595" fill="rgb(0,0,0)" font-size="12">Sequence Length (bp)</text>
+<text x="203" y="575" fill="rgb(0,0,0)" font-size="12">0</text>
+<rect width="388" height="520" x="401" y="40" fill="rgb(230,230,230)"/>
+<text x="591" y="575" fill="rgb(0,0,0)" font-size="12">1</text>
+<line x1="13" y1="560" x2="790" y2="560" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="207" y1="560" x2="595" y2="560" stroke="rgb(136,34,85)" stroke-width="2"/>
+<rect width="111" height="23" x="679" y="40" fill="rgb(255,255,255)"/>
+<rect width="111" height="23" x="679" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
+<text x="682" y="55" fill="rgb(136,34,85)" font-size="12" font-weight="bold">Sequence Length</text>
+</svg>

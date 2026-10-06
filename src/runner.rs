@@ -173,7 +173,9 @@ fn process_group(
     // Phred+33 by construction), pass it to the modules so they don't
     // infer it from the lowest quality character. Inference misdetects
     // Illumina 1.5 when the data contains no base below Q31 (issue #6).
-    let known_encoding = seq_file.known_phred_encoding();
+    let known_encoding = seq_file.known_phred_encoding().or(config
+        .phred64
+        .then_some(crate::utils::phred::PhredEncoding::PHRED64));
 
     // Set the filename on all modules (BasicStats uses it for the report)
     for module in modules.iter_mut() {
@@ -192,6 +194,11 @@ fn process_group(
         match seq_file.next() {
             Some(Ok(seq)) => {
                 sequence_count += 1;
+
+                let len = seq.sequence.len();
+                if len < config.min_length || (config.max_length > 0 && len > config.max_length) {
+                    continue;
+                }
 
                 for module in modules.iter_mut() {
                     // Skip filtered sequences for modules that request it
@@ -248,8 +255,12 @@ fn process_group(
     let zip_path = output_dir.join(format!("{}_fastqc.zip", base_name));
 
     // Generate HTML report as a string (used for both standalone file and zip entry)
-    let html_content =
-        report::html::generate_html_report(&modules, &file_display_name, config.template)?;
+    let html_content = report::html::generate_html_report(
+        &modules,
+        &file_display_name,
+        config.template,
+        config.png_output,
+    )?;
 
     // Write standalone HTML file
     // The Java code writes the HTML via PrintWriter after creating the zip
@@ -262,7 +273,6 @@ fn process_group(
         &base_name,
         &zip_path,
         &html_content,
-        config.svg_output,
         config.template,
     )?;
 

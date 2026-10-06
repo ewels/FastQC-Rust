@@ -1,0 +1,122 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="1125" height="600" version="1.1" xmlns="http://www.w3.org/2000/svg">
+<style>text{font-family:Arial}</style>
+<rect width="1125" height="600" x="0" y="0" fill="rgb(238,238,238)"/>
+<rect width="1125" height="600" x="0" y="0" fill="rgb(255,255,255)"/>
+<text x="2" y="566" fill="rgb(0,0,0)" font-size="12">0</text>
+<text x="2" y="514" fill="rgb(0,0,0)" font-size="12">10</text>
+<text x="2" y="462" fill="rgb(0,0,0)" font-size="12">20</text>
+<text x="2" y="410" fill="rgb(0,0,0)" font-size="12">30</text>
+<text x="2" y="358" fill="rgb(0,0,0)" font-size="12">40</text>
+<text x="2" y="306" fill="rgb(0,0,0)" font-size="12">50</text>
+<text x="2" y="254" fill="rgb(0,0,0)" font-size="12">60</text>
+<text x="2" y="202" fill="rgb(0,0,0)" font-size="12">70</text>
+<text x="2" y="150" fill="rgb(0,0,0)" font-size="12">80</text>
+<text x="2" y="98" fill="rgb(0,0,0)" font-size="12">90</text>
+<text x="2" y="46" fill="rgb(0,0,0)" font-size="12">100</text>
+<text x="474" y="30" fill="rgb(0,0,0)" font-size="12">Sequence content across all bases</text>
+<line x1="29" y1="560" x2="1115" y2="560" stroke="rgb(0,0,0)" stroke-width="2"/>
+<line x1="29" y1="560" x2="29" y2="40" stroke="rgb(0,0,0)" stroke-width="2"/>
+<text x="504" y="595" fill="rgb(0,0,0)" font-size="12">Position in read (bp)</text>
+<text x="32" y="575" fill="rgb(0,0,0)" font-size="12">1</text>
+<rect width="14" height="520" x="43" y="40" fill="rgb(230,230,230)"/>
+<text x="46" y="575" fill="rgb(0,0,0)" font-size="12">2</text>
+<text x="60" y="575" fill="rgb(0,0,0)" font-size="12">3</text>
+<rect width="14" height="520" x="71" y="40" fill="rgb(230,230,230)"/>
+<text x="74" y="575" fill="rgb(0,0,0)" font-size="12">4</text>
+<text x="88" y="575" fill="rgb(0,0,0)" font-size="12">5</text>
+<rect width="14" height="520" x="99" y="40" fill="rgb(230,230,230)"/>
+<text x="102" y="575" fill="rgb(0,0,0)" font-size="12">6</text>
+<text x="116" y="575" fill="rgb(0,0,0)" font-size="12">7</text>
+<rect width="14" height="520" x="127" y="40" fill="rgb(230,230,230)"/>
+<text x="130" y="575" fill="rgb(0,0,0)" font-size="12">8</text>
+<text x="144" y="575" fill="rgb(0,0,0)" font-size="12">9</text>
+<rect width="14" height="520" x="155" y="40" fill="rgb(230,230,230)"/>
+<text x="168" y="575" fill="rgb(0,0,0)" font-size="12">11</text>
+<rect width="14" height="520" x="183" y="40" fill="rgb(230,230,230)"/>
+<text x="196" y="575" fill="rgb(0,0,0)" font-size="12">13</text>
+<rect width="14" height="520" x="211" y="40" fill="rgb(230,230,230)"/>
+<text x="224" y="575" fill="rgb(0,0,0)" font-size="12">15</text>
+<rect width="14" height="520" x="239" y="40" fill="rgb(230,230,230)"/>
+<text x="252" y="575" fill="rgb(0,0,0)" font-size="12">17</text>
+<rect width="14" height="520" x="267" y="40" fill="rgb(230,230,230)"/>
+<text x="280" y="575" fill="rgb(0,0,0)" font-size="12">19</text>
+<rect width="14" height="520" x="295" y="40" fill="rgb(230,230,230)"/>
+<text x="308" y="575" fill="rgb(0,0,0)" font-size="12">21</text>
+<rect width="14" height="520" x="323" y="40" fill="rgb(230,230,230)"/>
+<text x="336" y="575" fill="rgb(0,0,0)" font-size="12">23</text>
+<rect width="14" height="520" x="351" y="40" fill="rgb(230,230,230)"/>
+<text x="364" y="575" fill="rgb(0,0,0)" font-size="12">25</text>
+<rect width="14" height="520" x="379" y="40" fill="rgb(230,230,230)"/>
+<text x="392" y="575" fill="rgb(0,0,0)" font-size="12">27</text>
+<rect width="14" height="520" x="407" y="40" fill="rgb(230,230,230)"/>
+<text x="420" y="575" fill="rgb(0,0,0)" font-size="12">29</text>
+<rect width="14" height="520" x="435" y="40" fill="rgb(230,230,230)"/>
+<text x="448" y="575" fill="rgb(0,0,0)" font-size="12">31</text>
+<rect width="14" height="520" x="463" y="40" fill="rgb(230,230,230)"/>
+<text x="476" y="575" fill="rgb(0,0,0)" font-size="12">33</text>
+<rect width="14" height="520" x="491" y="40" fill="rgb(230,230,230)"/>
+<text x="504" y="575" fill="rgb(0,0,0)" font-size="12">35</text>
+<rect width="14" height="520" x="519" y="40" fill="rgb(230,230,230)"/>
+<text x="532" y="575" fill="rgb(0,0,0)" font-size="12">37</text>
+<rect width="14" height="520" x="547" y="40" fill="rgb(230,230,230)"/>
+<text x="560" y="575" fill="rgb(0,0,0)" font-size="12">39</text>
+<rect width="14" height="520" x="575" y="40" fill="rgb(230,230,230)"/>
+<text x="588" y="575" fill="rgb(0,0,0)" font-size="12">41</text>
+<rect width="14" height="520" x="603" y="40" fill="rgb(230,230,230)"/>
+<text x="616" y="575" fill="rgb(0,0,0)" font-size="12">43</text>
+<rect width="14" height="520" x="631" y="40" fill="rgb(230,230,230)"/>
+<text x="644" y="575" fill="rgb(0,0,0)" font-size="12">45</text>
+<rect width="14" height="520" x="659" y="40" fill="rgb(230,230,230)"/>
+<text x="672" y="575" fill="rgb(0,0,0)" font-size="12">47</text>
+<rect width="14" height="520" x="687" y="40" fill="rgb(230,230,230)"/>
+<text x="700" y="575" fill="rgb(0,0,0)" font-size="12">49</text>
+<rect width="14" height="520" x="715" y="40" fill="rgb(230,230,230)"/>
+<text x="728" y="575" fill="rgb(0,0,0)" font-size="12">51</text>
+<rect width="14" height="520" x="743" y="40" fill="rgb(230,230,230)"/>
+<text x="756" y="575" fill="rgb(0,0,0)" font-size="12">53</text>
+<rect width="14" height="520" x="771" y="40" fill="rgb(230,230,230)"/>
+<text x="784" y="575" fill="rgb(0,0,0)" font-size="12">55</text>
+<rect width="14" height="520" x="799" y="40" fill="rgb(230,230,230)"/>
+<text x="812" y="575" fill="rgb(0,0,0)" font-size="12">57</text>
+<rect width="14" height="520" x="827" y="40" fill="rgb(230,230,230)"/>
+<text x="840" y="575" fill="rgb(0,0,0)" font-size="12">59</text>
+<rect width="14" height="520" x="855" y="40" fill="rgb(230,230,230)"/>
+<text x="868" y="575" fill="rgb(0,0,0)" font-size="12">61</text>
+<rect width="14" height="520" x="883" y="40" fill="rgb(230,230,230)"/>
+<text x="896" y="575" fill="rgb(0,0,0)" font-size="12">63</text>
+<rect width="14" height="520" x="911" y="40" fill="rgb(230,230,230)"/>
+<text x="924" y="575" fill="rgb(0,0,0)" font-size="12">65</text>
+<rect width="14" height="520" x="939" y="40" fill="rgb(230,230,230)"/>
+<text x="952" y="575" fill="rgb(0,0,0)" font-size="12">67</text>
+<rect width="14" height="520" x="967" y="40" fill="rgb(230,230,230)"/>
+<text x="980" y="575" fill="rgb(0,0,0)" font-size="12">69</text>
+<rect width="14" height="520" x="995" y="40" fill="rgb(230,230,230)"/>
+<text x="1008" y="575" fill="rgb(0,0,0)" font-size="12">71</text>
+<rect width="14" height="520" x="1023" y="40" fill="rgb(230,230,230)"/>
+<text x="1036" y="575" fill="rgb(0,0,0)" font-size="12">73</text>
+<rect width="14" height="520" x="1051" y="40" fill="rgb(230,230,230)"/>
+<text x="1064" y="575" fill="rgb(0,0,0)" font-size="12">75</text>
+<line x1="29" y1="560" x2="1115" y2="560" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="508" x2="1115" y2="508" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="456" x2="1115" y2="456" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="404" x2="1115" y2="404" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="352" x2="1115" y2="352" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="300" x2="1115" y2="300" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="248" x2="1115" y2="248" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="196" x2="1115" y2="196" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="144" x2="1115" y2="144" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="92" x2="1115" y2="92" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="40" x2="1115" y2="40" stroke="rgb(180,180,180)" stroke-width="2"/>
+<polyline points="36,432 50,434 64,424 78,430 92,423 106,437 120,427 134,417 148,430 162,431 176,430 190,429 204,426 218,432 232,429 246,434 260,428 274,422 288,431 302,433 316,426 330,432 344,422 358,420 372,432 386,426 400,436 414,423 428,430 442,434 456,425 470,441 484,428 498,433 512,419 526,431 540,430 554,432 568,431 582,424 596,434 610,420 624,423 638,434 652,437 666,440 680,444 694,435 708,428 722,430 736,431 750,439 764,431 778,426 792,429 806,443 820,417 834,433 848,437 862,440 876,420 890,434 904,447 918,424 932,434 946,420 960,420 974,438 988,440 1002,420 1016,413 1030,429 1044,422 1058,408 1072,431" stroke="rgb(136,34,85)" stroke-width="2" fill="none"/>
+<polyline points="36,432 50,420 64,437 78,424 92,435 106,427 120,429 134,438 148,438 162,435 176,432 190,425 204,441 218,431 232,432 246,432 260,436 274,438 288,430 302,430 316,438 330,435 344,429 358,435 372,428 386,436 400,418 414,425 428,427 442,425 456,426 470,431 484,433 498,419 512,431 526,430 540,413 554,429 568,428 582,439 596,425 610,425 624,430 638,432 652,427 666,440 680,435 694,425 708,430 722,435 736,427 750,419 764,437 778,441 792,434 806,415 820,435 834,430 848,428 862,412 876,431 890,443 904,441 918,426 932,417 946,450 960,445 974,420 988,448 1002,434 1016,427 1030,426 1044,438 1058,445 1072,426" stroke="rgb(51,34,136)" stroke-width="2" fill="none"/>
+<polyline points="36,428 50,436 64,421 78,432 92,439 106,428 120,440 134,428 148,429 162,420 176,427 190,427 204,425 218,425 232,430 246,420 260,430 274,427 288,432 302,434 316,433 330,435 344,440 358,435 372,425 386,425 400,427 414,441 428,429 442,428 456,432 470,425 484,439 498,428 512,434 526,437 540,429 554,437 568,425 582,430 596,446 610,442 624,442 638,428 652,427 666,421 680,412 694,428 708,438 722,426 736,439 750,428 764,417 778,422 792,423 806,422 820,427 834,421 848,417 862,446 876,443 890,417 904,412 918,422 932,424 946,424 960,422 974,441 988,412 1002,436 1016,452 1030,417 1044,455 1058,441 1072,443" stroke="rgb(17,119,51)" stroke-width="2" fill="none"/>
+<polyline points="36,430 50,432 64,439 78,437 92,425 106,430 120,426 134,439 148,425 162,436 176,434 190,441 204,429 218,434 232,430 246,436 260,428 274,434 288,429 302,426 316,425 330,420 344,430 358,432 372,437 386,435 400,441 414,432 428,436 442,435 456,439 470,425 484,422 498,442 512,437 526,423 540,449 554,423 568,438 582,428 596,418 610,435 624,426 638,428 652,431 666,420 680,430 694,434 708,427 722,430 736,425 750,436 764,437 778,433 792,435 806,441 820,443 834,438 848,440 862,424 876,427 890,427 904,422 918,450 932,447 946,427 960,434 974,422 988,422 1002,431 1016,429 1030,450 1044,406 1058,427 1072,422" stroke="rgb(221,204,119)" stroke-width="2" fill="none"/>
+<rect width="24" height="83" x="1091" y="40" fill="rgb(255,255,255)"/>
+<rect width="24" height="83" x="1091" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
+<text x="1094" y="55" fill="rgb(136,34,85)" font-size="12" font-weight="bold">%T</text>
+<text x="1094" y="75" fill="rgb(51,34,136)" font-size="12" font-weight="bold">%C</text>
+<text x="1094" y="95" fill="rgb(17,119,51)" font-size="12" font-weight="bold">%A</text>
+<text x="1094" y="115" fill="rgb(221,204,119)" font-size="12" font-weight="bold">%G</text>
+</svg>

@@ -22,8 +22,9 @@ pub fn generate_html_report(
     modules: &[Box<dyn QCModule>],
     filename: &str,
     template_name: TemplateName,
+    png: bool,
 ) -> io::Result<String> {
-    let template = crate::report::templates::create_template(template_name);
+    let template = crate::report::templates::create_template(template_name, png);
     let mut buf = Vec::new();
     template.write_html_report(modules, filename, &mut buf)?;
     String::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
@@ -38,14 +39,18 @@ pub fn generate_html_report(
 pub fn write_chart(
     module: &(impl crate::modules::QCModule + ?Sized),
     alt_text: &str,
+    png: bool,
     w: &mut dyn Write,
 ) -> io::Result<()> {
-    use crate::report::charts::{svg_to_png, CHART_HEIGHT, CHART_WIDTH};
+    use crate::report::charts::{svg_to_data_uri, svg_to_png};
 
     if let Some(svg) = module.generate_chart_svg() {
-        let png_bytes =
-            svg_to_png(&svg, CHART_WIDTH as u32, CHART_HEIGHT as u32).map_err(io::Error::other)?;
-        let data_uri = png_to_data_uri(&png_bytes);
+        let data_uri = if png {
+            let png_bytes = svg_to_png(&svg).map_err(io::Error::other)?;
+            png_to_data_uri(&png_bytes)
+        } else {
+            svg_to_data_uri(&java_svg(&svg))
+        };
         write!(
             w,
             "<p><img class=\"indented\" src=\"{}\" alt=\"{}\"/></p>",
@@ -131,6 +136,41 @@ fn minify_svg(svg: &str) -> String {
     }
 
     // Post-process: merge lines into polylines and RLE-merge rects
+    merge_lines_to_polylines(&mut out);
+    rle_merge_rects(&mut out);
+    out
+}
+
+/// Re-serialise a chart SVG the way Java FastQC 0.13 writes its SVG images:
+/// presentation attributes instead of `style`, one font rule, 2px lines, and
+/// the same polyline/rect merging as Java's `SVGImageSaver.optimizeSvg()`.
+pub fn java_svg(svg: &str) -> String {
+    let mut out = String::with_capacity(svg.len());
+    for line in svg.lines() {
+        let t = line
+            .replace(" shape-rendering=\"crispEdges\"", "")
+            .replace(
+                " font-family=\"'Liberation Sans', Arial, Helvetica, sans-serif\"",
+                "",
+            )
+            .replace(
+                "style=\"fill:none;stroke-width:1;stroke:",
+                "fill=\"none\" stroke=\"",
+            )
+            .replace("style=\"fill:rgb(", "fill=\"rgb(")
+            .replace(");stroke:none\"", ")\"");
+        let t = if t.starts_with("<line ") {
+            let width = extract_attr(&t, "stroke-width");
+            t.replace(&format!("stroke-width=\"{}\"", width), "stroke-width=\"2\"")
+        } else {
+            t
+        };
+        out.push_str(&t);
+        out.push('\n');
+        if t.starts_with("<svg ") {
+            out.push_str("<style>text{font-family:Arial}</style>\n");
+        }
+    }
     merge_lines_to_polylines(&mut out);
     rle_merge_rects(&mut out);
     out
@@ -226,7 +266,7 @@ fn merge_lines_to_polylines(svg: &mut String) {
             points.push_str(&format!(" {},{}", seg.x2, seg.y2));
         }
         let polyline = format!(
-            "<polyline points=\"{}\" stroke=\"{}\" stroke-width=\"{}\" fill=\"none\"/>",
+            "<polyline points=\"{}\" stroke=\"{}\" stroke-width=\"{}\" fill=\"none\"/>\n",
             points, stroke, width
         );
         svg.replace_range(start..skip_trailing_newlines(svg, end), &polyline);
@@ -307,7 +347,7 @@ fn rle_merge_rects(svg: &mut String) {
                 ""
             };
             let merged = format!(
-                "<rect width=\"{}\" height=\"{}\" x=\"{}\" y=\"{}\" fill=\"{}\"{}/>",
+                "<rect width=\"{}\" height=\"{}\" x=\"{}\" y=\"{}\" fill=\"{}\"{}/>\n",
                 merged_width, rects[i].height, rects[i].x, rects[i].y, rects[i].fill, class_attr
             );
             replacements.push((rects[i].start, rects[run_end - 1].end, merged));

@@ -91,8 +91,7 @@ struct Cli {
     #[arg(short, long, value_name = "DIR")]
     dir: Option<PathBuf>,
 
-    /// Sets an artificial lower limit on the length of the sequence to be shown
-    /// in the report. Sequences shorter than this limit will not be shown.
+    /// Ignore reads shorter than this length (bp).
     // Java uses --min_length (underscore), clap defaults to --min-length (hyphen).
     // Allow both forms.
     #[arg(
@@ -102,6 +101,15 @@ struct Cli {
         default_value = "0"
     )]
     min_length: usize,
+
+    /// Ignore reads longer than this length (bp).
+    #[arg(
+        long = "max_length",
+        alias = "max-length",
+        value_name = "N",
+        default_value = "0"
+    )]
+    max_length: usize,
 
     /// Specifies the truncation length used for duplicate detection.
     /// Reads longer than this value will be truncated before checking for duplicates.
@@ -114,14 +122,22 @@ struct Cli {
     )]
     dup_length: usize,
 
-    /// Save images as SVG files as well as PNG.
+    /// Quality scores are encoded in the obsolete Phred64 format.
     #[arg(long)]
+    phred64: bool,
+
+    /// Embed charts in the HTML report as PNG instead of SVG.
+    #[arg(long)]
+    png: bool,
+
+    /// No-op: SVG is now the default. Kept so existing commands still work.
+    #[arg(long, hide = true)]
     svg: bool,
 
     /// Select the HTML report template.
     /// "classic" produces the original FastQC report layout.
     /// "modern" uses a redesigned layout with responsive sidebar and help text.
-    #[arg(short = 't', long, value_name = "NAME", default_value = "classic")]
+    #[arg(long, value_name = "NAME", default_value = "classic")]
     template: TemplateName,
 
     /// Input files (one or more FastQ, BAM, or SAM files).
@@ -154,6 +170,11 @@ fn main() {
                 process::exit(1);
             }
         }
+    }
+
+    if cli.min_length > 0 && cli.max_length > 0 && cli.max_length < cli.min_length {
+        eprintln!("Error: --max_length cannot be less than --min_length");
+        process::exit(1);
     }
 
     // Validate output directory exists if specified
@@ -193,8 +214,10 @@ fn main() {
         adapter_file: cli.adapters,
         limits_file: cli.limits,
         min_length: cli.min_length,
+        max_length: cli.max_length,
         dup_length: cli.dup_length,
-        svg_output: cli.svg,
+        phred64: cli.phred64,
+        png_output: cli.png,
         temp_dir: cli.dir,
         template: cli.template,
     };

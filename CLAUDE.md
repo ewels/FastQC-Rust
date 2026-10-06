@@ -55,10 +55,11 @@ Generates an HTML report with text diffs and interactive image comparison (side-
 
 All Python scripts use [uv](https://docs.astral.sh/uv/) with inline script dependencies (PEP 723) — no virtual environment or `pip install` needed. Just prefix with `uv run`.
 
-To regenerate reference data after an upstream version update (requires Docker):
+To regenerate reference data after an upstream version update (requires Java 11+):
 ```bash
-docker pull quay.io/biocontainers/fastqc:0.12.1--hdfd78af_0
-uv run /path/to/regen_script.py  # or use tests/equivalence/generate_reference.sh
+gh release download vX.Y.Z -R s-andrews/FastQC -p 'fastqc_*.zip' && unzip fastqc_*.zip
+bash tests/equivalence/generate_reference.sh ./FastQC   # release zip or `ant build` checkout
+uv run tests/equivalence/update_svg_patches.py          # then review: only text x-positions should differ
 ```
 
 ## Upstream Version Tracking

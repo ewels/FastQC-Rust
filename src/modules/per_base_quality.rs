@@ -6,6 +6,7 @@ use std::io;
 use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
 use crate::report::charts::quality_boxplot::{render_quality_boxplot, QualityBoxPlotData};
+use crate::report::charts::scaled_chart_width;
 use crate::sequence::Sequence;
 use crate::utils::base_group::BaseGroup;
 use crate::utils::format::java_format_double;
@@ -16,19 +17,17 @@ pub struct PerBaseQualityScores {
     quality_counts: Vec<QualityCount>,
     nogroup: bool,
     expgroup: bool,
-    min_length: usize,
     // Set by QCModule::set_phred_encoding; see the trait docs.
     known_encoding: Option<phred::PhredEncoding>,
     limits: Limits,
 }
 
 impl PerBaseQualityScores {
-    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool, min_length: usize) -> Self {
+    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool) -> Self {
         PerBaseQualityScores {
             quality_counts: Vec::new(),
             nogroup,
             expgroup,
-            min_length,
             known_encoding: None,
             limits: limits.clone(),
         }
@@ -37,16 +36,12 @@ impl PerBaseQualityScores {
     fn calculate(&self) -> CalculatedData {
         let (min_char, _max_char) = quality_count::calculate_offsets(&self.quality_counts);
         // If no quality data, default to the Sanger offset.
-        let offset = phred::resolve(self.known_encoding, min_char)
+        let offset = phred::resolve(self.known_encoding, min_char as u16)
             .map(|e| e.offset)
             .unwrap_or(phred::PhredEncoding::SANGER.offset);
 
-        let groups = BaseGroup::make_base_groups(
-            self.quality_counts.len(),
-            self.min_length,
-            self.nogroup,
-            self.expgroup,
-        );
+        let groups =
+            BaseGroup::make_base_groups(self.quality_counts.len(), self.nogroup, self.expgroup);
 
         let mut means = vec![0.0f64; groups.len()];
         let mut medians = vec![0.0f64; groups.len()];
@@ -134,8 +129,8 @@ impl PerBaseQualityScores {
         let data = self.calculate();
         let (min_char, max_char) = quality_count::calculate_offsets(&self.quality_counts);
         // If no quality data, default to Sanger.
-        let encoding =
-            phred::resolve(self.known_encoding, min_char).unwrap_or(phred::PhredEncoding::SANGER);
+        let encoding = phred::resolve(self.known_encoding, min_char as u16)
+            .unwrap_or(phred::PhredEncoding::SANGER);
         let (offset, encoding_name) = (encoding.offset, encoding.name);
 
         // The chart title includes the encoding scheme name
@@ -155,6 +150,7 @@ impl PerBaseQualityScores {
         let min_y = 0.0;
 
         render_quality_boxplot(&QualityBoxPlotData {
+            width: scaled_chart_width(data.x_labels.len()),
             means: data.means,
             medians: data.medians,
             lower_quartile: data.lower_quartile,

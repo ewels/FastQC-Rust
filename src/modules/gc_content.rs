@@ -6,6 +6,7 @@ use std::io;
 use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
 use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
+use crate::report::charts::CHART_WIDTH;
 use crate::sequence::Sequence;
 use crate::utils::format::java_format_double;
 
@@ -228,6 +229,7 @@ impl PerSequenceGCContent {
 
         // Two series: GC distribution and theoretical distribution
         render_line_graph(&LineGraphData {
+            width: CHART_WIDTH,
             data: vec![gc_dist, theoretical],
             min_y: 0.0,
             max_y,

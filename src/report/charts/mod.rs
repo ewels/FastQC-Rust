@@ -24,6 +24,11 @@ impl ChartColor {
 pub const CHART_WIDTH: f64 = 800.0;
 pub const CHART_HEIGHT: f64 = 600.0;
 
+/// Java widens per-position charts so each base group gets at least 15px.
+pub fn scaled_chart_width(groups: usize) -> f64 {
+    CHART_WIDTH.max(groups as f64 * 15.0)
+}
+
 // Tol colorblind-safe palette from LineGraph.java
 // Note: Java FastQC updated these colours from the original bright palette
 // to the Tol scheme at https://davidmathlogic.com/colorblind/
@@ -111,15 +116,6 @@ fn svg_text_sized(x: f64, y: f64, text: &str, color: &ChartColor, bold: bool, si
         weight,
         xml_escape(text)
     )
-}
-
-/// Strip `shape-rendering="crispEdges"` from SVG output.
-///
-/// crispEdges is included in the SVG so that resvg renders pixel-sharp lines
-/// and rectangles in PNGs, but it is stripped from saved SVG files to minimise
-/// the diff from upstream Java output (which doesn't include it).
-pub fn strip_crisp_edges(svg: &str) -> String {
-    svg.replace(" shape-rendering=\"crispEdges\"", "")
 }
 
 /// Emit an SVG line element.
@@ -221,8 +217,7 @@ pub struct ChartLayout {
 
 impl ChartLayout {
     /// Create a chart layout by computing x_offset from Y-axis label widths.
-    pub fn new(min_y: f64, max_y: f64, y_interval: f64) -> Self {
-        let width = CHART_WIDTH;
+    pub fn new(min_y: f64, max_y: f64, y_interval: f64, width: f64) -> Self {
         let height = CHART_HEIGHT;
 
         // yStart calculation matches Java
@@ -409,6 +404,12 @@ pub fn png_to_data_uri(png_bytes: &[u8]) -> String {
     format!("data:image/png;base64,{}", BASE64.encode(png_bytes))
 }
 
+pub fn svg_to_data_uri(svg: &str) -> String {
+    use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine;
+    format!("data:image/svg+xml;base64,{}", BASE64.encode(svg))
+}
+
 /// Convert an SVG string to PNG bytes.
 ///
 /// In Java, writeDefaultImage() renders the Swing JPanel to a
@@ -419,7 +420,7 @@ pub fn png_to_data_uri(png_bytes: &[u8]) -> String {
 const FONT_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/LiberationSans-Regular.ttf");
 const FONT_BOLD: &[u8] = include_bytes!("../../../assets/fonts/LiberationSans-Bold.ttf");
 
-pub fn svg_to_png(svg: &str, width: u32, height: u32) -> Result<Vec<u8>, String> {
+pub fn svg_to_png(svg: &str) -> Result<Vec<u8>, String> {
     use resvg::usvg;
     use tiny_skia::Pixmap;
 
@@ -435,6 +436,8 @@ pub fn svg_to_png(svg: &str, width: u32, height: u32) -> Result<Vec<u8>, String>
 
     let tree =
         usvg::Tree::from_str(svg, &options).map_err(|e| format!("Failed to parse SVG: {}", e))?;
+    let size = tree.size().to_int_size();
+    let (width, height) = (size.width(), size.height());
 
     // Create pixel buffer at target dimensions
     let mut pixmap =
@@ -498,10 +501,17 @@ mod tests {
     }
 
     #[test]
+    fn test_scaled_chart_width() {
+        assert_eq!(scaled_chart_width(10), 800.0);
+        assert_eq!(scaled_chart_width(60), 900.0);
+    }
+
+    #[test]
     fn test_line_graph_renders_valid_svg() {
         use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
 
         let svg = render_line_graph(&LineGraphData {
+            width: CHART_WIDTH,
             data: vec![vec![1.0, 5.0, 3.0]],
             min_y: 0.0,
             max_y: 10.0,
@@ -523,6 +533,7 @@ mod tests {
         use crate::report::charts::quality_boxplot::{render_quality_boxplot, QualityBoxPlotData};
 
         let svg = render_quality_boxplot(&QualityBoxPlotData {
+            width: CHART_WIDTH,
             means: vec![30.0, 28.0],
             medians: vec![31.0, 29.0],
             lower_quartile: vec![25.0, 24.0],

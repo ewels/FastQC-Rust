@@ -13,6 +13,7 @@ use super::{
 
 /// Parameters for drawing a line graph.
 pub struct LineGraphData {
+    pub width: f64,
     /// One inner Vec per data series. All series should have the same length.
     pub data: Vec<Vec<f64>>,
     /// Minimum Y-axis value.
@@ -42,7 +43,7 @@ pub struct LineGraphData {
 /// - Legend box at top-right
 pub fn render_line_graph(params: &LineGraphData) -> String {
     let y_interval = find_optimal_y_interval(params.max_y);
-    let layout = ChartLayout::new(params.min_y, params.max_y, y_interval);
+    let layout = ChartLayout::new(params.min_y, params.max_y, y_interval, params.width);
 
     let num_points = if params.data.is_empty() || params.data[0].is_empty() {
         1

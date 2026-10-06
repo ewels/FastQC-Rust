@@ -1,0 +1,20 @@
+--- java/Images/per_base_quality.svg
++++ rust/Images/per_base_quality.svg
+@@ -25,7 +25,7 @@
+ <text x="0" y="98" fill="rgb(0,0,0)" font-size="12">36</text>
+ <text x="0" y="72" fill="rgb(0,0,0)" font-size="12">38</text>
+ <text x="0" y="46" fill="rgb(0,0,0)" font-size="12">40</text>
+-<text x="240" y="30" fill="rgb(0,0,0)" font-size="12">Quality scores across all bases (Sanger / Illumina 1.9 encoding)</text>
++<text x="230" y="30" fill="rgb(0,0,0)" font-size="12">Quality scores across all bases (Sanger / Illumina 1.9 encoding)</text>
+ <rect width="10" height="260" x="20" y="300" fill="rgb(230,175,175)"/>
+ <rect width="10" height="104" x="20" y="196" fill="rgb(230,215,175)"/>
+ <rect width="10" height="156" x="20" y="40" fill="rgb(175,230,175)"/>
+@@ -214,7 +214,7 @@
+ <text x="770" y="575" fill="rgb(0,0,0)" font-size="12">100</text>
+ <line x1="20" y1="560" x2="820" y2="560" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+ <line x1="20" y1="560" x2="20" y2="40" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+-<text x="350" y="595" fill="rgb(0,0,0)" font-size="12">Position in read (bp)</text>
++<text x="360" y="595" fill="rgb(0,0,0)" font-size="12">Position in read (bp)</text>
+ <rect width="10" height="247" x="20" y="170" fill="rgb(240,240,0)"/>
+ <rect width="10" height="247" x="20" y="170" rx="0" ry="0" fill="none" stroke="rgb(0,0,0)"/>
+ <line x1="30" y1="92" x2="30" y2="170" stroke="rgb(0,0,0)" stroke-width="[SW]"/>

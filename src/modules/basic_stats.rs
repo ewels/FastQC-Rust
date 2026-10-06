@@ -6,13 +6,12 @@ use std::io;
 use crate::config::Limits;
 use crate::modules::QCModule;
 use crate::sequence::Sequence;
-use crate::utils::base_counts::{BASE_INDEX, IDX_A, IDX_C, IDX_G, IDX_N, IDX_T};
+use crate::utils::base_counts::{BASE_INDEX, IDX_A, IDX_C, IDX_G, IDX_T};
 use crate::utils::phred;
 
 pub struct BasicStats {
     name: Option<String>,
     actual_count: u64,
-    filtered_count: u64,
     min_length: usize,
     max_length: usize,
     total_bases: u64,
@@ -20,10 +19,10 @@ pub struct BasicStats {
     c_count: u64,
     a_count: u64,
     t_count: u64,
-    n_count: u64,
-    // Java initialises lowestChar to 126 (char), which is the highest
-    // printable ASCII. We use Option to represent "no quality chars seen yet".
-    lowest_char: u8,
+    lowest_char: u16,
+    // Java reads the median from the Sequence Length Distribution module,
+    // which skips filtered reads, so this does too.
+    length_counts: Vec<u64>,
     // Set by QCModule::set_phred_encoding; see the trait docs.
     known_encoding: Option<phred::PhredEncoding>,
     file_type: Option<String>,
@@ -34,7 +33,6 @@ impl BasicStats {
         BasicStats {
             name: None,
             actual_count: 0,
-            filtered_count: 0,
             min_length: 0,
             max_length: 0,
             total_bases: 0,
@@ -42,9 +40,8 @@ impl BasicStats {
             c_count: 0,
             a_count: 0,
             t_count: 0,
-            n_count: 0,
-            // Java starts at 126 (char), we mirror that
-            lowest_char: 126,
+            lowest_char: phred::NO_QUALITY_SEEN,
+            length_counts: Vec::new(),
             known_encoding: None,
             file_type: None,
         }
@@ -64,20 +61,19 @@ impl BasicStats {
     /// its custom decimal truncation logic (keeps at most 1 non-zero decimal digit).
     pub fn format_length(original_length: u64) -> String {
         let mut length = original_length as f64;
-        let unit;
 
-        if length >= 1_000_000_000.0 {
+        let unit = if length >= 1_000_000_000.0 {
             length /= 1_000_000_000.0;
-            unit = " Gbp";
+            " Gbp"
         } else if length >= 1_000_000.0 {
             length /= 1_000_000.0;
-            unit = " Mbp";
+            " Mbp"
         } else if length >= 1_000.0 {
             length /= 1_000.0;
-            unit = " kbp";
+            " kbp"
         } else {
-            unit = " bp";
-        }
+            " bp"
+        };
 
         // JAVA COMPAT: Java builds `"" + length` which calls Double.toString(),
         // then applies a custom truncation: find the dot, keep one more char if
@@ -106,16 +102,24 @@ impl BasicStats {
         let truncated: String = chars[..=last_index].iter().collect();
         format!("{}{}", truncated, unit)
     }
+
+    /// Replicates `SequenceLengthDistribution.medianLength()`: the upper of the
+    /// two central values for an even read count, 0 when there are no reads.
+    fn median_length(&self) -> usize {
+        let rank50 = self.length_counts.iter().sum::<u64>() / 2;
+        let mut running = 0;
+        for (len, &count) in self.length_counts.iter().enumerate() {
+            running += count;
+            if running > rank50 {
+                return len;
+            }
+        }
+        0
+    }
 }
 
 impl QCModule for BasicStats {
     fn process_sequence(&mut self, sequence: &Sequence) {
-        // Java counts filtered sequences separately
-        if sequence.is_filtered {
-            self.filtered_count += 1;
-            return;
-        }
-
         self.actual_count += 1;
         self.total_bases += sequence.sequence.len() as u64;
 
@@ -129,6 +133,12 @@ impl QCModule for BasicStats {
 
         // min/max length initialised on first non-filtered sequence
         let len = sequence.sequence.len();
+        if !sequence.is_filtered {
+            if self.length_counts.len() <= len {
+                self.length_counts.resize(len + 1, 0);
+            }
+            self.length_counts[len] += 1;
+        }
         if self.actual_count == 1 {
             self.min_length = len;
             self.max_length = len;
@@ -146,11 +156,16 @@ impl QCModule for BasicStats {
         self.c_count += counts[IDX_C];
         self.g_count += counts[IDX_G];
         self.t_count += counts[IDX_T];
-        self.n_count += counts[IDX_N];
 
         for &q in &sequence.quality {
-            if q < self.lowest_char {
-                self.lowest_char = q;
+            self.lowest_char = self.lowest_char.min(q as u16);
+        }
+    }
+
+    fn finalize(&mut self) {
+        if self.known_encoding.is_none() {
+            if let Some(warning) = phred::phred64_suspicion(self.lowest_char) {
+                eprintln!("{}", warning);
             }
         }
     }
@@ -178,7 +193,6 @@ impl QCModule for BasicStats {
         self.c_count = 0;
         self.a_count = 0;
         self.t_count = 0;
-        self.n_count = 0;
     }
 
     // BasicStats never raises error or warning
@@ -191,7 +205,6 @@ impl QCModule for BasicStats {
     }
 
     fn ignore_filtered_sequences(&self) -> bool {
-        // BasicStats processes filtered sequences (to count them)
         false
     }
 
@@ -207,21 +220,17 @@ impl QCModule for BasicStats {
         writeln!(writer, "Filename\t{}", self.name.as_deref().unwrap_or(""))?;
 
         // Row 1: File type
+        // JAVA COMPAT: Java prints its unset String as "null" for empty input.
         writeln!(
             writer,
             "File type\t{}",
-            self.file_type
-                .as_deref()
-                .unwrap_or("Conventional base calls")
+            self.file_type.as_deref().unwrap_or("null")
         )?;
 
-        // Row 2: Encoding
-        // Uses PhredEncoding.getFastQEncodingOffset(lowestChar), unless the
-        // input format already specifies the encoding (BAM/SAM).
-        let encoding_name = phred::resolve(self.known_encoding, self.lowest_char)
-            .map(|e| e.name.to_string())
-            .unwrap_or_else(|_| "Unknown".to_string());
-        writeln!(writer, "Encoding\t{}", encoding_name)?;
+        // Row 2: Encoding. Java fails the whole file when this throws.
+        let encoding = phred::resolve(self.known_encoding, self.lowest_char)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        writeln!(writer, "Encoding\t{}", encoding.name)?;
 
         // Row 3: Total Sequences
         writeln!(writer, "Total Sequences\t{}", self.actual_count)?;
@@ -233,14 +242,7 @@ impl QCModule for BasicStats {
             Self::format_length(self.total_bases)
         )?;
 
-        // Row 5: Sequences flagged as poor quality
-        writeln!(
-            writer,
-            "Sequences flagged as poor quality\t{}",
-            self.filtered_count
-        )?;
-
-        // Row 6: Sequence length
+        // Row 5: Sequence length
         if self.min_length == self.max_length {
             writeln!(writer, "Sequence length\t{}", self.min_length)?;
         } else {
@@ -251,7 +253,15 @@ impl QCModule for BasicStats {
             )?;
         }
 
-        // Row 7: %GC
+        // JAVA COMPAT: integer division
+        writeln!(
+            writer,
+            "Mean Length\t{}",
+            self.total_bases.checked_div(self.actual_count).unwrap_or(0)
+        )?;
+        writeln!(writer, "Median Length\t{}", self.median_length())?;
+
+        // Row 8: %GC
         // JAVA COMPAT: Integer division: ((gCount+cCount)*100)/(aCount+tCount+gCount+cCount)
         let total = self.a_count + self.t_count + self.g_count + self.c_count;
         let gc = ((self.g_count + self.c_count) * 100)

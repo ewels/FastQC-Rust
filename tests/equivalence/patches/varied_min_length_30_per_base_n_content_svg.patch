@@ -1,0 +1,15 @@
+--- java/Images/per_base_n_content.svg
++++ rust/Images/per_base_n_content.svg
+@@ -15,10 +15,10 @@
+ <text x="0" y="150" fill="rgb(0,0,0)" font-size="12">80</text>
+ <text x="0" y="98" fill="rgb(0,0,0)" font-size="12">90</text>
+ <text x="0" y="46" fill="rgb(0,0,0)" font-size="12">100</text>
+-<text x="350" y="30" fill="rgb(0,0,0)" font-size="12">N content across all bases</text>
++<text x="340" y="30" fill="rgb(0,0,0)" font-size="12">N content across all bases</text>
+ <line x1="30" y1="560" x2="820" y2="560" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+ <line x1="30" y1="560" x2="30" y2="40" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+-<text x="350" y="595" fill="rgb(0,0,0)" font-size="12">Position in read (bp)</text>
++<text x="360" y="595" fill="rgb(0,0,0)" font-size="12">Position in read (bp)</text>
+ <text x="30" y="575" fill="rgb(0,0,0)" font-size="12">1</text>
+ <rect width="10" height="520" x="40" y="40" fill="rgb(230,230,230)"/>
+ <text x="50" y="575" fill="rgb(0,0,0)" font-size="12">2</text>

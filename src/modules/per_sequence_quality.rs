@@ -6,6 +6,7 @@ use std::io;
 use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
 use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
+use crate::report::charts::CHART_WIDTH;
 use crate::sequence::Sequence;
 use crate::utils::format::java_format_double;
 use crate::utils::phred;
@@ -21,7 +22,7 @@ pub struct PerSequenceQualityScores {
     // Using a fixed array instead of HashMap eliminates hashing on every read.
     average_score_counts: [u64; MAX_QUALITY_SCORE],
     has_data: bool,
-    lowest_char: u8,
+    lowest_char: u16,
     // Set by QCModule::set_phred_encoding; see the trait docs.
     known_encoding: Option<phred::PhredEncoding>,
     limits: Limits,
@@ -32,8 +33,7 @@ impl PerSequenceQualityScores {
         PerSequenceQualityScores {
             average_score_counts: [0u64; MAX_QUALITY_SCORE],
             has_data: false,
-            // Java initialises lowestChar to 126
-            lowest_char: 126,
+            lowest_char: phred::NO_QUALITY_SEEN,
             known_encoding: None,
             limits: limits.clone(),
         }
@@ -44,7 +44,8 @@ impl PerSequenceQualityScores {
             return None;
         }
 
-        let encoding = phred::resolve(self.known_encoding, self.lowest_char).unwrap();
+        let encoding = phred::resolve(self.known_encoding, self.lowest_char)
+            .unwrap_or(phred::PhredEncoding::SANGER);
 
         // Find the range of scores with non-zero counts
         let mut range_start: Option<usize> = None;
@@ -109,6 +110,7 @@ impl PerSequenceQualityScores {
             data.x_categories.iter().map(|v| format!("{}", v)).collect();
 
         Some(render_line_graph(&LineGraphData {
+            width: CHART_WIDTH,
             data: vec![data.quality_distribution],
             min_y: 0.0,
             max_y,
@@ -130,9 +132,7 @@ impl QCModule for PerSequenceQualityScores {
         let mut average_quality: i32 = 0;
 
         for &q in qual.iter() {
-            if q < self.lowest_char {
-                self.lowest_char = q;
-            }
+            self.lowest_char = self.lowest_char.min(q as u16);
             average_quality += q as i32;
         }
 
@@ -160,7 +160,7 @@ impl QCModule for PerSequenceQualityScores {
     fn reset(&mut self) {
         self.average_score_counts = [0u64; MAX_QUALITY_SCORE];
         self.has_data = false;
-        self.lowest_char = 126;
+        self.lowest_char = phred::NO_QUALITY_SEEN;
     }
 
     fn raises_error(&self) -> bool {

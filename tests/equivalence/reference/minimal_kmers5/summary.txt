@@ -1,6 +1,6 @@
 PASS	Basic Statistics	minimal.fastq
 PASS	Per base sequence quality	minimal.fastq
-FAIL	Per sequence quality scores	minimal.fastq
+PASS	Per sequence quality scores	minimal.fastq
 FAIL	Per base sequence content	minimal.fastq
 FAIL	Per sequence GC content	minimal.fastq
 PASS	Per base N content	minimal.fastq
