@@ -72,16 +72,15 @@ struct Cli {
     #[arg(short, long, value_name = "FILE")]
     limits: Option<PathBuf>,
 
-    /// Total thread budget for the run, gzip decompression included [default:
-    /// available CPUs, up to 4]. Spread across the files processed
-    /// simultaneously and then within each file (a reader plus analysis
-    /// workers).
+    /// Total thread budget for the run [default: available CPUs, up to 6].
+    /// Spread across the files processed simultaneously and then within each
+    /// file (a reader/decoder plus analysis workers).
     #[arg(short, long, value_name = "N")]
     threads: Option<usize>,
 
-    /// Worker budget for parallel gzip decompression of .fastq.gz inputs, per
-    /// file. 0 (default) derives it from the --threads budget.
-    #[arg(long = "decompress-threads", value_name = "N", default_value = "0")]
+    /// Parallel gzip decoders per .fastq.gz file, not counted in --threads.
+    /// The default (1) keeps up with the analysis.
+    #[arg(long = "decompress-threads", value_name = "N", default_value = "1")]
     decompress_threads: usize,
 
     /// Specifies the length of Kmer to look for in the Kmer content module.

@@ -70,41 +70,40 @@ Output matches Java FastQC v0.13.0. Many of these changes came from this project
   single large `.fastq.gz` now benefits from extra threads instead of being
   pinned to one core. Builds on the upstream Java three-stage pipeline
   ([s-andrews/FastQC#197](https://github.com/s-andrews/FastQC/pull/197)).
-  A single file scales until the heaviest single module dominates (~4x for the
-  default modules); the order-dependent modules (overrepresented sequences,
+  A single file scales until the heaviest single module dominates (~2.4x on a
+  7.9 GB WES file, flat from `-t 6`); the order-dependent modules (overrepresented sequences,
   per-sequence GC) can't be split without changing output, so beyond that extra
   cores are best spent on more files at once, which scales linearly.
-- **`-t/--threads` is a ceiling on the whole run**, decompression included. Give
-  it and the run stays inside it — `-t 1` really does mean one analysis thread
-  and one decoder, which is what a workflow engine passing `task.cpus` needs.
-  Leave it out and the budget defaults to **the available CPUs, up to 4** — a
-  plain `fastqc sample.fastq.gz` gets the parallel pipeline without being
-  asked, but a big shared machine is not treated as idle just because it is
-  big. (Java FastQC defaults to 1; output is byte-identical whatever the
-  budget.) `--decompress-threads N` overrides the decompression side. The
-  thread budget honours cgroup quotas and CPU affinity, so a container or a
-  scheduler-pinned job sees its own allowance, not the host's cores. Four is
-  where a single file's returns flatten: on a 498 MB Illumina-like FASTQ a
-  single decoder already matched reading the *uncompressed* file, and the
-  analysis is bounded at roughly 4x by its heaviest module.
+- **`-t/--threads` is a ceiling on the whole run**, each file's decoder
+  included. Give it and the run stays inside it — `-t 1` really does mean one
+  analysis thread and one decoder, which is what a workflow engine passing
+  `task.cpus` needs. Leave it out and the budget defaults to **the available
+  CPUs, up to 6** — a plain `fastqc sample.fastq.gz` gets the parallel pipeline
+  without being asked, but a big shared machine is not treated as idle just
+  because it is big. (Java FastQC defaults to 1; output is byte-identical
+  whatever the budget.) The thread budget honours cgroup quotas and CPU
+  affinity, so a container or a scheduler-pinned job sees its own allowance,
+  not the host's cores. Six is where a single file's returns flatten; at most 6
+  analysis workers run per file, and any budget beyond that is left idle.
 - **Bounded pipeline memory on long reads.** The analysis pipeline capped its
   in-flight batches by record count alone, which is a few MB of Illumina reads
   but gigabytes of nanopore or PacBio ones. Batches are now capped by bytes as
   well: peak RSS on a 10 kb-read FASTQ at `-t 8` drops from 552 MB to 66 MB, and
   short-read runs batch exactly as before.
-- **Parallel gzip decompression is now the default** (and only) gzip reader,
-  backed by [`rapidgzip-core`](https://crates.io/crates/rapidgzip-core).
-  `.fastq.gz` is decompressed on a pool of background threads and overlapped
-  with the analysis, giving a meaningful end-to-end speedup on large gzipped
-  inputs (~1.5× end-to-end, up to ~4× on decompression alone in local tests)
-  while producing byte-identical output. New `--decompress-threads N` option
-  (default `0` = auto).
+- **rapidgzip is now the default** (and only) gzip reader, backed by
+  [`rapidgzip-core`](https://crates.io/crates/rapidgzip-core). `.fastq.gz` is
+  decoded on a background thread, overlapped with the analysis, with
+  byte-identical output. One decoder keeps up with the full parallel pipeline;
+  the new `--decompress-threads N` option (default `1`, not counted in
+  `--threads`) decodes in parallel chunks, but on typical data that costs CPU
+  and memory without speeding the run up.
 - **Removed the flate2/system-zlib gzip path**, the `rapidgzip`/`native-zlib`
   Cargo features, and the `FASTQC_GZIP_BACKEND` switch. The binary is now pure
   Rust (zlib-rs) with no C toolchain or system-library dependency, so builds are
-  fully static by default. As a side effect, BAM/BGZF and Fast5 decompression
-  (via `noodles`/`hdf5-pure`) now use the pure-Rust `miniz_oxide` backend rather
-  than system zlib. The `zip` dependency is likewise reduced to the `deflate`
+  fully static by default. BAM/BGZF and Fast5 decompression (via
+  `noodles`/`hdf5-pure`) use flate2's pure-Rust zlib-rs backend instead of
+  system zlib: ~10% slower on a BAM at `-t 1` on macOS, where the default
+  `miniz_oxide` backend was ~30% slower. The `zip` dependency is likewise reduced to the `deflate`
   feature — the only compression method FastQC ever writes or reads — which
   drops `xz2`/`lzma-sys` and with it the last dynamically linked C library.
 

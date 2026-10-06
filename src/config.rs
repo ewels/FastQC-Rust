@@ -30,15 +30,7 @@ pub struct FastQCConfig {
     pub expgroup: bool,
     pub quiet: bool,
     pub kmer_size: u8,
-    /// Total thread budget for the run, or `None` for "not specified".
-    ///
-    /// The distinction matters to gzip decompression, not to the analysis
-    /// (which reads `None` as 1 either way). An explicit budget is a statement
-    /// about how much of the machine this run may use — a scheduler passing
-    /// `task.cpus`, say — so decompression is held inside it too. With nothing
-    /// specified there is no such statement to honour, and decompression scales
-    /// to the hardware, which is what makes a plain `fastqc sample.fastq.gz`
-    /// fast. See [`crate::runner`]'s thread planning.
+    /// Total thread budget for the run; `None` means the available CPUs, capped.
     pub threads: Option<usize>,
     pub output_dir: Option<PathBuf>,
     pub casava: bool,
@@ -59,11 +51,7 @@ pub struct FastQCConfig {
     pub temp_dir: Option<PathBuf>,
     pub template: TemplateName,
     /// Per-file worker budget for the parallel gzip (rapidgzip) backend.
-    ///
-    /// `0` means "auto": the runner derives a value from [`Self::threads`] when
-    /// one was given, and otherwise from the available parallelism, in both
-    /// cases divided by the number of file groups processed concurrently. Any
-    /// other value is used verbatim. Applies to `.gz` inputs only.
+    /// Applies to `.gz` inputs only; `0` is treated as `1`.
     pub decompress_threads: usize,
 }
 
@@ -92,7 +80,7 @@ impl Default for FastQCConfig {
             png_output: false,
             temp_dir: None,
             template: TemplateName::Classic,
-            decompress_threads: 0,
+            decompress_threads: 1,
         }
     }
 }

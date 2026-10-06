@@ -372,10 +372,7 @@ impl FastQFile {
                 // .gz is decompressed in parallel by rapidgzip; progress is
                 // tracked by the compressed-byte counter it returns.
                 "gz" => {
-                    // `runner::run` normalises the "auto" (0) budget to a positive
-                    // value before we get here; `.max(1)` floors any direct caller
-                    // (e.g. a unit test) that leaves it at 0.
-                    let threads = config.decompress_threads.max(1);
+                    let threads = config.decompress_threads;
                     let trailer = gzip_trailer_size(path, file_size);
                     let (reader, progress) = open_rapidgzip(file, threads, trailer)?;
                     (

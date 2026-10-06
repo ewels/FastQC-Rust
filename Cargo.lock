@@ -386,6 +386,7 @@ dependencies = [
  "chrono",
  "clap",
  "console",
+ "flate2",
  "hdf5-pure",
  "indicatif",
  "libc",
@@ -423,6 +424,7 @@ checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
+ "zlib-rs",
 ]
 
 [[package]]

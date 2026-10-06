@@ -75,19 +75,22 @@ fastqc --help
 
 `-t`/`--threads` is the whole run's thread budget. It is spread across the files
 processed at once and then within each file (a reader plus analysis workers),
-and it bounds gzip decompression too — so `-t 1` means one analysis thread and
-one decoder, which is what a workflow engine passing `task.cpus` expects. The
+and each file's gzip decoder counts as part of its reader — so `-t 1` means one
+analysis thread and one decoder, which is what a workflow engine passing
+`task.cpus` expects. The
 budget honours cgroup quotas and CPU affinity, so a container or a
 scheduler-pinned job sees its own allowance rather than the host's core count.
 
-Leave `--threads` out and the budget is the available CPUs, up to 4 — enough
-that a plain `fastqc sample.fastq.gz` gets the parallel pipeline without being
-asked, without treating a big shared machine as idle. `--decompress-threads N`
-sets the decompression budget per file explicitly.
+Leave `--threads` out and the budget is the available CPUs, up to 6, so a plain
+`fastqc sample.fastq.gz` runs in parallel without taking over a shared machine.
+A single file stops
+getting faster at around `-t 6`: the analysis is split by module, and the
+heaviest one (Adapter Content) ends up alone on a worker and sets the pace.
+Above that, `--threads` only helps by processing more files at once.
 
-Decompression is rarely the thing to tune: one decoder already keeps up with the
-single-threaded analysis on typical Illumina data, so most of what `--threads`
-buys goes to the analysis pipeline.
+Decompression is rarely the thing to tune: one decoder per file keeps up with
+the full parallel pipeline, and extra decoders (`--decompress-threads N`, not
+counted in `--threads`) cost CPU and memory without making it faster.
 
 ### Progress display
 

@@ -33,6 +33,8 @@ path = "src/lib.rs"
 clap = { version = "4", features = ["derive"] }
 # Parallel, multi-member gzip decompression for .fastq.gz (pure Rust, zlib-rs backend).
 rapidgzip-core = "0.1.0"
+# Unused directly: switches all flate2 users (noodles BGZF, zip, png) from miniz_oxide to zlib-rs.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 bzip2-rs = "0.1"
 noodles = { version = "0.88", features = ["bam", "sam", "bgzf"] }
 # Only deflate: FastQC writes (and re-reads) nothing else, and the default
