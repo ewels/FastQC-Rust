@@ -21,7 +21,7 @@ import Base from '../../layouts/Base.astro';
     <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
       <code>UPSTREAM.toml</code> pins the tracked Java FastQC version.
       A nightly CI job checks for new releases and opens a GitHub issue when one appears.
-      Every commit is tested against stored Java reference output across 18 test cases,
+      Every commit is tested against stored Java reference output across 26 test cases,
       covering text files (byte-identical), HTML structure, SVG charts (normalised), and
       pixel-level PNG comparison.
       See the <a href="../equivalence/">equivalence report</a> for details.
@@ -32,35 +32,17 @@ import Base from '../../layouts/Base.astro';
       instead of system Arial, and uses resvg + tiny-skia instead of Java2D for PNG output,
       so antialiasing and text positions differ slightly — plus deliberate bug fixes
       documented in the <a href="https://github.com/ewels/FastQC-Rust/blob/main/CHANGELOG.md">changelog</a>,
-      such as using the specified Phred+33 encoding for BAM/SAM input instead of inferring it
+      such as always using Phred+33 for BAM/SAM input, even with <code>--phred64</code>
       (<a href="https://github.com/ewels/FastQC-Rust/issues/6">#6</a>).
     </p>
   </section>
 
   <section style="margin-bottom: 2.5rem">
     <h2>Upstream contributions</h2>
-    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
-      Pull requests submitted to <a href="https://github.com/s-andrews/FastQC">s-andrews/FastQC</a>
-      to port improvements upstream:
+    <p style="color: var(--ink-muted)">
+      Improvements found or prototyped here go back to
+      <a href="https://github.com/s-andrews/FastQC">s-andrews/FastQC</a> as pull requests.
+      See <a href="../upstream/">upstream contributions</a> for the full list, including what shipped in FastQC v0.13.0.
     </p>
-    <ul style="color: var(--ink-muted)">
-      <li><a href="https://github.com/s-andrews/FastQC/pull/185">#185</a> — Bundle Liberation Sans font (merged). Eliminates system font dependency and aligns chart text metrics between Java and Rust.</li>
-      <li><a href="https://github.com/s-andrews/FastQC/pull/186">#186</a> — Update integration test snapshots for the bundled font.</li>
-      <li><a href="https://github.com/s-andrews/FastQC/pull/187">#187</a> — Trim trailing empty rows from Adapter Content when <code>--min_length</code> is used.</li>
-      <li><a href="https://github.com/s-andrews/FastQC/pull/210">#210</a> — Use the Phred+33 encoding fixed by the BAM/SAM format instead of inferring it from the data (issue <a href="https://github.com/s-andrews/FastQC/issues/209">#209</a>).</li>
-    </ul>
-    <p style="color: var(--ink-muted); margin-top: 1rem">
-      Features ported from upstream PRs (not yet merged):
-    </p>
-    <ul style="color: var(--ink-muted)">
-      <li><a href="https://github.com/s-andrews/FastQC/pull/161">#161</a> — HTML report design refresh. Available in the Rust rewrite as the <a href="../templates/">modern template</a> (<code>--template modern</code>).</li>
-    </ul>
-
-    <p style="color: var(--ink-muted); margin-top: 1rem">
-      Coming soon (code awaiting clean-up and PR creation):
-    </p>
-    <ul style="color: var(--ink-muted)">
-      <li><a href="https://github.com/pditommaso/FastQC/pulls">pditommaso/FastQC</a> — fork by <a href="https://github.com/pditommaso">Paolo Di Tommaso</a>. Achieves 2-3x speed gains.</li>
-    </ul>
   </section>
 </Base>

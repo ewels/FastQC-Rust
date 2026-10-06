@@ -19,7 +19,7 @@ Two reasons, both secondary to the original tool:
 - **Upstream contributions** — a sandbox for prototyping improvements (performance, bug fixes, UI) that get [ported back to Java FastQC as PRs](https://ewels.github.io/FastQC-Rust/about/strategy/). The goal is to make the canonical tool better, not replace it.
 - **Rust crate** — published as [`fastqc-rust`](https://crates.io/crates/fastqc-rust) for developers building bioinformatics tooling in the Rust ecosystem. `fastqc_data.txt` and `summary.txt` are byte-identical to the Java version — see the [equivalence report](https://ewels.github.io/FastQC-Rust/about/equivalence/).
 
-Currently tracking upstream Java FastQC version `0.12.1`. See [`UPSTREAM.toml`](UPSTREAM.toml) for details.
+Currently tracking upstream Java FastQC version `0.13.0`. See [`UPSTREAM.toml`](UPSTREAM.toml) for details.
 
 ## Installation + Usage
 
@@ -29,7 +29,7 @@ Download prebuilt binaries from the [Releases](https://github.com/ewels/FastQC-R
 
 ```bash
 # Install (Linux x86_64 example -- see docs for all platforms)
-curl -fsSL https://github.com/ewels/FastQC-Rust/releases/download/v0.12.1/fastqc-linux-x86_64.tar.gz | tar xz --strip-components=1
+curl -fsSL https://github.com/ewels/FastQC-Rust/releases/latest/download/fastqc-linux-x86_64.tar.gz | tar xz --strip-components=1
 sudo mv ./fastqc /usr/local/bin/
 
 # Run
