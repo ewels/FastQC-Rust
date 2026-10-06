@@ -7,6 +7,7 @@ use std::io;
 use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
 use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
+use crate::report::charts::scaled_chart_width;
 use crate::sequence::Sequence;
 use crate::utils::base_group::BaseGroup;
 
@@ -49,7 +50,6 @@ pub struct KmerContent {
     limits: Limits,
     nogroup: bool,
     expgroup: bool,
-    min_length: usize,
     // Lazily computed
     computed: Option<ComputedKmerResults>,
 }
@@ -74,13 +74,7 @@ struct EnrichedKmer {
 }
 
 impl KmerContent {
-    pub fn new(
-        limits: &Limits,
-        kmer_size: u8,
-        nogroup: bool,
-        expgroup: bool,
-        min_length: usize,
-    ) -> Self {
+    pub fn new(limits: &Limits, kmer_size: u8, nogroup: bool, expgroup: bool) -> Self {
         let ks = kmer_size as usize;
         KmerContent {
             kmers: HashMap::with_capacity(4usize.pow(ks as u32)),
@@ -91,7 +85,6 @@ impl KmerContent {
             limits: limits.clone(),
             nogroup,
             expgroup,
-            min_length,
             computed: None,
         }
     }
@@ -136,8 +129,7 @@ impl KmerContent {
             0
         };
 
-        let groups =
-            BaseGroup::make_base_groups(group_length, self.min_length, self.nogroup, self.expgroup);
+        let groups = BaseGroup::make_base_groups(group_length, self.nogroup, self.expgroup);
 
         let mut uneven_kmers: Vec<(String, u64, f32, Vec<f32>, f32)> = Vec::new();
 
@@ -336,6 +328,7 @@ impl KmerContent {
         }
 
         Some(render_line_graph(&LineGraphData {
+            width: scaled_chart_width(x_categories.len()),
             data,
             min_y,
             max_y,

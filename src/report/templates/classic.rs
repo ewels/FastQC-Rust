@@ -22,7 +22,9 @@ const ICON_ERROR: &[u8] = include_bytes!("../../../assets/icons/error.png");
 // CSS is embedded from header_template.html, read at compile time.
 const CSS: &str = include_str!("../../../assets/header_template.html");
 
-pub struct ClassicTemplate;
+pub struct ClassicTemplate {
+    pub png: bool,
+}
 
 impl ReportTemplate for ClassicTemplate {
     fn write_html_report(
@@ -146,7 +148,7 @@ impl ReportTemplate for ClassicTemplate {
             write!(w, "</h2>")?;
 
             // Module content (table or chart)
-            module.write_html_report(w)?;
+            module.write_html_report(w, self.png)?;
 
             write!(w, "</div>")?;
         }

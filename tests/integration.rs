@@ -158,6 +158,7 @@ fn test_html_report_generation() {
         &mods,
         &file_display_name,
         fastqc_rust::config::TemplateName::Classic,
+        true,
     )
     .expect("Failed to generate HTML");
 
@@ -264,10 +265,9 @@ fn test_sam_input_uses_sanger_encoding() {
 }
 
 #[test]
-fn test_fastq_input_keeps_detection_heuristic() {
-    // For FASTQ the encoding genuinely is ambiguous, so the lowest-char
-    // heuristic must be kept to match Java FastQC: uniform Q40 data
-    // misdetects as Illumina 1.5 through the FASTQ path.
+fn test_fastq_input_defaults_to_phred33() {
+    // Since FastQC 0.13 there is no autodetection: uniform Q40 FASTQ data
+    // (formerly misdetected as Illumina 1.5) is read as Phred+33.
     let tmp_dir = std::env::temp_dir().join("fastqc_test_fastq_encoding");
     std::fs::create_dir_all(&tmp_dir).unwrap();
 
@@ -281,8 +281,8 @@ fn test_fastq_input_keeps_detection_heuristic() {
     let data = run_pipeline_extracted(&fastq_path, &tmp_dir);
 
     assert!(
-        data.contains("Encoding\tIllumina 1.5"),
-        "FASTQ input must keep Java's detection heuristic"
+        data.contains("Encoding\tSanger / Illumina 1.9"),
+        "FASTQ input must default to Phred+33"
     );
 
     std::fs::remove_dir_all(&tmp_dir).ok();
@@ -329,6 +329,7 @@ fn test_zip_archive_structure() {
         &mods,
         &file_display_name,
         fastqc_rust::config::TemplateName::Classic,
+        false,
     )
     .expect("Failed to generate HTML");
     report::archive::create_zip_archive(
@@ -337,7 +338,6 @@ fn test_zip_archive_structure() {
         "complex",
         &zip_path,
         &html_content,
-        true,
         fastqc_rust::config::TemplateName::Classic,
     )
     .expect("Failed to create zip");

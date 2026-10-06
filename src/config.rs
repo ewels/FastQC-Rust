@@ -42,8 +42,11 @@ pub struct FastQCConfig {
     pub adapter_file: Option<PathBuf>,
     pub limits_file: Option<PathBuf>,
     pub min_length: usize,
+    pub max_length: usize,
     pub dup_length: usize,
-    pub svg_output: bool,
+    pub phred64: bool,
+    /// Embed PNG rather than SVG charts in the HTML report.
+    pub png_output: bool,
     pub temp_dir: Option<PathBuf>,
     pub template: TemplateName,
 }
@@ -67,8 +70,10 @@ impl Default for FastQCConfig {
             adapter_file: None,
             limits_file: None,
             min_length: 0,
+            max_length: 0,
             dup_length: 0,
-            svg_output: false,
+            phred64: false,
+            png_output: false,
             temp_dir: None,
             template: TemplateName::Classic,
         }

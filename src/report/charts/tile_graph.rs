@@ -6,8 +6,8 @@
 // per-tile quality deviations from the position average.
 
 use super::{
-    approx_text_width, render_centered_title, svg_footer, svg_header, svg_line, svg_rect_filled,
-    svg_text, ChartColor, CHART_HEIGHT, CHART_WIDTH,
+    approx_text_width, render_centered_title, scaled_chart_width, svg_footer, svg_header, svg_line,
+    svg_rect_filled, svg_text, ChartColor, CHART_HEIGHT,
 };
 
 /// Parameters for drawing a tile heatmap.
@@ -109,10 +109,10 @@ impl HotColdGradient {
 /// - Each cell colored by deviation from average quality
 /// - Color gradient: blue (good) -> green (neutral) -> red (bad)
 pub fn render_tile_graph(params: &TileGraphData) -> String {
-    let width = CHART_WIDTH;
-    let height = CHART_HEIGHT;
     let num_tiles = params.tiles.len();
     let num_bases = params.x_labels.len();
+    let width = scaled_chart_width(num_bases);
+    let height = CHART_HEIGHT;
 
     if num_tiles == 0 || num_bases == 0 {
         // Return minimal SVG for empty data

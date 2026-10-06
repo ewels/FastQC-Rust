@@ -23,14 +23,13 @@ pub struct PerTileQualityScores {
     ignore_in_report: bool,
     nogroup: bool,
     expgroup: bool,
-    min_length: usize,
     // Set by QCModule::set_phred_encoding; see the trait docs.
     known_encoding: Option<phred::PhredEncoding>,
     limits: Limits,
 }
 
 impl PerTileQualityScores {
-    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool, min_length: usize) -> Self {
+    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool) -> Self {
         PerTileQualityScores {
             per_tile_quality_counts: HashMap::new(),
             current_length: 0,
@@ -39,7 +38,6 @@ impl PerTileQualityScores {
             ignore_in_report: false,
             nogroup,
             expgroup,
-            min_length,
             known_encoding: None,
             limits: limits.clone(),
         }
@@ -58,16 +56,11 @@ impl PerTileQualityScores {
             .collect();
         let (min_char, _max_char) = quality_count::calculate_offsets(all_counts);
         // If no quality data, default to the Sanger offset.
-        let offset = phred::resolve(self.known_encoding, min_char)
+        let offset = phred::resolve(self.known_encoding, min_char as u16)
             .map(|e| e.offset)
             .unwrap_or(phred::PhredEncoding::SANGER.offset);
 
-        let groups = BaseGroup::make_base_groups(
-            self.current_length,
-            self.min_length,
-            self.nogroup,
-            self.expgroup,
-        );
+        let groups = BaseGroup::make_base_groups(self.current_length, self.nogroup, self.expgroup);
 
         let mut tile_numbers: Vec<i32> = self.per_tile_quality_counts.keys().copied().collect();
         tile_numbers.sort();

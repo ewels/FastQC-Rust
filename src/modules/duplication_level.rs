@@ -9,6 +9,7 @@ use crate::config::{Limits, LimitsExt};
 use crate::modules::overrepresented_seqs::OverRepresentedData;
 use crate::modules::QCModule;
 use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
+use crate::report::charts::CHART_WIDTH;
 use crate::sequence::Sequence;
 use crate::utils::format::java_format_double;
 
@@ -100,12 +101,9 @@ impl DuplicationLevel {
             total_percentages[dup_slot] += count * dup_level as f64;
         }
 
-        // Convert to percentages
+        // JAVA COMPAT: no zero guard, so empty input gives NaN like Java.
         for tp in &mut total_percentages {
-            if raw_total > 0.0 {
-                *tp /= raw_total;
-                *tp *= 100.0;
-            }
+            *tp = *tp / raw_total * 100.0;
         }
 
         // percentDifferentSeqs = (dedupTotal/rawTotal)*100
@@ -188,6 +186,7 @@ impl DuplicationLevel {
         let title = format!("Percent of seqs remaining if deduplicated {}%", pct_str);
 
         render_line_graph(&LineGraphData {
+            width: CHART_WIDTH,
             data: vec![computed.total_percentages.to_vec()],
             min_y: 0.0,
             max_y: max_count,

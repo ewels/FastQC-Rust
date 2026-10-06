@@ -400,6 +400,15 @@ impl QCModule for OverRepresentedSeqs {
         self.limits.is_ignored("overrepresented")
     }
 
+    fn write_html_report(&self, writer: &mut dyn io::Write, _png: bool) -> io::Result<()> {
+        if self.ensure_calculated().is_empty() {
+            return write!(writer, "<p>No overrepresented sequences</p>");
+        }
+        let mut text = Vec::new();
+        self.write_text_report(&mut text)?;
+        crate::report::html::write_default_html_table(&String::from_utf8_lossy(&text), writer)
+    }
+
     fn write_text_report(&self, writer: &mut dyn io::Write) -> io::Result<()> {
         let seqs = self.ensure_calculated();
 
@@ -416,18 +425,14 @@ impl QCModule for OverRepresentedSeqs {
                 Some(hit) => hit.to_string(),
                 None => "No Hit".to_string(),
             };
-            // JAVA COMPAT: Java's OverRepresentedSeqs.OverrepresentedSeq stores
-            // the raw double percentage without rounding (see OverRepresentedSeqs.java:253),
-            // and AbstractQCModule.writeTable serializes it via String.valueOf(getValueAt(...))
-            // (AbstractQCModule.java:159), which returns Java's Double.toString() of the
-            // unrounded value (e.g. "7.160449112640348"). Pass the raw percentage to the
-            // formatter; do not round to 2 decimals.
+            // JAVA COMPAT: Math.round(p * 100.0) / 100.0, then Double.toString(),
+            // so "0.5" not "0.50". f64::round matches Math.round for positives.
             writeln!(
                 writer,
                 "{}\t{}\t{}\t{}",
                 s.seq,
                 s.count,
-                java_format_double(s.percentage),
+                java_format_double((s.percentage * 100.0).round() / 100.0),
                 source
             )?;
         }

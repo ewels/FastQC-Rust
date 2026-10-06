@@ -6,6 +6,7 @@ use std::io;
 use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
 use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
+use crate::report::charts::scaled_chart_width;
 use crate::sequence::Sequence;
 use crate::utils::base_counts::{BASE_INDEX, IDX_A, IDX_C, IDX_G, IDX_T};
 use crate::utils::base_group::BaseGroup;
@@ -18,28 +19,21 @@ pub struct PerBaseSequenceContent {
     counts: Vec<[u64; 4]>,
     nogroup: bool,
     expgroup: bool,
-    min_length: usize,
     limits: Limits,
 }
 
 impl PerBaseSequenceContent {
-    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool, min_length: usize) -> Self {
+    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool) -> Self {
         PerBaseSequenceContent {
             counts: Vec::new(),
             nogroup,
             expgroup,
-            min_length,
             limits: limits.clone(),
         }
     }
 
     fn calculate(&self) -> ContentData {
-        let groups = BaseGroup::make_base_groups(
-            self.counts.len(),
-            self.min_length,
-            self.nogroup,
-            self.expgroup,
-        );
+        let groups = BaseGroup::make_base_groups(self.counts.len(), self.nogroup, self.expgroup);
 
         let mut x_categories = Vec::with_capacity(groups.len());
         let mut g_percent = vec![0.0f64; groups.len()];
@@ -92,6 +86,7 @@ impl PerBaseSequenceContent {
         // Series order in LineGraph is [%T, %C, %A, %G], matching Java's
         // `new LineGraph(percentages, 0d, 100d, ..., new String[] {"%T","%C","%A","%G"}, ...)`
         render_line_graph(&LineGraphData {
+            width: scaled_chart_width(data.x_categories.len()),
             data: vec![
                 data.t_percent,
                 data.c_percent,

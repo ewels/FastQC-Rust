@@ -6,6 +6,7 @@ use std::io;
 use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
 use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
+use crate::report::charts::scaled_chart_width;
 use crate::sequence::Sequence;
 use crate::utils::format::java_format_double;
 
@@ -162,6 +163,7 @@ impl SequenceLengthDistribution {
 
         // Matches Java constructor call
         render_line_graph(&LineGraphData {
+            width: scaled_chart_width(computed.graph_counts.len()),
             data: vec![computed.graph_counts.clone()],
             min_y: 0.0,
             max_y,

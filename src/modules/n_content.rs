@@ -6,6 +6,7 @@ use std::io;
 use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
 use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
+use crate::report::charts::scaled_chart_width;
 use crate::sequence::Sequence;
 use crate::utils::base_counts::{BASE_INDEX, IDX_N};
 use crate::utils::base_group::BaseGroup;
@@ -16,29 +17,22 @@ pub struct NContent {
     not_n_counts: Vec<u64>,
     nogroup: bool,
     expgroup: bool,
-    min_length: usize,
     limits: Limits,
 }
 
 impl NContent {
-    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool, min_length: usize) -> Self {
+    pub fn new(limits: &Limits, nogroup: bool, expgroup: bool) -> Self {
         NContent {
             n_counts: Vec::new(),
             not_n_counts: Vec::new(),
             nogroup,
             expgroup,
-            min_length,
             limits: limits.clone(),
         }
     }
 
     fn calculate(&self) -> NContentData {
-        let groups = BaseGroup::make_base_groups(
-            self.n_counts.len(),
-            self.min_length,
-            self.nogroup,
-            self.expgroup,
-        );
+        let groups = BaseGroup::make_base_groups(self.n_counts.len(), self.nogroup, self.expgroup);
 
         let mut x_categories = Vec::with_capacity(groups.len());
         let mut percentages = vec![0.0f64; groups.len()];
@@ -74,6 +68,7 @@ impl NContent {
 
         // minY=0, maxY=100 for percentage, matching Java's constructor
         render_line_graph(&LineGraphData {
+            width: scaled_chart_width(data.x_categories.len()),
             data: vec![data.percentages],
             min_y: 0.0,
             max_y: 100.0,
