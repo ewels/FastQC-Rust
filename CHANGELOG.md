@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## v1.0.2dev
+
+> [!NOTE]
+> Tracking: FastQC [v0.13.0](https://github.com/s-andrews/FastQC/releases/tag/v0.13.0)
+
+### Upstream v0.13.0 changes
+
+Output matches Java FastQC v0.13.0. Many of these changes came from this project: see [upstream contributions](https://ewels.github.io/FastQC-Rust/about/upstream/).
+
+- **Phred+33 is the default.** Encoding autodetection is gone. Use the new `--phred64` flag for legacy Phred+64 files. A warning is printed if the data has no quality below Q31, and `--phred64` fails the file if a quality character is below 64.
+- **Basic Statistics** has new `Mean Length` and `Median Length` rows. The `Sequences flagged as poor quality` row is gone, and `Total Sequences` now includes CASAVA-filtered reads.
+- **`--min_length` is now a read filter**: shorter reads are discarded before analysis. It no longer pads per-base plots. The new `--max_length` discards longer reads.
+- **SVG graphs are the default** in the HTML report. Use `--png` for PNG. `--svg` is still accepted and does nothing. SVG files are now always written to the zip, in the same compact format as Java (polylines, merged rectangles, 2px lines).
+- **Overrepresented sequences** percentages are rounded to 2 decimal places, as in Java v0.13.0.
+- Empty input (for example, every read removed by `--min_length`) gives the same output as Java.
+- A warning is printed if the adapter sequences have different lengths.
 
 ### Changes
 
@@ -112,14 +127,21 @@
   a mis-encoded or non-ASCII quality line aborted the analysis (and, under the
   parallel pipeline, took a worker thread with it). It clamps and warns once,
   like the per-position tally next to it. Pre-existing, not new in this release.
-- `--template` no longer claims the short flag `-t`, which is `--threads` (as in
-  Java FastQC). Two arguments sharing a short name makes clap abort at startup —
-  release builds skip that assertion so it only showed up in debug builds, but
-  `-t` was ambiguous either way. Use the long `--template` form.
 - The live statistics table follows a terminal resized mid-run, rather than
   staying laid out for the width the run started at.
 - Read counts just short of a unit read as `1.0M` rather than `1000.0k`.
 
+- Use Sanger / Illumina 1.9 encoding for BAM/SAM input instead of inferring it from the lowest quality character ([#6](https://github.com/ewels/FastQC-Rust/issues/6), [#10](https://github.com/ewels/FastQC-Rust/pull/10)). BAM/SAM quality is Phred+33 by specification. Java FastQC v0.13.0 now defaults to Phred+33 for all input, so the only divergence left is that `--phred64` has no effect on BAM/SAM input. The matching Java PR ([s-andrews/FastQC#210](https://github.com/s-andrews/FastQC/pull/210)) was closed as superseded by v0.13.0.
+- Per-base charts (quality, sequence content, N content, adapter, Kmer, length distribution, per-tile) are now `max(800, groups × 15)` px wide, as in Java. Before, they were always 800px, which squashed long-read and `--nogroup` plots.
+- Adapter Content shows "Can't analyse adapters as read length is too short", as in Java, when no read is longer than the longest adapter. Overrepresented sequences shows "No overrepresented sequences" when there are none.
+- `--template` no longer uses the `-t` short flag, which clashed with `--threads`.
+- Fixed the nightly upstream check, which failed because the `upstream-update` label did not exist.
+
+### Other
+
+- New equivalence test cases for mixed read lengths, `--min_length`/`--max_length`, empty input and Phred+64 (26 cases in total).
+- `generate_reference.sh` works with an unpacked upstream release zip. The new `update_svg_patches.py` regenerates the SVG patches.
+- New docs page: [upstream contributions](https://ewels.github.io/FastQC-Rust/about/upstream/).
 ### Breaking changes for library users
 
 - `FastQCConfig::threads` is now `Option<usize>`; `None` (the default) means

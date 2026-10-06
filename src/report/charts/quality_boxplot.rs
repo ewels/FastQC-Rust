@@ -11,6 +11,7 @@ use super::{
 
 /// Parameters for drawing a quality box plot.
 pub struct QualityBoxPlotData {
+    pub width: f64,
     pub means: Vec<f64>,
     pub medians: Vec<f64>,
     pub lower_quartile: Vec<f64>,
@@ -51,7 +52,7 @@ const MEAN_COLOR: ChartColor = ChartColor::new(0, 0, 200);
 /// - Yellow boxes for IQR, whiskers for 10th/90th percentile
 /// - Red median line, blue mean line connecting all positions
 pub fn render_quality_boxplot(params: &QualityBoxPlotData) -> String {
-    let layout = ChartLayout::new(params.min_y, params.max_y, params.y_interval);
+    let layout = ChartLayout::new(params.min_y, params.max_y, params.y_interval, params.width);
 
     let num_positions = params.means.len();
     let base_width = layout.base_width(num_positions);

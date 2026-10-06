@@ -160,6 +160,7 @@ fn test_html_report_generation() {
         &mods,
         &file_display_name,
         fastqc_rust::config::TemplateName::Classic,
+        true,
     )
     .expect("Failed to generate HTML");
 
@@ -181,6 +182,112 @@ fn test_html_report_generation() {
         "Should contain base64 icons"
     );
     assert!(html.contains("</html>"), "Should end with closing html tag");
+}
+
+/// Build the read data for the encoding tests: uniform Q40 ('I' in Phred+33)
+/// with no base below Q31, which the lowest-char heuristic would misdetect
+/// as Illumina 1.5 (issue #6).
+fn high_quality_reads() -> Vec<(String, String, String)> {
+    (0..150)
+        .map(|i| {
+            (
+                format!("read{}", i),
+                "ACGTACGTACGTACGTACGTACGTACGTACGTAC".to_string(), // 34 bp
+                "I".repeat(34),                                   // Q40 throughout
+            )
+        })
+        .collect()
+}
+
+/// Run the full pipeline via runner::run with --extract and return fastqc_data.txt.
+fn run_pipeline_extracted(input_path: &Path, tmp_dir: &Path) -> String {
+    let config = FastQCConfig {
+        output_dir: Some(tmp_dir.to_path_buf()),
+        do_unzip: Some(true),
+        quiet: true,
+        threads: Some(1),
+        ..FastQCConfig::default()
+    };
+
+    fastqc_rust::runner::run(&config, &[input_path.to_path_buf()]).expect("Pipeline failed");
+
+    let base = input_path
+        .file_stem()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    std::fs::read_to_string(
+        tmp_dir
+            .join(format!("{}_fastqc", base))
+            .join("fastqc_data.txt"),
+    )
+    .expect("Failed to read extracted fastqc_data.txt")
+}
+
+#[test]
+fn test_sam_input_uses_sanger_encoding() {
+    // SAM/BAM quality is Phred+33 by construction, so the encoding must be
+    // reported as Sanger even when no base is below Q31 — the lowest-char
+    // heuristic would misdetect Illumina 1.5 and report every score 31 too
+    // low (issue #6).
+    let tmp_dir = std::env::temp_dir().join("fastqc_test_sam_encoding");
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+
+    let sam_path = tmp_dir.join("high_q.sam");
+    let mut sam = String::from("@HD\tVN:1.6\n");
+    for (name, seq, qual) in high_quality_reads() {
+        sam.push_str(&format!(
+            "{}\t4\t*\t0\t0\t*\t*\t0\t0\t{}\t{}\n",
+            name, seq, qual
+        ));
+    }
+    std::fs::write(&sam_path, sam).unwrap();
+
+    let data = run_pipeline_extracted(&sam_path, &tmp_dir);
+
+    assert!(
+        data.contains("Encoding\tSanger / Illumina 1.9"),
+        "SAM input must report Sanger encoding, got:\n{}",
+        data.lines()
+            .find(|l| l.starts_with("Encoding"))
+            .unwrap_or("(no Encoding line)")
+    );
+    // Per-base mean must be 40.0, not 9.0 (= 40 - 31, the Illumina 1.5 offset error)
+    assert!(
+        data.contains("1\t40.0\t"),
+        "Per-base quality for base 1 should have mean 40.0"
+    );
+    // Per-sequence quality distribution: all 150 reads average Q40
+    assert!(
+        data.contains("40\t150.0"),
+        "Per-sequence quality should place all 150 reads at Q40"
+    );
+
+    std::fs::remove_dir_all(&tmp_dir).ok();
+}
+
+#[test]
+fn test_fastq_input_defaults_to_phred33() {
+    // Since FastQC 0.13 there is no autodetection: uniform Q40 FASTQ data
+    // (formerly misdetected as Illumina 1.5) is read as Phred+33.
+    let tmp_dir = std::env::temp_dir().join("fastqc_test_fastq_encoding");
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+
+    let fastq_path = tmp_dir.join("high_q.fastq");
+    let mut fastq = String::new();
+    for (name, seq, qual) in high_quality_reads() {
+        fastq.push_str(&format!("@{}\n{}\n+\n{}\n", name, seq, qual));
+    }
+    std::fs::write(&fastq_path, fastq).unwrap();
+
+    let data = run_pipeline_extracted(&fastq_path, &tmp_dir);
+
+    assert!(
+        data.contains("Encoding\tSanger / Illumina 1.9"),
+        "FASTQ input must default to Phred+33"
+    );
+
+    std::fs::remove_dir_all(&tmp_dir).ok();
 }
 
 #[test]
@@ -224,6 +331,7 @@ fn test_zip_archive_structure() {
         &mods,
         &file_display_name,
         fastqc_rust::config::TemplateName::Classic,
+        false,
     )
     .expect("Failed to generate HTML");
     report::archive::create_zip_archive(
@@ -232,7 +340,6 @@ fn test_zip_archive_structure() {
         "complex",
         &zip_path,
         &html_content,
-        true,
         fastqc_rust::config::TemplateName::Classic,
     )
     .expect("Failed to create zip");
@@ -327,6 +434,8 @@ fn broken_input(dir: &Path) -> PathBuf {
 }
 
 const MINIMAL: &str = "tests/data/minimal.fastq";
+/// Unlike MINIMAL, low enough quality not to trigger the Phred64 warning.
+const VARIED: &str = "tests/data/varied.fastq";
 const COMPLEX: &str = "tests/data/complex.fastq";
 
 /// Everything that steers the display. Cleared before each run so a test says
@@ -572,7 +681,7 @@ fn test_quiet_beats_everything() {
         &[("CLICOLOR_FORCE", "1")][..],
         &[("FASTQC_PROGRESS", "always"), ("CLICOLOR_FORCE", "1")][..],
     ] {
-        let stderr = run_binary_stderr(&["--quiet"], env);
+        let stderr = run_binary(|_| vec![PathBuf::from(VARIED)], &["--quiet"], env);
         assert!(
             stderr.is_empty(),
             "--quiet wrote to stderr for {:?}: {:?}",
@@ -681,7 +790,7 @@ fn test_completion_summary() {
 /// `--quiet` stays quiet right to the end: no completion line either.
 #[test]
 fn test_quiet_suppresses_the_completion_summary() {
-    let stderr = run_binary_stderr(&["--quiet"], &[]);
+    let stderr = run_binary(|_| vec![PathBuf::from(VARIED)], &["--quiet"], &[]);
     assert!(stderr.is_empty(), "--quiet wrote: {:?}", stderr);
 }
 
@@ -712,10 +821,10 @@ fn test_table_visibility_follows_terminal_width() {
 
     // One file fits on a normal terminal but not a cramped one.
     assert!(shows_table(&run(&one, "80")));
-    assert!(!shows_table(&run(&one, "40")));
+    assert!(!shows_table(&run(&one, "30")));
 
-    // Three files need more room than 80 columns can give.
-    let cramped = run(&three, "80");
+    // Three files need more room than 70 columns can give.
+    let cramped = run(&three, "70");
     assert!(!shows_table(&cramped));
     assert!(shows_table(&run(&three, "120")));
 
@@ -740,7 +849,7 @@ fn run_on_a_pty(args: &[&str], rows: u16, columns: u16) -> String {
 
     let mut primary = 0;
     let mut secondary = 0;
-    let size = libc::winsize {
+    let mut size = libc::winsize {
         ws_row: rows,
         ws_col: columns,
         ws_xpixel: 0,
@@ -753,8 +862,8 @@ fn run_on_a_pty(args: &[&str], rows: u16, columns: u16) -> String {
             &mut primary,
             &mut secondary,
             std::ptr::null_mut(),
-            std::ptr::null(),
-            &size,
+            std::ptr::null_mut(),
+            &mut size,
         )
     };
     assert_eq!(opened, 0, "could not open a pty");

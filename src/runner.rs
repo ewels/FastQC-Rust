@@ -356,9 +356,20 @@ fn process_group(
     // Create module instances
     let mut modules = modules::create_modules(config, limits);
 
+    // If the input format specifies the quality encoding (BAM/SAM are
+    // Phred+33 by construction), pass it to the modules so they don't
+    // infer it from the lowest quality character. Inference misdetects
+    // Illumina 1.5 when the data contains no base below Q31 (issue #6).
+    let known_encoding = seq_file.known_phred_encoding().or(config
+        .phred64
+        .then_some(crate::utils::phred::PhredEncoding::PHRED64));
+
     // Set the filename on all modules (BasicStats uses it for the report)
     for module in modules.iter_mut() {
         module.set_filename(&file_display_name);
+        if let Some(encoding) = known_encoding {
+            module.set_phred_encoding(encoding);
+        }
     }
 
     // If the terminal display is showing a live statistics table, give
@@ -382,10 +393,15 @@ fn process_group(
     // worker count by the number of active modules.
     let num_processors = processors_per_file.min(modules.len());
     let read_count = if num_processors == 0 {
-        process_sequences_sequential(seq_file.as_mut(), &mut modules, file_progress)?
+        process_sequences_sequential(config, seq_file.as_mut(), &mut modules, file_progress)?
     } else {
-        let (rebuilt, count) =
-            process_sequences_parallel(seq_file.as_mut(), modules, num_processors, file_progress)?;
+        let (rebuilt, count) = process_sequences_parallel(
+            config,
+            seq_file.as_mut(),
+            modules,
+            num_processors,
+            file_progress,
+        )?;
         modules = rebuilt;
         count
     };
@@ -425,8 +441,12 @@ fn process_group(
     let zip_path = output_dir.join(format!("{}_fastqc.zip", base_name));
 
     // Generate HTML report as a string (used for both standalone file and zip entry)
-    let html_content =
-        report::html::generate_html_report(&modules, &file_display_name, config.template)?;
+    let html_content = report::html::generate_html_report(
+        &modules,
+        &file_display_name,
+        config.template,
+        config.png_output,
+    )?;
 
     // Write standalone HTML file
     // The Java code writes the HTML via PrintWriter after creating the zip
@@ -439,7 +459,6 @@ fn process_group(
         &base_name,
         &zip_path,
         &html_content,
-        config.svg_output,
         config.template,
     )?;
 
@@ -470,6 +489,12 @@ fn feed_module(module: &mut dyn QCModule, seq: &Sequence) {
     module.process_sequence(seq);
 }
 
+/// `--min_length`/`--max_length` discard reads before any module sees them.
+fn passes_length_filter(config: &FastQCConfig, seq: &Sequence) -> bool {
+    let len = seq.sequence.len();
+    len >= config.min_length && (config.max_length == 0 || len <= config.max_length)
+}
+
 /// How many records to read between updates of the terminal progress display.
 /// The display throttles its own redraws, so this only needs to be frequent
 /// enough that the bars look smooth.
@@ -481,6 +506,7 @@ const PROGRESS_INTERVAL: u64 = 1000;
 ///
 /// Returns the number of records read.
 fn process_sequences_sequential(
+    config: &FastQCConfig,
     seq_file: &mut dyn SequenceFile,
     modules: &mut [Box<dyn QCModule>],
     file_progress: FileProgress<'_>,
@@ -492,8 +518,10 @@ fn process_sequences_sequential(
             Some(Ok(seq)) => {
                 sequence_count += 1;
 
-                for module in modules.iter_mut() {
-                    feed_module(module.as_mut(), &seq);
+                if passes_length_filter(config, &seq) {
+                    for module in modules.iter_mut() {
+                        feed_module(module.as_mut(), &seq);
+                    }
                 }
 
                 if sequence_count.is_multiple_of(PROGRESS_INTERVAL) {
@@ -573,6 +601,7 @@ fn partition_modules_by_cost(
 ///
 /// Returns the modules in report order along with the number of records read.
 fn process_sequences_parallel(
+    config: &FastQCConfig,
     seq_file: &mut dyn SequenceFile,
     modules: Vec<Box<dyn QCModule>>,
     num_processors: usize,
@@ -622,10 +651,13 @@ fn process_sequences_parallel(
         'read: loop {
             match seq_file.next() {
                 Some(Ok(seq)) => {
+                    sequence_count += 1;
+                    if !passes_length_filter(config, &seq) {
+                        continue;
+                    }
                     batch_bytes += seq.heap_bytes();
                     batch.push(seq);
                     if batch.len() == BATCH_SIZE || batch_bytes >= BATCH_BYTES {
-                        let published = batch.len() as u64;
                         let full = std::mem::replace(&mut batch, Vec::with_capacity(BATCH_SIZE));
                         batch_bytes = 0;
                         let shared = Arc::new(full);
@@ -638,7 +670,6 @@ fn process_sequences_parallel(
                             }
                         }
 
-                        sequence_count += published;
                         file_progress.update(sequence_count, || seq_file.percent_complete());
                     }
                 }
@@ -652,7 +683,6 @@ fn process_sequences_parallel(
 
         // Publish the final partial batch (unless a read error aborted the run).
         if reader_error.is_none() && !batch.is_empty() {
-            sequence_count += batch.len() as u64;
             let shared = Arc::new(batch);
             for tx in &senders {
                 let _ = tx.send(Arc::clone(&shared));
@@ -947,7 +977,7 @@ mod tests {
             pos: 0,
         };
         let sequential_reads =
-            process_sequences_sequential(&mut seq_file, &mut mods_seq, reporter.file(0))
+            process_sequences_sequential(&config, &mut seq_file, &mut mods_seq, reporter.file(0))
                 .expect("sequential run");
         assert_eq!(sequential_reads, seqs.len() as u64);
         for m in mods_seq.iter_mut() {
@@ -972,6 +1002,7 @@ mod tests {
                 pos: 0,
             };
             let (mut mods_par, parallel_reads) = process_sequences_parallel(
+                &config,
                 &mut seq_file,
                 mods_par,
                 num_processors,

@@ -1,0 +1,22 @@
+--- java/Images/per_base_sequence_content.svg
++++ rust/Images/per_base_sequence_content.svg
+@@ -18,7 +18,7 @@
+ <text x="310" y="30" fill="rgb(0,0,0)" font-size="12">Sequence content across all bases</text>
+ <line x1="30" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+ <line x1="30" y1="560" x2="30" y2="40" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+-<text x="340" y="595" fill="rgb(0,0,0)" font-size="12">Position in read (bp)</text>
++<text x="350" y="595" fill="rgb(0,0,0)" font-size="12">Position in read (bp)</text>
+ <line x1="30" y1="560" x2="790" y2="560" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <line x1="30" y1="508" x2="790" y2="508" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <line x1="30" y1="456" x2="790" y2="456" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+@@ -30,8 +30,8 @@
+ <line x1="30" y1="144" x2="790" y2="144" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <line x1="30" y1="92" x2="790" y2="92" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <line x1="30" y1="40" x2="790" y2="40" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+-<rect width="20" height="83" x="770" y="40" fill="rgb(255,255,255)"/>
+-<rect width="20" height="83" x="770" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
++<rect width="20" height="83" x="760" y="40" fill="rgb(255,255,255)"/>
++<rect width="20" height="83" x="760" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
+ <text x="770" y="55" fill="rgb(136,34,85)" font-size="12">%T</text>
+ <text x="770" y="75" fill="rgb(51,34,136)" font-size="12">%C</text>
+ <text x="770" y="95" fill="rgb(17,119,51)" font-size="12">%A</text>

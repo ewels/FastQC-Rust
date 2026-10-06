@@ -71,8 +71,8 @@ fastqc -t 4 --format bam aligned.bam      # parallel, BAM input`;
         <h3 style="margin-top: 0">Upstream contributions</h3>
         <p style="font-size: 0.875rem; color: var(--ink-muted)">
           It started off as a "what if.." and turned into more of a sandbox for
-          prototyping improvements, that will hopefully get
-          <a href={`${base}about/strategy/`}>ported back to the main Java FastQC</a>.
+          prototyping improvements that get
+          <a href={`${base}about/upstream/`}>ported back to the main Java FastQC</a>.
           The goal is to make the canonical tool better, not to replace it or fragment community usage.
         </p>
       </div>
@@ -95,8 +95,8 @@ fastqc -t 4 --format bam aligned.bam      # parallel, BAM input`;
       Single-threaded, one file (7.3 GB Illumina WES). <a href={`${base}about/performance/`}>Full benchmarks</a>.
     </p>
     <p style="color: var(--ink-muted); font-size: 0.875rem; margin-bottom: 1rem">
-      Expect this gap to narrow,
-      <a href={`${base}about/strategy/`}>most of these speedups are being contributed upstream</a>.
+      These benchmarks predate Java FastQC v0.13.0. The main speedups have since been
+      <a href={`${base}about/upstream/`}>contributed upstream</a> and shipped in v0.13.0, so expect the gap to be smaller.
     </p>
     <div class="grid-2">
       <div>

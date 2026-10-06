@@ -1,0 +1,26 @@
+--- java/Images/duplication_levels.svg
++++ rust/Images/duplication_levels.svg
+@@ -15,10 +15,10 @@
+ <text x="0" y="150" fill="rgb(0,0,0)" font-size="12">80</text>
+ <text x="0" y="98" fill="rgb(0,0,0)" font-size="12">90</text>
+ <text x="0" y="46" fill="rgb(0,0,0)" font-size="12">100</text>
+-<text x="260" y="30" fill="rgb(0,0,0)" font-size="12">Percent of seqs remaining if deduplicated 99,27%</text>
++<text x="260" y="30" fill="rgb(0,0,0)" font-size="12">Percent of seqs remaining if deduplicated 99.27%</text>
+ <line x1="30" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+ <line x1="30" y1="560" x2="30" y2="40" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+-<text x="320" y="595" fill="rgb(0,0,0)" font-size="12">Sequence Duplication Level</text>
++<text x="330" y="595" fill="rgb(0,0,0)" font-size="12">Sequence Duplication Level</text>
+ <text x="50" y="575" fill="rgb(0,0,0)" font-size="12">1</text>
+ <rect width="50" height="520" x="80" y="40" fill="rgb(230,230,230)"/>
+ <text x="100" y="575" fill="rgb(0,0,0)" font-size="12">2</text>
+@@ -55,7 +55,7 @@
+ <line x1="30" y1="92" x2="790" y2="92" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <line x1="30" y1="40" x2="790" y2="40" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <polyline points="52,45 99,560 146,560 193,559 240,560 287,558 334,560 381,560 428,560 475,560 522,560 569,560 616,560 663,560 710,560 757,560" stroke="rgb(136,34,85)" stroke-width="[SW]" fill="none"/>
+-<rect width="120" height="23" x="670" y="40" fill="rgb(255,255,255)"/>
+-<rect width="120" height="23" x="670" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
+-<text x="670" y="55" fill="rgb(136,34,85)" font-size="12">% Total sequences</text>
++<rect width="110" height="23" x="680" y="40" fill="rgb(255,255,255)"/>
++<rect width="110" height="23" x="680" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
++<text x="680" y="55" fill="rgb(136,34,85)" font-size="12">% Total sequences</text>
+ </svg>

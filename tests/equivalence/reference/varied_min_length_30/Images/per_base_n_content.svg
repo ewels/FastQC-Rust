@@ -1,0 +1,85 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="825" height="600" version="1.1" xmlns="http://www.w3.org/2000/svg">
+<style>text{font-family:Arial}</style>
+<rect width="825" height="600" x="0" y="0" fill="rgb(238,238,238)"/>
+<rect width="825" height="600" x="0" y="0" fill="rgb(255,255,255)"/>
+<text x="2" y="566" fill="rgb(0,0,0)" font-size="12">0</text>
+<text x="2" y="514" fill="rgb(0,0,0)" font-size="12">10</text>
+<text x="2" y="462" fill="rgb(0,0,0)" font-size="12">20</text>
+<text x="2" y="410" fill="rgb(0,0,0)" font-size="12">30</text>
+<text x="2" y="358" fill="rgb(0,0,0)" font-size="12">40</text>
+<text x="2" y="306" fill="rgb(0,0,0)" font-size="12">50</text>
+<text x="2" y="254" fill="rgb(0,0,0)" font-size="12">60</text>
+<text x="2" y="202" fill="rgb(0,0,0)" font-size="12">70</text>
+<text x="2" y="150" fill="rgb(0,0,0)" font-size="12">80</text>
+<text x="2" y="98" fill="rgb(0,0,0)" font-size="12">90</text>
+<text x="2" y="46" fill="rgb(0,0,0)" font-size="12">100</text>
+<text x="347" y="30" fill="rgb(0,0,0)" font-size="12">N content across all bases</text>
+<line x1="29" y1="560" x2="815" y2="560" stroke="rgb(0,0,0)" stroke-width="2"/>
+<line x1="29" y1="560" x2="29" y2="40" stroke="rgb(0,0,0)" stroke-width="2"/>
+<text x="354" y="595" fill="rgb(0,0,0)" font-size="12">Position in read (bp)</text>
+<text x="32" y="575" fill="rgb(0,0,0)" font-size="12">1</text>
+<rect width="14" height="520" x="43" y="40" fill="rgb(230,230,230)"/>
+<text x="46" y="575" fill="rgb(0,0,0)" font-size="12">2</text>
+<text x="60" y="575" fill="rgb(0,0,0)" font-size="12">3</text>
+<rect width="14" height="520" x="71" y="40" fill="rgb(230,230,230)"/>
+<text x="74" y="575" fill="rgb(0,0,0)" font-size="12">4</text>
+<text x="88" y="575" fill="rgb(0,0,0)" font-size="12">5</text>
+<rect width="14" height="520" x="99" y="40" fill="rgb(230,230,230)"/>
+<text x="102" y="575" fill="rgb(0,0,0)" font-size="12">6</text>
+<text x="116" y="575" fill="rgb(0,0,0)" font-size="12">7</text>
+<rect width="14" height="520" x="127" y="40" fill="rgb(230,230,230)"/>
+<text x="130" y="575" fill="rgb(0,0,0)" font-size="12">8</text>
+<text x="144" y="575" fill="rgb(0,0,0)" font-size="12">9</text>
+<rect width="14" height="520" x="155" y="40" fill="rgb(230,230,230)"/>
+<rect width="14" height="520" x="183" y="40" fill="rgb(230,230,230)"/>
+<text x="171" y="575" fill="rgb(0,0,0)" font-size="12">14-15</text>
+<rect width="14" height="520" x="211" y="40" fill="rgb(230,230,230)"/>
+<rect width="14" height="520" x="239" y="40" fill="rgb(230,230,230)"/>
+<text x="227" y="575" fill="rgb(0,0,0)" font-size="12">22-23</text>
+<rect width="14" height="520" x="267" y="40" fill="rgb(230,230,230)"/>
+<rect width="14" height="520" x="295" y="40" fill="rgb(230,230,230)"/>
+<text x="283" y="575" fill="rgb(0,0,0)" font-size="12">30-31</text>
+<rect width="14" height="520" x="323" y="40" fill="rgb(230,230,230)"/>
+<rect width="14" height="520" x="351" y="40" fill="rgb(230,230,230)"/>
+<text x="339" y="575" fill="rgb(0,0,0)" font-size="12">38-39</text>
+<rect width="14" height="520" x="379" y="40" fill="rgb(230,230,230)"/>
+<rect width="14" height="520" x="407" y="40" fill="rgb(230,230,230)"/>
+<text x="395" y="575" fill="rgb(0,0,0)" font-size="12">46-47</text>
+<rect width="14" height="520" x="435" y="40" fill="rgb(230,230,230)"/>
+<rect width="14" height="520" x="463" y="40" fill="rgb(230,230,230)"/>
+<text x="451" y="575" fill="rgb(0,0,0)" font-size="12">54-55</text>
+<rect width="14" height="520" x="491" y="40" fill="rgb(230,230,230)"/>
+<rect width="14" height="520" x="519" y="40" fill="rgb(230,230,230)"/>
+<text x="507" y="575" fill="rgb(0,0,0)" font-size="12">62-63</text>
+<rect width="14" height="520" x="547" y="40" fill="rgb(230,230,230)"/>
+<rect width="14" height="520" x="575" y="40" fill="rgb(230,230,230)"/>
+<text x="563" y="575" fill="rgb(0,0,0)" font-size="12">70-71</text>
+<rect width="14" height="520" x="603" y="40" fill="rgb(230,230,230)"/>
+<rect width="14" height="520" x="631" y="40" fill="rgb(230,230,230)"/>
+<text x="619" y="575" fill="rgb(0,0,0)" font-size="12">78-79</text>
+<rect width="14" height="520" x="659" y="40" fill="rgb(230,230,230)"/>
+<rect width="14" height="520" x="687" y="40" fill="rgb(230,230,230)"/>
+<text x="675" y="575" fill="rgb(0,0,0)" font-size="12">86-87</text>
+<rect width="14" height="520" x="715" y="40" fill="rgb(230,230,230)"/>
+<rect width="14" height="520" x="743" y="40" fill="rgb(230,230,230)"/>
+<text x="731" y="575" fill="rgb(0,0,0)" font-size="12">94-95</text>
+<rect width="14" height="520" x="771" y="40" fill="rgb(230,230,230)"/>
+<text x="780" y="575" fill="rgb(0,0,0)" font-size="12">100</text>
+<line x1="29" y1="560" x2="815" y2="560" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="508" x2="815" y2="508" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="456" x2="815" y2="456" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="404" x2="815" y2="404" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="352" x2="815" y2="352" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="300" x2="815" y2="300" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="248" x2="815" y2="248" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="196" x2="815" y2="196" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="144" x2="815" y2="144" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="92" x2="815" y2="92" stroke="rgb(180,180,180)" stroke-width="2"/>
+<line x1="29" y1="40" x2="815" y2="40" stroke="rgb(180,180,180)" stroke-width="2"/>
+<polyline points="36,560 50,560 64,560 78,560 92,560 106,560 120,560 134,560 148,560 162,560 176,560 190,560 204,560 218,560 232,560 246,560 260,560 274,560 288,560 302,560 316,560 330,560 344,560 358,560 372,560 386,560 400,560 414,560 428,560 442,560 456,560 470,560 484,560 498,560 512,560 526,560 540,560 554,560 568,560 582,560 596,560 610,560 624,560 638,560 652,560 666,560 680,560 694,560 708,560 722,560 736,560 750,560 764,560 778,560 792,560" stroke="rgb(136,34,85)" stroke-width="2" fill="none"/>
+<rect width="24" height="23" x="791" y="40" fill="rgb(255,255,255)"/>
+<rect width="24" height="23" x="791" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
+<text x="794" y="55" fill="rgb(136,34,85)" font-size="12" font-weight="bold">%N</text>
+</svg>

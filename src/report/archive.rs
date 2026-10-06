@@ -25,7 +25,7 @@ use zip::ZipWriter;
 
 use crate::config::TemplateName;
 use crate::modules::QCModule;
-use crate::report::charts::{strip_crisp_edges, svg_to_png, xml_escape, CHART_HEIGHT, CHART_WIDTH};
+use crate::report::charts::{svg_to_png, xml_escape};
 use crate::report::text;
 
 // Embed icon files at compile time, same PNGs as in Templates/Icons/
@@ -61,7 +61,6 @@ pub fn create_zip_archive(
     base_name: &str,
     zip_path: &Path,
     html_content: &str,
-    svg_output: bool,
     template: TemplateName,
 ) -> io::Result<()> {
     let file = fs::File::create(zip_path)?;
@@ -125,19 +124,14 @@ pub fn create_zip_archive(
         if let (Some(image_name), Some(svg)) =
             (module.chart_image_name(), module.generate_chart_svg())
         {
-            // SVG files are only written when --svg flag is passed.
-            // PNGs are always written.
-            if svg_output {
-                zip.start_file(format!("{}/Images/{}.svg", folder, image_name), options)
-                    .map_err(zip_err)?;
-                zip.write_all(strip_crisp_edges(&svg).as_bytes())?;
-            }
+            zip.start_file(format!("{}/Images/{}.svg", folder, image_name), options)
+                .map_err(zip_err)?;
+            zip.write_all(crate::report::html::java_svg(&svg).as_bytes())?;
 
             // Write PNG file
             // Java renders the Swing JPanel at 800x600 to a BufferedImage,
             // then writes via ImageIO.write(b, "PNG", zip).
-            let png_bytes = svg_to_png(&svg, CHART_WIDTH as u32, CHART_HEIGHT as u32)
-                .map_err(io::Error::other)?;
+            let png_bytes = svg_to_png(&svg).map_err(io::Error::other)?;
             zip.start_file(format!("{}/Images/{}.png", folder, image_name), options)
                 .map_err(zip_err)?;
             zip.write_all(&png_bytes)?;

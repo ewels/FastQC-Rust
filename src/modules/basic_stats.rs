@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use crate::config::Limits;
 use crate::modules::QCModule;
 use crate::sequence::Sequence;
-use crate::utils::base_counts::{BASE_INDEX, IDX_A, IDX_C, IDX_G, IDX_N, IDX_T};
+use crate::utils::base_counts::{BASE_INDEX, IDX_A, IDX_C, IDX_G, IDX_T};
 use crate::utils::phred;
 
 /// Sequences between publications of the counters to the live snapshot.
@@ -30,7 +30,6 @@ const PUBLISH_INTERVAL: u32 = 256;
 #[derive(Debug, Clone, Copy)]
 pub struct BasicStatsCounters {
     actual_count: u64,
-    filtered_count: u64,
     min_length: usize,
     max_length: usize,
     total_bases: u64,
@@ -38,27 +37,26 @@ pub struct BasicStatsCounters {
     c_count: u64,
     a_count: u64,
     t_count: u64,
-    n_count: u64,
-    /// Lowest quality character seen. Java initialises this to 126 (the
-    /// highest printable ASCII) and lowers it as sequences are read.
-    lowest_char: u8,
-    /// Whether the base calls were converted from colorspace, for the "File
-    /// type" row. Java leaves the field null until the first sequence and
-    /// prints "Conventional base calls" for it, so `false` is also the
-    /// no-sequences-yet value.
-    colorspace: bool,
+    lowest_char: u16,
+    // Set by QCModule::set_phred_encoding; see the trait docs.
+    known_encoding: Option<phred::PhredEncoding>,
+    /// Whether the base calls were converted from colorspace, taken from the
+    /// first sequence. `None` until then.
+    colorspace: Option<bool>,
+    /// Derived from [`BasicStats`]'s length histogram, which is too big to copy
+    /// into every snapshot; refreshed whenever the counters are published.
+    median_length: usize,
 }
 
-/// Spelled out rather than derived: `lowest_char` starts at the *top* of the
-/// range and is lowered, so a derived all-zeroes default would be a state the
-/// counters can never legitimately reach — and one whose `rows()` reports a
-/// bogus encoding. This is the only constructor, so there is nowhere for that
+/// Spelled out rather than derived: `lowest_char` starts at a sentinel above
+/// the range and is lowered, so a derived all-zeroes default would be a state
+/// the counters can never legitimately reach — and one whose `rows()` reports
+/// a bogus encoding. This is the only constructor, so there is nowhere for that
 /// state to come from.
 impl Default for BasicStatsCounters {
     fn default() -> Self {
         BasicStatsCounters {
             actual_count: 0,
-            filtered_count: 0,
             min_length: 0,
             max_length: 0,
             total_bases: 0,
@@ -66,10 +64,10 @@ impl Default for BasicStatsCounters {
             c_count: 0,
             a_count: 0,
             t_count: 0,
-            n_count: 0,
-            // Java starts at 126 (char), we mirror that
-            lowest_char: 126,
-            colorspace: false,
+            lowest_char: phred::NO_QUALITY_SEEN,
+            known_encoding: None,
+            colorspace: None,
+            median_length: 0,
         }
     }
 }
@@ -77,13 +75,14 @@ impl Default for BasicStatsCounters {
 impl BasicStatsCounters {
     /// The measures reported, in report order, minus the leading "Filename"
     /// row. [`Self::rows`] returns a value for each of these, in this order.
-    pub const MEASURES: [&'static str; 7] = [
+    pub const MEASURES: [&'static str; 8] = [
         "File type",
         "Encoding",
         "Total Sequences",
         "Total Bases",
-        "Sequences flagged as poor quality",
         "Sequence length",
+        "Mean Length",
+        "Median Length",
         "%GC",
     ];
 
@@ -91,8 +90,16 @@ impl BasicStatsCounters {
     /// order. Both the text report and the live progress table render from
     /// this, so the values on screen always agree with the values on disk.
     pub fn rows(&self) -> Vec<(&'static str, String)> {
-        // Uses PhredEncoding.getFastQEncodingOffset(lowestChar)
-        let encoding = phred::detect(self.lowest_char)
+        // JAVA COMPAT: Java prints its unset String as "null" for empty input.
+        let file_type = match self.colorspace {
+            None => "null",
+            Some(true) => "Colorspace converted to bases",
+            Some(false) => "Conventional base calls",
+        };
+
+        // The report propagates a resolve failure before rendering rows (see
+        // write_text_report), so "Unknown" only ever reaches the live table.
+        let encoding = phred::resolve(self.known_encoding, self.lowest_char)
             .map(|e| e.name.to_string())
             .unwrap_or_else(|_| "Unknown".to_string());
 
@@ -102,25 +109,23 @@ impl BasicStatsCounters {
             format!("{}-{}", self.min_length, self.max_length)
         };
 
+        // JAVA COMPAT: integer division
+        let mean_length = self.total_bases.checked_div(self.actual_count).unwrap_or(0);
+
         // JAVA COMPAT: Integer division: ((gCount+cCount)*100)/(aCount+tCount+gCount+cCount)
         let total = self.a_count + self.t_count + self.g_count + self.c_count;
         let gc = ((self.g_count + self.c_count) * 100)
             .checked_div(total)
             .unwrap_or(0);
 
-        let file_type = if self.colorspace {
-            "Colorspace converted to bases"
-        } else {
-            "Conventional base calls"
-        };
-
         let values = [
             file_type.to_string(),
             encoding,
             self.actual_count.to_string(),
             format_length(self.total_bases),
-            self.filtered_count.to_string(),
             sequence_length,
+            mean_length.to_string(),
+            self.median_length.to_string(),
             gc.to_string(),
         ];
         Self::MEASURES.into_iter().zip(values).collect()
@@ -160,20 +165,19 @@ impl LiveStats {
 /// its custom decimal truncation logic (keeps at most 1 non-zero decimal digit).
 pub fn format_length(original_length: u64) -> String {
     let mut length = original_length as f64;
-    let unit;
 
-    if length >= 1_000_000_000.0 {
+    let unit = if length >= 1_000_000_000.0 {
         length /= 1_000_000_000.0;
-        unit = " Gbp";
+        " Gbp"
     } else if length >= 1_000_000.0 {
         length /= 1_000_000.0;
-        unit = " Mbp";
+        " Mbp"
     } else if length >= 1_000.0 {
         length /= 1_000.0;
-        unit = " kbp";
+        " kbp"
     } else {
-        unit = " bp";
-    }
+        " bp"
+    };
 
     // JAVA COMPAT: Java builds `"" + length` which calls Double.toString(),
     // then applies a custom truncation: find the dot, keep one more char if
@@ -206,6 +210,9 @@ pub fn format_length(original_length: u64) -> String {
 pub struct BasicStats {
     name: Option<String>,
     counters: BasicStatsCounters,
+    // Java reads the median from the Sequence Length Distribution module,
+    // which skips filtered reads, so this does too.
+    length_counts: Vec<u64>,
     /// Optional live snapshot sink for the terminal progress table.
     live: Option<Arc<LiveStats>>,
 }
@@ -215,6 +222,7 @@ impl BasicStats {
         BasicStats {
             name: None,
             counters: BasicStatsCounters::default(),
+            length_counts: Vec::new(),
             live: None,
         }
     }
@@ -228,11 +236,26 @@ impl BasicStats {
     }
 
     /// Push the current counters to the live snapshot, if one is attached.
-    fn publish(&self) {
+    fn publish(&mut self) {
         if let Some(ref live) = self.live {
+            self.counters.median_length = median_length(&self.length_counts);
             live.publish(self.counters);
         }
     }
+}
+
+/// Replicates `SequenceLengthDistribution.medianLength()`: the upper of the
+/// two central values for an even read count, 0 when there are no reads.
+fn median_length(length_counts: &[u64]) -> usize {
+    let rank50 = length_counts.iter().sum::<u64>() / 2;
+    let mut running = 0;
+    for (len, &count) in length_counts.iter().enumerate() {
+        running += count;
+        if running > rank50 {
+            return len;
+        }
+    }
+    0
 }
 
 impl QCModule for BasicStats {
@@ -242,29 +265,26 @@ impl QCModule for BasicStats {
 
     fn process_sequence(&mut self, sequence: &Sequence) {
         // Publish a snapshot for the live progress table every so often.
-        // Counted off the tallies themselves rather than a third counter, and
-        // taken before this sequence is added so that nothing is published
+        // Taken before this sequence is added so that nothing is published
         // until there is something to show.
-        let seen = self.counters.actual_count + self.counters.filtered_count;
+        let seen = self.counters.actual_count;
         if seen != 0 && seen.is_multiple_of(PUBLISH_INTERVAL as u64) {
             self.publish();
-        }
-
-        // Java counts filtered sequences separately
-        if sequence.is_filtered {
-            self.counters.filtered_count += 1;
-            return;
         }
 
         let c = &mut self.counters;
         c.actual_count += 1;
         c.total_bases += sequence.sequence.len() as u64;
 
-        // Both the file type and the length range are taken from the first
-        // non-filtered sequence, as Java does.
         let len = sequence.sequence.len();
+        if !sequence.is_filtered {
+            if self.length_counts.len() <= len {
+                self.length_counts.resize(len + 1, 0);
+            }
+            self.length_counts[len] += 1;
+        }
         if c.actual_count == 1 {
-            c.colorspace = sequence.colorspace.is_some();
+            c.colorspace = Some(sequence.colorspace.is_some());
             c.min_length = len;
             c.max_length = len;
         } else {
@@ -281,12 +301,9 @@ impl QCModule for BasicStats {
         c.c_count += counts[IDX_C];
         c.g_count += counts[IDX_G];
         c.t_count += counts[IDX_T];
-        c.n_count += counts[IDX_N];
 
         for &q in &sequence.quality {
-            if q < c.lowest_char {
-                c.lowest_char = q;
-            }
+            c.lowest_char = c.lowest_char.min(q as u16);
         }
     }
 
@@ -297,11 +314,21 @@ impl QCModule for BasicStats {
     /// Publish the final counters so the progress table ends on exactly the
     /// values that go into the report.
     fn finalize(&mut self) {
+        if self.counters.known_encoding.is_none() {
+            if let Some(warning) = phred::phred64_suspicion(self.counters.lowest_char) {
+                crate::progress::log_line(&warning);
+            }
+        }
+        self.counters.median_length = median_length(&self.length_counts);
         self.publish();
     }
 
     fn set_filename(&mut self, name: &str) {
         self.set_file_name(name);
+    }
+
+    fn set_phred_encoding(&mut self, encoding: phred::PhredEncoding) {
+        self.counters.known_encoding = Some(encoding);
     }
 
     fn name(&self) -> &str {
@@ -319,7 +346,6 @@ impl QCModule for BasicStats {
         self.counters.c_count = 0;
         self.counters.a_count = 0;
         self.counters.t_count = 0;
-        self.counters.n_count = 0;
     }
 
     // BasicStats never raises error or warning
@@ -332,7 +358,6 @@ impl QCModule for BasicStats {
     }
 
     fn ignore_filtered_sequences(&self) -> bool {
-        // BasicStats processes filtered sequences (to count them)
         false
     }
 
@@ -341,14 +366,16 @@ impl QCModule for BasicStats {
     }
 
     fn write_text_report(&self, writer: &mut dyn io::Write) -> io::Result<()> {
+        // Java fails the whole file when the encoding can't be resolved.
+        phred::resolve(self.counters.known_encoding, self.counters.lowest_char)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
         // Header row matches writeTextTable output from AbstractQCModule
         writeln!(writer, "#Measure\tValue")?;
 
         // Row 0: Filename
         writeln!(writer, "Filename\t{}", self.name.as_deref().unwrap_or(""))?;
 
-        // Rows 1-7: File type, Encoding, Total Sequences, Total Bases,
-        // Sequences flagged as poor quality, Sequence length, %GC.
         for (measure, value) in self.counters.rows() {
             writeln!(writer, "{}\t{}", measure, value)?;
         }
@@ -469,11 +496,10 @@ mod tests {
     fn test_counters_rows_placeholder_state() {
         let counters = BasicStatsCounters::default();
         let rows = counters.rows();
-        assert_eq!(rows.len(), 7);
-        assert_eq!(rows[0].0, "File type");
-        assert_eq!(rows[0].1, "Conventional base calls");
+        assert_eq!(rows.len(), 8);
+        assert_eq!(rows[0], ("File type", "null".to_string()));
         assert_eq!(rows[2], ("Total Sequences", "0".to_string()));
         // No bases at all must not divide by zero.
-        assert_eq!(rows[6], ("%GC", "0".to_string()));
+        assert_eq!(rows[7], ("%GC", "0".to_string()));
     }
 }

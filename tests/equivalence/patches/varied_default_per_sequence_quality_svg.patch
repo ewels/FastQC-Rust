@@ -1,0 +1,22 @@
+--- java/Images/per_sequence_quality.svg
++++ rust/Images/per_sequence_quality.svg
+@@ -13,7 +13,7 @@
+ <text x="280" y="30" fill="rgb(0,0,0)" font-size="12">Quality score distribution over all sequences</text>
+ <line x1="30" y1="560" x2="790" y2="560" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+ <line x1="30" y1="560" x2="30" y2="40" stroke="rgb(0,0,0)" stroke-width="[SW]"/>
+-<text x="290" y="595" fill="rgb(0,0,0)" font-size="12">Mean Sequence Quality (Phred Score)</text>
++<text x="300" y="595" fill="rgb(0,0,0)" font-size="12">Mean Sequence Quality (Phred Score)</text>
+ <text x="40" y="575" fill="rgb(0,0,0)" font-size="12">13</text>
+ <rect width="40" height="520" x="70" y="40" fill="rgb(230,230,230)"/>
+ <text x="90" y="575" fill="rgb(0,0,0)" font-size="12">14</text>
+@@ -46,7 +46,7 @@
+ <line x1="30" y1="150" x2="790" y2="150" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <line x1="30" y1="48" x2="790" y2="48" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <polyline points="51,559 95,557 139,555 183,538 227,508 271,405 315,261 359,73 403,40 447,254 491,429 535,504 579,540 623,557 667,558 711,558 755,558" stroke="rgb(136,34,85)" stroke-width="[SW]" fill="none"/>
+-<rect width="160" height="23" x="630" y="40" fill="rgb(255,255,255)"/>
+-<rect width="160" height="23" x="630" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
+-<text x="630" y="55" fill="rgb(136,34,85)" font-size="12">Average Quality per read</text>
++<rect width="150" height="23" x="640" y="40" fill="rgb(255,255,255)"/>
++<rect width="150" height="23" x="640" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
++<text x="640" y="55" fill="rgb(136,34,85)" font-size="12">Average Quality per read</text>
+ </svg>

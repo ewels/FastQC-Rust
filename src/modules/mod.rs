@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::config::{FastQCConfig, Limits, LimitsExt};
 use crate::sequence::Sequence;
+use crate::utils::phred::PhredEncoding;
 
 /// Status of a QC module after analysis, matching Java FastQC's pass/warn/fail icons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,6 +76,13 @@ pub trait QCModule: Send {
     /// statistics. Only BasicStats implements this; every other module ignores
     /// it, and nothing about the analysis changes when no sink is attached.
     fn attach_live_stats(&mut self, _live: Arc<basic_stats::LiveStats>) {}
+
+    /// Tell the module the quality encoding specified by the input format,
+    /// when there is one (BAM/SAM, where quality is Phred+33 by construction).
+    /// Modules that would otherwise infer the encoding from the lowest quality
+    /// character use this instead; other modules ignore it. Never called for
+    /// formats like FASTQ where the encoding must be inferred.
+    fn set_phred_encoding(&mut self, _encoding: PhredEncoding) {}
 
     /// Finalize calculations after all sequences have been processed.
     ///
@@ -144,11 +152,11 @@ pub trait QCModule: Send {
     /// checks for `chart_alt_text()` -- if present, it renders the chart and table
     /// via `write_chart_and_table`; otherwise it renders just an HTML table from
     /// the text report output, matching writeXhtmlTable().
-    fn write_html_report(&self, writer: &mut dyn io::Write) -> io::Result<()> {
+    fn write_html_report(&self, writer: &mut dyn io::Write, png: bool) -> io::Result<()> {
         // Modules with charts show only the chart in HTML, not the data table.
         // The data table only goes into fastqc_data.txt.
         if let Some(alt_text) = self.chart_alt_text() {
-            return crate::report::html::write_chart(self, alt_text, writer);
+            return crate::report::html::write_chart(self, alt_text, png, writer);
         }
         // Default: render the text report data as an HTML table
         let mut text_buf = Vec::new();
@@ -186,20 +194,14 @@ pub fn create_modules(config: &FastQCConfig, limits: &Limits) -> Vec<Box<dyn QCM
     // 2. PerBaseQualityScores
     if limits.is_module_enabled("quality_base") {
         modules.push(Box::new(per_base_quality::PerBaseQualityScores::new(
-            limits,
-            ng,
-            eg,
-            config.min_length,
+            limits, ng, eg,
         )));
     }
 
     // 3. PerTileQualityScores
     if limits.is_module_enabled("tile") {
         modules.push(Box::new(per_tile_quality::PerTileQualityScores::new(
-            limits,
-            ng,
-            eg,
-            config.min_length,
+            limits, ng, eg,
         )));
     }
 
@@ -213,12 +215,7 @@ pub fn create_modules(config: &FastQCConfig, limits: &Limits) -> Vec<Box<dyn QCM
     // 5. PerBaseSequenceContent
     if limits.is_module_enabled("sequence") {
         modules.push(Box::new(
-            per_base_sequence_content::PerBaseSequenceContent::new(
-                limits,
-                ng,
-                eg,
-                config.min_length,
-            ),
+            per_base_sequence_content::PerBaseSequenceContent::new(limits, ng, eg),
         ));
     }
 
@@ -229,12 +226,7 @@ pub fn create_modules(config: &FastQCConfig, limits: &Limits) -> Vec<Box<dyn QCM
 
     // 7. NContent
     if limits.is_module_enabled("n_content") {
-        modules.push(Box::new(n_content::NContent::new(
-            limits,
-            ng,
-            eg,
-            config.min_length,
-        )));
+        modules.push(Box::new(n_content::NContent::new(limits, ng, eg)));
     }
 
     // 8. SequenceLengthDistribution
@@ -268,11 +260,7 @@ pub fn create_modules(config: &FastQCConfig, limits: &Limits) -> Vec<Box<dyn QCM
     // 11. AdapterContent
     if limits.is_module_enabled("adapter") {
         modules.push(Box::new(adapter_content::AdapterContent::new(
-            limits,
-            &adapters,
-            ng,
-            eg,
-            config.min_length,
+            limits, &adapters, ng, eg,
         )));
     }
 
@@ -284,7 +272,6 @@ pub fn create_modules(config: &FastQCConfig, limits: &Limits) -> Vec<Box<dyn QCM
             config.kmer_size,
             ng,
             eg,
-            config.min_length,
         )));
     }
 

@@ -87,3 +87,35 @@
 - name: realistic_default
   file: realistic.fastq.gz
   args: []
+
+# 2019 reads, 12-100bp, with three duplicated reads (counts 9, 6, 4), to exercise mean/median length and the
+# --min_length / --max_length pre-filters.
+- name: varied_default
+  file: varied.fastq
+  args: []
+
+- name: varied_min_length_30
+  file: varied.fastq
+  args: [--min_length, "30"]
+
+- name: varied_max_length_50
+  file: varied.fastq
+  args: [--max_length, "50"]
+
+- name: varied_min_max_length
+  file: varied.fastq
+  args: [--min_length, "25", --max_length, "75"]
+
+# All reads filtered out: the empty-input path.
+- name: varied_min_length_200
+  file: varied.fastq
+  args: [--min_length, "200"]
+
+# complex.fastq with qualities shifted by +31.
+- name: phred64_default
+  file: phred64.fastq
+  args: []
+
+- name: phred64_phred64
+  file: phred64.fastq
+  args: [--phred64]

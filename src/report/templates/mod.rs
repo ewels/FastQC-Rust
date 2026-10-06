@@ -21,9 +21,9 @@ pub trait ReportTemplate {
 }
 
 /// Create the appropriate template for the given name.
-pub fn create_template(name: TemplateName) -> Box<dyn ReportTemplate> {
+pub fn create_template(name: TemplateName, png: bool) -> Box<dyn ReportTemplate> {
     match name {
-        TemplateName::Classic => Box::new(classic::ClassicTemplate),
+        TemplateName::Classic => Box::new(classic::ClassicTemplate { png }),
         TemplateName::Modern => Box::new(modern::ModernTemplate),
     }
 }

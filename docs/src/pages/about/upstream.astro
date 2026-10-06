@@ -1,0 +1,113 @@
+---
+import Base from '../../layouts/Base.astro';
+
+const gh = (n: number) => `https://github.com/s-andrews/FastQC/pull/${n}`;
+const issue = (n: number) => `https://github.com/s-andrews/FastQC/issues/${n}`;
+---
+
+<Base title="Upstream contributions - FastQC" description="Improvements to Java FastQC that came out of the Rust rewrite">
+  <p class="label">Upstream contributions</p>
+  <h1>Changes to FastQC</h1>
+
+  <p style="color: var(--ink-muted); margin-bottom: 2.5rem">
+    The Rust rewrite works as a development sandbox for FastQC. Ideas get prototyped and benchmarked here,
+    and the equivalence tests catch bugs. What works then goes back to
+    <a href="https://github.com/s-andrews/FastQC">Java FastQC</a> as pull requests.
+    The aim is a better canonical tool, not a replacement for it.
+    Many of these changes shipped in
+    <a href="https://github.com/s-andrews/FastQC/releases/tag/v0.13.0">FastQC v0.13.0</a>.
+  </p>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Released in FastQC v0.13.0</h2>
+
+    <h3>Performance</h3>
+    <ul style="color: var(--ink-muted)">
+      <li>
+        <a href={gh(197)}>#197</a> — <strong>About 3x faster with parallel processing.</strong>
+        Each file now runs through a small pipeline: one reader thread (decompression and parsing)
+        feeds up to three processor threads, each of which owns a subset of the QC modules.
+        <code>-t</code> is now a total CPU budget. This work started with
+        <a href="https://github.com/pditommaso">Paolo Di Tommaso</a>'s
+        <a href="https://github.com/pditommaso/FastQC/pulls">experiments</a>. Each change was then
+        benchmarked on its own to find the smallest change with the biggest effect.
+      </li>
+      <li>
+        <a href={gh(199)}>#199</a> — Removes the per-sequence <code>char[]</code> allocations in seven QC modules.
+      </li>
+    </ul>
+
+    <h3>SVG graphs</h3>
+    <ul style="color: var(--ink-muted)">
+      <li>
+        <a href={gh(200)}>#200</a> — <strong>SVG is now the default graph format</strong> in the HTML report.
+        Graphs are sharp at any zoom level and easy to edit for publication. Use <code>--png</code> to get PNG graphs again.
+      </li>
+      <li>
+        <a href={gh(188)}>#188</a> — Smaller SVG output. Uses presentation attributes, merges line segments into
+        polylines and merges runs of same-colour rectangles. Data lines are also thicker.
+      </li>
+    </ul>
+
+    <h3>Correctness</h3>
+    <ul style="color: var(--ink-muted)">
+      <li>
+        <a href={gh(187)}>#187</a> — Adapter Content showed empty trailing rows when <code>--min_length</code> was set.
+        The Rust equivalence tests found this. Upstream then reworked <code>--min_length</code> into a real read-length filter,
+        and added <code>--max_length</code>.
+      </li>
+      <li>
+        <a href={issue(209)}>#209</a> — Encoding detection misread high-quality data (no base below Q31) as Illumina 1.5,
+        so every quality score was 31 too low. The Rust rewrite found this with BAM input.
+        In v0.13.0 Phred+33 is the default for all input, and <code>--phred64</code> is now an opt-in.
+      </li>
+      <li>
+        <a href={issue(203)}>#203</a> — Basic Statistics now reports <strong>mean and median read length</strong>.
+      </li>
+    </ul>
+
+    <h3>Project infrastructure</h3>
+    <ul style="color: var(--ink-muted)">
+      <li><a href={gh(156)}>#156</a> — GitHub Actions workflow that builds the release assets automatically.</li>
+      <li><a href={gh(155)}>#155</a> — Markdown README and installation docs.</li>
+    </ul>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Merged into a feature branch</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      These are merged into the upstream <code>liberationfont</code> branch, but that branch is not yet in <code>master</code>
+      (<a href={issue(216)}>#216</a>). <a href={gh(217)}>#217</a> merges it into <code>master</code>.
+    </p>
+    <ul style="color: var(--ink-muted)">
+      <li>
+        <a href={gh(185)}>#185</a>, <a href={gh(186)}>#186</a>, <a href={gh(194)}>#194</a> — Bundle the
+        Liberation Sans font and anti-alias graph text. This removes the dependency on system fonts,
+        so graphs look the same on all machines. It also aligns text metrics between Java and Rust.
+      </li>
+    </ul>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Open pull requests</h2>
+    <ul style="color: var(--ink-muted)">
+      <li><a href={gh(205)}>#205</a> — Mean read length to one decimal place, and the standard median for an even number of reads.</li>
+      <li><a href={gh(196)}>#196</a>, <a href={gh(195)}>#195</a> — Move the HTML report layout into template fragments, and fix some small HTML problems.</li>
+      <li>
+        <a href={gh(161)}>#161</a> — HTML report design refresh. The Rust rewrite already has this as the
+        <a href="../../templates/">modern template</a> (<code>--template modern</code>).
+      </li>
+    </ul>
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>How it works</h2>
+    <p style="color: var(--ink-muted)">
+      The Rust rewrite follows upstream releases (see <a href="../strategy/">strategy</a>).
+      The <a href="../equivalence/">equivalence tests</a> run the Java and Rust versions on the same inputs
+      and compare their outputs. A difference is either a Rust bug or a Java bug.
+      Java bugs become upstream issues and pull requests.
+      When upstream releases a fix, the Rust rewrite gets the same change, so the two outputs stay identical.
+    </p>
+  </section>
+</Base>

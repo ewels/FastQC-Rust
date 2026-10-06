@@ -1,0 +1,10 @@
+PASS	Basic Statistics	phred64.fastq
+PASS	Per base sequence quality	phred64.fastq
+PASS	Per sequence quality scores	phred64.fastq
+FAIL	Per base sequence content	phred64.fastq
+WARN	Per sequence GC content	phred64.fastq
+PASS	Per base N content	phred64.fastq
+PASS	Sequence Length Distribution	phred64.fastq
+FAIL	Sequence Duplication Levels	phred64.fastq
+FAIL	Overrepresented sequences	phred64.fastq
+PASS	Adapter Content	phred64.fastq

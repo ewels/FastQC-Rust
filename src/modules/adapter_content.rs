@@ -8,6 +8,7 @@ use memchr::memmem;
 use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
 use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
+use crate::report::charts::scaled_chart_width;
 use crate::sequence::Sequence;
 use crate::utils::base_group::BaseGroup;
 use crate::utils::format::java_format_double;
@@ -61,7 +62,6 @@ pub struct AdapterContent {
     limits: Limits,
     nogroup: bool,
     expgroup: bool,
-    min_length: usize,
     // Lazily computed
     computed: Option<ComputedEnrichment>,
 }
@@ -77,7 +77,6 @@ impl AdapterContent {
         adapter_entries: &[(String, String)],
         nogroup: bool,
         expgroup: bool,
-        min_length: usize,
     ) -> Self {
         let mut longest_adapter = 0;
         let mut adapters = Vec::with_capacity(adapter_entries.len());
@@ -89,6 +88,13 @@ impl AdapterContent {
             adapters.push(Adapter::new(name, seq));
         }
 
+        if adapter_entries
+            .iter()
+            .any(|(_, seq)| seq.len() != longest_adapter)
+        {
+            eprintln!("[Warning] You are using adapter sequences with different lengths. Matches will only be reported up to the position where the longest adapter could match. Matches to shorter adapters at the end of sequences will not be recorded.");
+        }
+
         AdapterContent {
             adapters,
             longest_sequence: 0,
@@ -97,7 +103,6 @@ impl AdapterContent {
             limits: limits.clone(),
             nogroup,
             expgroup,
-            min_length,
             computed: None,
         }
     }
@@ -116,8 +121,7 @@ impl AdapterContent {
         }
 
         // Group positions using BaseGroup
-        let groups =
-            BaseGroup::make_base_groups(max_length, self.min_length, self.nogroup, self.expgroup);
+        let groups = BaseGroup::make_base_groups(max_length, self.nogroup, self.expgroup);
 
         let x_labels: Vec<String> = groups.iter().map(|g| g.label()).collect();
 
@@ -150,6 +154,12 @@ impl AdapterContent {
         });
     }
 
+    /// No read was longer than the longest adapter, so Java skips the analysis
+    /// (no table or chart) and just warns.
+    fn reads_too_short(&self) -> bool {
+        self.longest_adapter > self.longest_sequence
+    }
+
     /// Derive adapter names from the adapters Vec (avoids storing a redundant copy).
     fn adapter_names(&self) -> Vec<String> {
         self.adapters.iter().map(|a| a.name.clone()).collect()
@@ -170,6 +180,7 @@ impl AdapterContent {
 
         // Matches Java's `new LineGraph(enrichments, 0, 100, "Position in read (bp)", labels, xLabels, "% Adapter")`
         render_line_graph(&LineGraphData {
+            width: scaled_chart_width(computed.x_labels.len()),
             data: computed.enrichments.clone(),
             min_y: 0.0,
             max_y: 100.0,
@@ -253,8 +264,7 @@ impl QCModule for AdapterContent {
     }
 
     fn raises_warning(&self) -> bool {
-        // Warn if adapters are longer than sequences
-        if self.longest_adapter > self.longest_sequence {
+        if self.reads_too_short() {
             return true;
         }
 
@@ -274,8 +284,23 @@ impl QCModule for AdapterContent {
         self.limits.is_ignored("adapter")
     }
 
+    fn write_html_report(&self, writer: &mut dyn io::Write, png: bool) -> io::Result<()> {
+        if self.reads_too_short() {
+            return write!(
+                writer,
+                "<p>Can't analyse adapters as read length is too short ({} vs {})</p>",
+                self.longest_adapter, self.longest_sequence
+            );
+        }
+        crate::report::html::write_chart(self, "Adapter graph", png, writer)
+    }
+
     fn write_text_report(&self, writer: &mut dyn io::Write) -> io::Result<()> {
         let computed = self.ensure_calculated();
+
+        if self.reads_too_short() {
+            return Ok(());
+        }
 
         // Header line with Position tab and all adapter names
         write!(writer, "#Position")?;
@@ -308,6 +333,9 @@ impl QCModule for AdapterContent {
         Some("Adapter graph")
     }
     fn generate_chart_svg(&self) -> Option<String> {
+        if self.reads_too_short() {
+            return None;
+        }
         Some(self.build_chart_svg())
     }
 }

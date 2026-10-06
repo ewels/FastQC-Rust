@@ -1564,10 +1564,10 @@ mod tests {
         // Nothing to tabulate.
         assert!(!fits(0, 200));
 
-        // 80 columns is enough for one or two files, not three.
+        // 80 columns is enough for up to three files, not four.
         assert!(fits(1, 80));
-        assert!(fits(2, 80));
-        assert!(!fits(3, 80));
+        assert!(fits(3, 80));
+        assert!(!fits(4, 80));
 
         // Widening the terminal brings more columns into range, and the
         // threshold only ever moves one way.
@@ -1648,8 +1648,8 @@ mod tests {
             "sample_2.fastq.gz".to_string(),
         ];
 
-        let narrow = Geometry::new(&names, 60);
-        assert!(narrow.is_none(), "two columns cannot be readable at 60");
+        let narrow = Geometry::new(&names, 50);
+        assert!(narrow.is_none(), "two columns cannot be readable at 50");
 
         let wide = Geometry::new(&names, 200).expect("two columns fit at 200");
         let wider = Geometry::new(&names, 400).expect("two columns fit at 400");

@@ -1,0 +1,13 @@
+--- java/Images/sequence_length_distribution.svg
++++ rust/Images/sequence_length_distribution.svg
+@@ -61,7 +61,7 @@
+ <line x1="30" y1="136" x2="790" y2="136" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <line x1="30" y1="51" x2="790" y2="51" stroke="rgb(180,180,180)" stroke-width="[SW]"/>
+ <polyline points="37,560 53,414 69,560 85,560 101,392 117,560 133,560 149,217 165,560 181,560 197,387 213,384 229,560 245,560 261,560 277,40 293,560 309,560 325,414 341,560 357,375 373,560 389,382 405,560 421,560 437,227 453,560 469,560 485,560 501,560 517,560 533,560 549,56 565,560 581,560 597,340 613,560 629,560 645,560 661,560 677,391 693,560 709,560 725,560 741,560 757,396" stroke="rgb(136,34,85)" stroke-width="[SW]" fill="none"/>
+-<rect width="110" height="23" x="680" y="40" fill="rgb(255,255,255)"/>
+-<rect width="110" height="23" x="680" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
+-<text x="680" y="55" fill="rgb(136,34,85)" font-size="12">Sequence Length</text>
++<rect width="100" height="23" x="680" y="40" fill="rgb(255,255,255)"/>
++<rect width="100" height="23" x="680" y="40" rx="0" ry="0" fill="none" stroke="rgb(192,192,192)"/>
++<text x="690" y="55" fill="rgb(136,34,85)" font-size="12">Sequence Length</text>
+ </svg>
