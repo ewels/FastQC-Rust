@@ -20,9 +20,10 @@ use crate::sequence::{Sequence, SequenceFile, SequenceFileGroup};
 /// so the analysis stays single-threaded per module (no in-module locking,
 /// byte-identical output) while the work is spread across cores.
 ///
-/// Wall-clock is bounded by the heaviest module (Adapter Content), which has a
-/// worker to itself by ~4 workers, so more don't help. Splitting a module's
-/// work would break byte-identical output; extra cores go to more files at once.
+/// Wall-clock is bounded by the slower of the file's single gzip decoder and
+/// its heaviest worker, so a few workers already saturate a short-read file.
+/// Splitting a module's work would break byte-identical output; extra cores go
+/// to more files at once.
 const MAX_PROCESSORS_PER_FILE: usize = 6;
 
 /// Number of sequences the reader batches before publishing to the processors.
@@ -32,7 +33,7 @@ const BATCH_SIZE: usize = 1024;
 
 /// Thread budget when `-t` is not given: available CPUs up to this cap. A big
 /// shared node isn't idle just because it is big; 6 (reader + 5 workers) is
-/// where one file stops speeding up.
+/// past where one file stops speeding up, with headroom for slower cores.
 const DEFAULT_THREADS: usize = 6;
 
 /// Byte ceiling on a single batch, applied alongside [`BATCH_SIZE`].

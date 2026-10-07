@@ -83,14 +83,14 @@ scheduler-pinned job sees its own allowance rather than the host's core count.
 
 Leave `--threads` out and the budget is the available CPUs, up to 6, so a plain
 `fastqc sample.fastq.gz` runs in parallel without taking over a shared machine.
-A single file stops
-getting faster at around `-t 6`: the analysis is split by module, and the
-heaviest one (Adapter Content) ends up alone on a worker and sets the pace.
-Above that, `--threads` only helps by processing more files at once.
+A single `.fastq.gz` stops getting faster at around `-t 4`, where the analysis
+outpaces the file's one gzip decoder. Above that, `--threads` only helps by
+processing more files at once.
 
-Decompression is rarely the thing to tune: one decoder per file keeps up with
-the full parallel pipeline, and extra decoders (`--decompress-threads N`, not
-counted in `--threads`) cost CPU and memory without making it faster.
+Decompression is rarely worth tuning. A single-member `.gz` (what `gzip` and
+`pigz` write) can only be split across decoders speculatively, so extra
+decoders (`--decompress-threads N`, not counted in `--threads`) cost several
+times the CPU and hundreds of MB for little or no gain.
 
 ### Progress display
 

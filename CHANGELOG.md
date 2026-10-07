@@ -70,10 +70,16 @@ Output matches Java FastQC v0.13.0. Many of these changes came from this project
   single large `.fastq.gz` now benefits from extra threads instead of being
   pinned to one core. Builds on the upstream Java three-stage pipeline
   ([s-andrews/FastQC#197](https://github.com/s-andrews/FastQC/pull/197)).
-  A single file scales until the heaviest single module dominates (~2.4x on a
-  7.9 GB WES file, flat from `-t 6`); the order-dependent modules (overrepresented sequences,
-  per-sequence GC) can't be split without changing output, so beyond that extra
-  cores are best spent on more files at once, which scales linearly.
+  A single file scales until its one gzip decoder is the limit (~3.5x on a
+  7.9 GB WES file, flat from `-t 4`); modules can't be split across workers
+  without changing output either, so beyond that extra cores are best spent on
+  more files at once, which scales linearly.
+- **Faster analysis**, byte-identical output: Adapter Content finds all adapters
+  in one SIMD multi-pattern pass per read instead of one search per adapter;
+  Basic Statistics and per-sequence GC count bases with vectorised counters;
+  FASTQ lines are parsed straight into the record buffers. On a 7.9 GB WES
+  `.fastq.gz` (M1 Pro) `-t 1` drops from 126 s to 92 s and CPU per file by
+  ~20%; 58 GB of long reads at `-t 1` from 1273 s to 549 s.
 - **`-t/--threads` is a ceiling on the whole run**, each file's decoder
   included. Give it and the run stays inside it — `-t 1` really does mean one
   analysis thread and one decoder, which is what a workflow engine passing
