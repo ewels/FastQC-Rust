@@ -298,7 +298,7 @@ impl QCModule for BasicStats {
         c.g_count += counts[IDX_G];
         c.t_count += counts[IDX_T];
 
-        if let Some(&lowest) = sequence.quality.iter().min() {
+        if let Some(lowest) = sequence.quality.iter().copied().min() {
             c.lowest_char = c.lowest_char.min(lowest as u16);
         }
     }

@@ -537,7 +537,7 @@ impl FastQFile {
         }
 
         // Track lowest quality character for Phred encoding detection.
-        if let Some(&lowest) = quality_bytes.iter().min() {
+        if let Some(lowest) = quality_bytes.iter().copied().min() {
             self.lowest_char = self.lowest_char.min(lowest);
         }
 
