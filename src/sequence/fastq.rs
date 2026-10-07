@@ -537,10 +537,8 @@ impl FastQFile {
         }
 
         // Track lowest quality character for Phred encoding detection.
-        for &b in &quality_bytes {
-            if b < self.lowest_char {
-                self.lowest_char = b;
-            }
+        if let Some(&lowest) = quality_bytes.iter().min() {
+            self.lowest_char = self.lowest_char.min(lowest);
         }
 
         // -- Colorspace detection (first record only) --

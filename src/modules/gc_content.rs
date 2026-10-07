@@ -8,6 +8,7 @@ use crate::modules::QCModule;
 use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
 use crate::report::charts::CHART_WIDTH;
 use crate::sequence::Sequence;
+use crate::utils::base_counts::count_acgt;
 use crate::utils::format::java_format_double;
 
 /// Mirrors GCModel/GCModelValue.java - a single percentage bin and its increment weight.
@@ -261,12 +262,8 @@ impl QCModule for PerSequenceGCContent {
         }
 
         // Count G and C in the truncated portion only
-        let mut gc_count: usize = 0;
-        for &b in &seq[..truncated_len] {
-            if b == b'G' || b == b'C' {
-                gc_count += 1;
-            }
-        }
+        let [_, c, g, _] = count_acgt(&seq[..truncated_len]);
+        let gc_count = (c + g) as usize;
 
         // Ensure cache is large enough
         if truncated_len >= self.cached_models.len() {

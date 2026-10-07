@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use crate::config::Limits;
 use crate::modules::QCModule;
 use crate::sequence::Sequence;
-use crate::utils::base_counts::{BASE_INDEX, IDX_A, IDX_C, IDX_G, IDX_T};
+use crate::utils::base_counts::{count_acgt, IDX_A, IDX_C, IDX_G, IDX_T};
 use crate::utils::phred;
 
 /// Sequences between publications of the counters to the live snapshot.
@@ -292,18 +292,14 @@ impl QCModule for BasicStats {
             c.max_length = c.max_length.max(len);
         }
 
-        // Use lookup table to avoid branch misprediction on random DNA data
-        let mut counts = [0u64; 6];
-        for &b in &sequence.sequence {
-            counts[BASE_INDEX[b as usize] as usize] += 1;
-        }
+        let counts = count_acgt(&sequence.sequence);
         c.a_count += counts[IDX_A];
         c.c_count += counts[IDX_C];
         c.g_count += counts[IDX_G];
         c.t_count += counts[IDX_T];
 
-        for &q in &sequence.quality {
-            c.lowest_char = c.lowest_char.min(q as u16);
+        if let Some(&lowest) = sequence.quality.iter().min() {
+            c.lowest_char = c.lowest_char.min(lowest as u16);
         }
     }
 
