@@ -24,6 +24,7 @@ Output matches Java FastQC v0.13.0. Many of these changes came from this project
 - Adapter Content shows "Can't analyse adapters as read length is too short", as in Java, when no read is longer than the longest adapter. Overrepresented sequences shows "No overrepresented sequences" when there are none.
 - `--template` no longer uses the `-t` short flag, which clashed with `--threads`.
 - Fixed the nightly upstream check, which failed because the `upstream-update` label did not exist.
+- Sequence Duplication Levels values are now deterministic and match Java to the last digit. They were summed in Rust's randomly seeded `HashMap` order, so the last 2–3 digits of `#Total Deduplicated Percentage` and the level percentages could change between runs on large inputs; they are now summed in Java's `HashMap` iteration order.
 
 ### Other
 

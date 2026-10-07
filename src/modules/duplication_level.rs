@@ -57,22 +57,25 @@ impl DuplicationLevel {
         }
 
         // Apply statistical correction to each duplication level
-        let mut corrected_counts: HashMap<u64, f64> = HashMap::new();
-        for (&dup_level, &num_observations) in &collated_counts {
-            let corrected = get_corrected_count(
-                data.count_at_unique_limit,
-                data.count,
-                dup_level,
-                num_observations,
-            );
-            corrected_counts.insert(dup_level, corrected);
-        }
+        let mut corrected_counts: Vec<(u64, f64)> = collated_counts
+            .into_iter()
+            .map(|(dup_level, num_observations)| {
+                let corrected = get_corrected_count(
+                    data.count_at_unique_limit,
+                    data.count,
+                    dup_level,
+                    num_observations,
+                );
+                (dup_level, corrected)
+            })
+            .collect();
+        sort_in_java_hashmap_order(&mut corrected_counts);
 
         // Calculate raw and deduplicated totals from corrected counts
         let mut dedup_total: f64 = 0.0;
         let mut raw_total: f64 = 0.0;
 
-        for (&dup_level, &count) in &corrected_counts {
+        for &(dup_level, count) in &corrected_counts {
             dedup_total += count;
             raw_total += count * dup_level as f64;
 
@@ -128,6 +131,20 @@ impl DuplicationLevel {
         };
         self.computed.as_ref().unwrap_or(&DEFAULT)
     }
+}
+
+/// JAVA COMPAT: Java sums corrected counts in `HashMap<Long, Double>` order, and
+/// float addition is order-sensitive. That order is hash bucket (16 slots, doubling
+/// past 0.75 load), then insertion order within a bucket, approximated here by key.
+fn sort_in_java_hashmap_order(entries: &mut [(u64, f64)]) {
+    let mut capacity = 16;
+    while entries.len() * 4 > capacity * 3 {
+        capacity *= 2;
+    }
+    entries.sort_unstable_by_key(|&(key, _)| {
+        let h = (key ^ (key >> 32)) as u32;
+        (((h ^ (h >> 16)) as usize) & (capacity - 1), key)
+    });
 }
 
 /// Replicates getCorrectedCount() from DuplicationLevel.java.
@@ -281,5 +298,28 @@ impl QCModule for DuplicationLevel {
     }
     fn generate_chart_svg(&self) -> Option<String> {
         Some(self.build_chart_svg())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_java_hashmap_order() {
+        // 12 keys fit 16 slots, so 32 and 17 wrap to buckets 0 and 1.
+        let mut entries: Vec<(u64, f64)> = [32, 3, 17, 1, 2, 4, 5, 6, 7, 8, 9, 10]
+            .iter()
+            .map(|&k| (k, 0.0))
+            .collect();
+        sort_in_java_hashmap_order(&mut entries);
+        let keys: Vec<u64> = entries.iter().map(|&(k, _)| k).collect();
+        assert_eq!(keys, [32, 1, 17, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+        // A 13th key grows the table to 32 slots.
+        let mut entries: Vec<(u64, f64)> = (1..=12).chain([40]).map(|k| (k, 0.0)).collect();
+        sort_in_java_hashmap_order(&mut entries);
+        let keys: Vec<u64> = entries.iter().map(|&(k, _)| k).collect();
+        assert_eq!(keys, [1, 2, 3, 4, 5, 6, 7, 8, 40, 9, 10, 11, 12]);
     }
 }
