@@ -27,10 +27,13 @@ enum ReaderKind {
     /// Parallel, multi-member gzip decompression via rapidgzip. The heavy
     /// lifting (inflate on a pool of background threads) happens behind a
     /// `Read + Send` handle, so it looks like any other buffered reader here.
-    Gzip(BufReader<rapidgzip_core::DecoderReader>),
+    Gzip(Box<BufReader<rapidgzip_core::DecoderReader>>),
     Bzip2(Box<BufReader<DecoderReader<File>>>),
     Stdin(BufReader<Stdin>),
 }
+
+/// Large so gzip refills (a decoder-thread handoff) are rare.
+const READ_BUFFER: usize = 1 << 20;
 
 impl BufRead for ReaderKind {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
@@ -136,12 +139,14 @@ struct GzipEstimate {
 
 impl GzipProgress {
     /// Progress through the file as a percentage, or `None` before the decoder
-    /// has produced enough to estimate a total.
-    fn percent(&self, file_size: u64) -> Option<f64> {
+    /// has produced enough to estimate a total. `buffered` is decompressed
+    /// output already read but not yet parsed.
+    fn percent(&self, file_size: u64, buffered: u64) -> Option<f64> {
         if file_size == 0 {
             return None;
         }
         let stats = self.handle.stats();
+        let parsed = stats.consumed_bytes.saturating_sub(buffered);
         let compressed = self.compressed.load(Ordering::Relaxed);
         if compressed == 0 || stats.decompressed_bytes == 0 {
             return None;
@@ -157,7 +162,7 @@ impl GzipProgress {
             // is larger than that, and the true size is the recorded one plus
             // however many whole wraps have been consumed -- still exact.
             Some(trailer) => {
-                let wraps = stats.consumed_bytes.saturating_sub(1) / ISIZE_MODULUS;
+                let wraps = parsed.saturating_sub(1) / ISIZE_MODULUS;
                 trailer + wraps * ISIZE_MODULUS
             }
             // Underestimates while the read-ahead is outstanding and converges
@@ -172,8 +177,7 @@ impl GzipProgress {
             return None;
         }
 
-        let permille =
-            ((stats.consumed_bytes as f64 / total as f64) * 1000.0).clamp(0.0, 1000.0) as u64;
+        let permille = ((parsed as f64 / total as f64) * 1000.0).clamp(0.0, 1000.0) as u64;
         estimate.high_water = estimate.high_water.max(permille);
         Some(estimate.high_water as f64 / 10.0)
     }
@@ -320,9 +324,6 @@ pub struct FastQFile {
 
     /// The lowest raw quality character seen so far (for Phred encoding detection).
     pub lowest_char: u8,
-
-    /// A reusable String buffer to avoid allocating on every `read_line`.
-    line_buf: String,
 }
 
 impl FastQFile {
@@ -376,7 +377,7 @@ impl FastQFile {
                     let trailer = gzip_trailer_size(path, file_size);
                     let (reader, progress) = open_rapidgzip(file, threads, trailer)?;
                     (
-                        ReaderKind::Gzip(BufReader::new(reader)),
+                        ReaderKind::Gzip(Box::new(BufReader::with_capacity(READ_BUFFER, reader))),
                         Progress::Gzip(progress),
                     )
                 }
@@ -392,7 +393,7 @@ impl FastQFile {
                 _ => {
                     let pos_handle = file.try_clone()?;
                     (
-                        ReaderKind::Plain(BufReader::new(file)),
+                        ReaderKind::Plain(BufReader::with_capacity(READ_BUFFER, file)),
                         Progress::FilePosition(pos_handle),
                     )
                 }
@@ -414,7 +415,6 @@ impl FastQFile {
             casava_mode,
             nofilter,
             lowest_char: 255,
-            line_buf: String::with_capacity(512),
         };
 
         // Prime the look-ahead buffer by reading the first record.
@@ -423,18 +423,46 @@ impl FastQFile {
         Ok(fq)
     }
 
-    /// Read a single line into `self.line_buf`, incrementing `line_number`.
-    /// Returns `true` if a line was read, `false` at EOF.
-    fn read_line(&mut self) -> io::Result<bool> {
-        self.line_buf.clear();
-        let n = self.reader.read_line(&mut self.line_buf)?;
+    /// Read the next line, without its line ending, into `out` (cleared first),
+    /// incrementing `line_number`. Returns `false` at EOF.
+    ///
+    /// Not `read_until`: its newline search is measurably slower than the
+    /// `memchr` crate's SIMD search on this, the parser's hottest loop.
+    fn read_line(&mut self, out: &mut Vec<u8>) -> io::Result<bool> {
+        out.clear();
+        let mut read_any = false;
+        loop {
+            let available = match self.reader.fill_buf() {
+                Ok(available) => available,
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(e),
+            };
+            if available.is_empty() {
+                break;
+            }
+            read_any = true;
+            if let Some(newline) = memchr::memchr(b'\n', available) {
+                out.extend_from_slice(&available[..newline]);
+                self.reader.consume(newline + 1);
+                break;
+            }
+            let len = available.len();
+            out.extend_from_slice(available);
+            self.reader.consume(len);
+        }
         self.line_number += 1;
-        if n == 0 {
+        if !read_any {
             return Ok(false);
         }
-        // Strip trailing newline / carriage return
-        while self.line_buf.ends_with('\n') || self.line_buf.ends_with('\r') {
-            self.line_buf.pop();
+        while out.last() == Some(&b'\r') {
+            out.pop();
+        }
+        // Match `BufRead::read_line`'s UTF-8 error.
+        if std::str::from_utf8(out).is_err() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "stream did not contain valid UTF-8",
+            ));
         }
         Ok(true)
     }
@@ -451,68 +479,62 @@ impl FastQFile {
         // -- ID line (skip blank lines) --
         // The Java code loops reading lines until it finds a non-empty
         // one or hits EOF. Blank lines between records are silently skipped.
+        let mut id_bytes = Vec::new();
         loop {
-            if !self.read_line()? {
+            if !self.read_line(&mut id_bytes)? {
                 // EOF
                 self.next_sequence = None;
                 return Ok(());
             }
-            if !self.line_buf.is_empty() {
+            if !id_bytes.is_empty() {
                 break;
             }
         }
 
-        if !self.line_buf.starts_with('@') {
+        if !id_bytes.starts_with(b"@") {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("ID line didn't start with '@' at line {}", self.line_number),
             ));
         }
-        // Clone the ID string and clear line_buf, preserving its heap allocation
-        // for reuse on subsequent read_line calls. Using std::mem::take here would
-        // leave line_buf with zero capacity, forcing a new allocation every line --
-        // 3 wasted allocations per record across millions of reads.
-        let id = self.line_buf.clone();
-        self.line_buf.clear();
+        let id = String::from_utf8(id_bytes)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         // -- Sequence line --
-        if !self.read_line()? {
+        let mut seq_bytes = Vec::new();
+        if !self.read_line(&mut seq_bytes)? {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 "Ran out of data in the middle of a fastq entry. Your file is probably truncated",
             ));
         }
-        let seq_bytes = self.line_buf.as_bytes().to_vec();
-        self.line_buf.clear();
 
-        // -- Mid-line ('+' line) --
-        if !self.read_line()? {
+        // -- Mid-line ('+' line), read into what will hold the qualities --
+        let mut quality_bytes = Vec::with_capacity(seq_bytes.len());
+        if !self.read_line(&mut quality_bytes)? {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 "Ran out of data in the middle of a fastq entry. Your file is probably truncated",
             ));
         }
-        if !self.line_buf.starts_with('+') {
+        if !quality_bytes.starts_with(b"+") {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
                     "Midline '{}' didn't start with '+' at {}",
-                    self.line_buf, self.line_number
+                    String::from_utf8_lossy(&quality_bytes),
+                    self.line_number
                 ),
             ));
         }
-        // Mid-line is not needed; just clear the buffer (keeping its allocation)
-        self.line_buf.clear();
 
         // -- Quality line --
-        if !self.read_line()? {
+        if !self.read_line(&mut quality_bytes)? {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 "Ran out of data in the middle of a fastq entry. Your file is probably truncated",
             ));
         }
-        let quality_bytes = self.line_buf.as_bytes().to_vec();
-        self.line_buf.clear();
 
         // Track lowest quality character for Phred encoding detection.
         for &b in &quality_bytes {
@@ -527,7 +549,7 @@ impl FastQFile {
         // `nextSequence` is null (i.e. no prior record) and `seq` is non-null.
         if !self.colorspace_checked {
             self.colorspace_checked = true;
-            // Safety: seq_bytes originated from a valid UTF-8 String
+            // read_line has validated UTF-8.
             let seq_str = std::str::from_utf8(&seq_bytes).unwrap_or("");
             self.is_colorspace = check_colorspace(seq_str);
         }
@@ -542,7 +564,7 @@ impl FastQFile {
         let mut sequence = if self.is_colorspace {
             // For colorspace, `seq.toUpperCase()` is passed to both
             // `convertColorspaceToBases` and stored as `colorspaceSequence`.
-            // Safety: seq_bytes originated from a valid UTF-8 String
+            // read_line has validated UTF-8.
             let seq_str = String::from_utf8(seq_bytes).unwrap_or_default();
             let upper = seq_str.to_ascii_uppercase();
             let bases = convert_colorspace_to_bases(&upper);
@@ -603,16 +625,30 @@ impl SequenceFile for FastQFile {
             // gzip: the rapidgzip decoder owns the file and reads it positionally
             // on background threads, so there is no single cursor to seek, and
             // its workers read far ahead of the parser. See [`GzipProgress`].
-            Progress::Gzip(progress) => progress.percent(self.file_size).unwrap_or(0.0),
+            Progress::Gzip(progress) => {
+                let buffered = match &self.reader {
+                    ReaderKind::Gzip(r) => r.buffer().len() as u64,
+                    _ => 0,
+                };
+                progress.percent(self.file_size, buffered).unwrap_or(0.0)
+            }
             // Java queries fis.getChannel().position() on the raw FileInputStream
             // to get the compressed byte position, then divides by fileSize. We
             // do the same via a cloned handle (seek(Current)) so we need only
             // `&self`; a clone or seek failure degrades to 0%.
-            Progress::FilePosition(handle) => handle
-                .try_clone()
-                .and_then(|mut h| h.stream_position())
-                .map(|pos| (pos as f64 / self.file_size as f64) * 100.0)
-                .unwrap_or(0.0),
+            Progress::FilePosition(handle) => {
+                let buffered = match &self.reader {
+                    ReaderKind::Plain(r) => r.buffer().len() as u64,
+                    _ => 0,
+                };
+                handle
+                    .try_clone()
+                    .and_then(|mut h| h.stream_position())
+                    .map(|pos| {
+                        (pos.saturating_sub(buffered) as f64 / self.file_size as f64) * 100.0
+                    })
+                    .unwrap_or(0.0)
+            }
         }
     }
 }
@@ -970,6 +1006,29 @@ mod tests {
             "progress was saturated for the whole file, which is the bug this guards"
         );
         assert_eq!(reader.percent_complete(), 100.0, "did not finish at 100%");
+    }
+
+    /// Plain-file progress must not count what the read buffer has fetched
+    /// ahead of the parser, or a small file reads 100% from its first record.
+    #[test]
+    fn test_plain_progress_tracks_parsed_bytes() {
+        let config = FastQCConfig::default();
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/varied.fastq");
+        let mut reader = FastQFile::open(&config, path).unwrap();
+        let mut last = 0.0f64;
+        let mut seen_partial = false;
+        while let Some(result) = reader.next() {
+            result.unwrap();
+            let percent = reader.percent_complete();
+            assert!(
+                percent >= last,
+                "progress went backwards: {last} -> {percent}"
+            );
+            seen_partial |= percent < 100.0;
+            last = percent;
+        }
+        assert!(seen_partial, "progress was saturated for the whole file");
+        assert_eq!(reader.percent_complete(), 100.0);
     }
 
     /// The gzip reader must decode a real (dynamic-Huffman) gzip stream
