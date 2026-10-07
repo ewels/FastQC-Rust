@@ -260,7 +260,7 @@ fn median_length(length_counts: &[u64]) -> usize {
 
 impl QCModule for BasicStats {
     fn cost_hint(&self) -> u32 {
-        11
+        2
     }
 
     fn process_sequence(&mut self, sequence: &Sequence) {

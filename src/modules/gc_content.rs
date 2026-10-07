@@ -247,7 +247,7 @@ impl PerSequenceGCContent {
 
 impl QCModule for PerSequenceGCContent {
     fn cost_hint(&self) -> u32 {
-        4
+        2
     }
 
     fn process_sequence(&mut self, sequence: &Sequence) {

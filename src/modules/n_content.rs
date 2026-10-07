@@ -82,7 +82,7 @@ impl NContent {
 
 impl QCModule for NContent {
     fn cost_hint(&self) -> u32 {
-        7
+        8
     }
 
     fn process_sequence(&mut self, sequence: &Sequence) {

@@ -779,8 +779,8 @@ mod tests {
         let n = modules.len();
         let groups = partition_modules_by_cost(modules, 3);
 
-        // The three heaviest modules by cost_hint (Basic Statistics, Adapter
-        // Content, per-base quality) must be balanced onto different workers.
+        // The three heaviest modules by cost_hint (per-base quality, per-base
+        // sequence content, Adapter Content) must land on different workers.
         let worker_of = |name: &str| {
             groups
                 .iter()
@@ -788,9 +788,9 @@ mod tests {
                 .unwrap_or_else(|| panic!("{name} not placed"))
         };
         let heavy = [
-            worker_of("Basic Statistics"),
-            worker_of("Adapter Content"),
             worker_of("Per base sequence quality"),
+            worker_of("Per base sequence content"),
+            worker_of("Adapter Content"),
         ];
         assert!(
             heavy[0] != heavy[1] && heavy[0] != heavy[2] && heavy[1] != heavy[2],

@@ -110,7 +110,7 @@ impl PerBaseSequenceContent {
 
 impl QCModule for PerBaseSequenceContent {
     fn cost_hint(&self) -> u32 {
-        8
+        9
     }
 
     fn process_sequence(&mut self, sequence: &Sequence) {

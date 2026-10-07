@@ -271,7 +271,7 @@ impl AdapterContent {
 
 impl QCModule for AdapterContent {
     fn cost_hint(&self) -> u32 {
-        11
+        9
     }
 
     fn process_sequence(&mut self, sequence: &Sequence) {
