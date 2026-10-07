@@ -21,28 +21,13 @@ impl QualityCount {
     /// Record a quality character (raw ASCII value, not offset-adjusted).
     ///
     /// Matches `addValue(char c)` which indexes by `(int)c`.
+    #[inline]
     pub fn add_value(&mut self, quality_char: u8) {
         let idx = quality_char as usize;
         if idx >= self.actual_counts.len() {
-            // Java throws ArrayIndexOutOfBoundsException here, crashing
-            // the run. We clamp to the last slot instead so that corrupt quality chars
-            // don't abort the entire analysis -- the value will be wrong for that
-            // position, but the rest of the file can still be processed.
-            //
-            // Once per run, not once per base: this sits in the innermost loop
-            // of the analysis, and a file with a systematically bad encoding
-            // would otherwise emit the warning millions of times. The latch is
-            // checked before the message is built, so the repeats cost one
-            // relaxed atomic rather than a formatted string.
-            static WARNED: crate::progress::OncePerRun = crate::progress::OncePerRun::new();
-            if WARNED.should_say() {
-                crate::progress::log_line(&format!(
-                    "Warning: quality character '{}' (ASCII {}) exceeds maximum {}; clamping",
-                    quality_char as char,
-                    idx,
-                    self.actual_counts.len() - 1
-                ));
-            }
+            // Java throws ArrayIndexOutOfBoundsException here; clamp to the last
+            // slot so a corrupt quality char doesn't abort the run.
+            warn_out_of_range(quality_char, self.actual_counts.len() - 1);
             self.actual_counts[self.actual_counts.len() - 1] += 1;
             self.total_counts += 1;
             return;
@@ -121,6 +106,19 @@ impl QualityCount {
 
         // JAVA COMPAT: Java returns -1 when no value found (cast to double = -1.0).
         -1.0
+    }
+}
+
+/// Out of line so the per-base `add_value` stays inlinable.
+#[cold]
+#[inline(never)]
+fn warn_out_of_range(quality_char: u8, max: usize) {
+    static WARNED: crate::progress::OncePerRun = crate::progress::OncePerRun::new();
+    if WARNED.should_say() {
+        crate::progress::log_line(&format!(
+            "Warning: quality character '{}' (ASCII {}) exceeds maximum {}; clamping",
+            quality_char as char, quality_char, max
+        ));
     }
 }
 
