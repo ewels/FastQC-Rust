@@ -81,8 +81,10 @@ if (fs.existsSync(reportPath)) {
   html.dark .bench-report .right { color: var(--ink-muted); }
 
   /* Bars */
-  html.dark .bench-report .bar-java { background: var(--color-java); }
-  html.dark .bench-report .bar-rust { background: #f0825f; }
+  html.dark .bench-report .bar-java,
+  html.dark .bench-report .bar-java-old { background: var(--color-java); }
+  html.dark .bench-report .bar-rust,
+  html.dark .bench-report .bar-rust-old { background: #f0825f; }
   html.dark .bench-report .legend-item { color: var(--ink-muted); }
 
   /* Callouts and dividers */

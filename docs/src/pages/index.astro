@@ -92,8 +92,9 @@ fastqc -t 4 --format bam aligned.bam      # parallel, BAM input`;
   <section style="margin-bottom: 3rem">
     <h2>Performance</h2>
     <p style="color: var(--ink-muted); margin-bottom: 1rem">
-      One file (7.3 GB Illumina WES), each tool at its default threads. Java FastQC v0.13.0 includes
-      parallel processing <a href={`${base}about/upstream/`}>contributed upstream</a> from this project.
+      One file (7.3 GB Illumina WES), each tool at its default threads. Rust 1.0 is the current
+      release and Rust 2.0 the next one. Java FastQC v0.13.0 includes parallel processing
+      <a href={`${base}about/upstream/`}>contributed upstream</a> from this project.
       <a href={`${base}about/performance/`}>Full benchmarks</a>.
     </p>
     <div class="grid-2">
@@ -103,19 +104,25 @@ fastqc -t 4 --format bam aligned.bam      # parallel, BAM input`;
           <div class="bench-row">
             <span class="bench-label bench-label-version">Java 0.12</span>
             <div class="bench-bar bench-bar-java bench-bar-old" style="width: 100%"></div>
-            <span class="bench-time">7m 36s</span>
+            <span class="bench-time">7m 32s</span>
           </div>
           <div class="bench-row">
             <span class="bench-label bench-label-version">Java 0.13</span>
-            <div class="bench-bar bench-bar-java" style="width: 36.6%"></div>
+            <div class="bench-bar bench-bar-java" style="width: 36.9%"></div>
             <span class="bench-time">2m 47s</span>
             <span class="bench-speedup">2.7x</span>
           </div>
           <div class="bench-row">
-            <span class="bench-label bench-label-version">Rust</span>
-            <div class="bench-bar bench-bar-rust" style="width: 7.8%"></div>
-            <span class="bench-time">36 s</span>
-            <span class="bench-speedup">12.8x</span>
+            <span class="bench-label bench-label-version">Rust 1.0</span>
+            <div class="bench-bar bench-bar-rust bench-bar-old" style="width: 38.1%"></div>
+            <span class="bench-time">2m 52s</span>
+            <span class="bench-speedup">2.6x</span>
+          </div>
+          <div class="bench-row">
+            <span class="bench-label bench-label-version">Rust 2.0</span>
+            <div class="bench-bar bench-bar-rust" style="width: 8.1%"></div>
+            <span class="bench-time">37 s</span>
+            <span class="bench-speedup">12.4x</span>
           </div>
         </div>
       </div>
@@ -124,19 +131,25 @@ fastqc -t 4 --format bam aligned.bam      # parallel, BAM input`;
         <div class="bench-chart">
           <div class="bench-row">
             <span class="bench-label bench-label-version">Java 0.12</span>
-            <div class="bench-bar bench-bar-java bench-bar-old" style="width: 86.6%"></div>
-            <span class="bench-time">426 MB</span>
+            <div class="bench-bar bench-bar-java bench-bar-old" style="width: 86.7%"></div>
+            <span class="bench-time">435 MB</span>
           </div>
           <div class="bench-row">
             <span class="bench-label bench-label-version">Java 0.13</span>
             <div class="bench-bar bench-bar-java" style="width: 100%"></div>
-            <span class="bench-time">492 MB</span>
+            <span class="bench-time">502 MB</span>
           </div>
           <div class="bench-row">
-            <span class="bench-label bench-label-version">Rust</span>
-            <div class="bench-bar bench-bar-rust" style="width: 9.6%"></div>
-            <span class="bench-time">47 MB</span>
-            <span class="bench-speedup">9x less</span>
+            <span class="bench-label bench-label-version">Rust 1.0</span>
+            <div class="bench-bar bench-bar-rust bench-bar-old" style="width: 5.0%"></div>
+            <span class="bench-time">25 MB</span>
+            <span class="bench-speedup">17x less</span>
+          </div>
+          <div class="bench-row">
+            <span class="bench-label bench-label-version">Rust 2.0</span>
+            <div class="bench-bar bench-bar-rust" style="width: 9.0%"></div>
+            <span class="bench-time">45 MB</span>
+            <span class="bench-speedup">10x less</span>
           </div>
         </div>
       </div>
