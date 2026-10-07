@@ -168,7 +168,7 @@ impl PerBaseQualityScores {
 
 impl QCModule for PerBaseQualityScores {
     fn cost_hint(&self) -> u32 {
-        8
+        10
     }
 
     fn process_sequence(&mut self, sequence: &Sequence) {

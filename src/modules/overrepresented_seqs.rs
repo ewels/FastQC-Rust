@@ -323,7 +323,7 @@ impl OverRepresentedSeqs {
 
 impl QCModule for OverRepresentedSeqs {
     fn cost_hint(&self) -> u32 {
-        6
+        4
     }
 
     fn process_sequence(&mut self, sequence: &Sequence) {

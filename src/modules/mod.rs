@@ -51,10 +51,10 @@ pub trait QCModule: Send {
     /// across worker threads in the parallel analysis pipeline, so that the few
     /// expensive modules don't pile onto one thread. The values are approximate
     /// and never affect results — a wrong hint only costs a little parallel
-    /// efficiency, never correctness. The default suits a lightweight
-    /// counting/accumulating module; heavier modules override it.
+    /// efficiency, never correctness. Keep them in proportion to a profile of
+    /// the default modules on short reads; the default suits a near-free module.
     fn cost_hint(&self) -> u32 {
-        2
+        1
     }
 
     /// The display name of this module as shown in the report.

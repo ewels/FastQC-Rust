@@ -155,9 +155,7 @@ impl PerTileQualityScores {
 
 impl QCModule for PerTileQualityScores {
     fn cost_hint(&self) -> u32 {
-        // Splits and parses the read ID on every record before touching the
-        // qualities, which costs more than a plain counting module.
-        4
+        1
     }
 
     fn process_sequence(&mut self, sequence: &Sequence) {

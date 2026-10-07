@@ -778,22 +778,22 @@ mod tests {
         let n = modules.len();
         let groups = partition_modules_by_cost(modules, 3);
 
-        // The two heaviest modules by cost_hint (Adapter Content = 12, per-sequence
-        // GC = 10) must be balanced onto different workers, not piled together.
+        // The three heaviest modules by cost_hint (Basic Statistics, Adapter
+        // Content, per-base quality) must be balanced onto different workers.
         let worker_of = |name: &str| {
             groups
                 .iter()
                 .position(|g| g.iter().any(|(_, m)| m.name() == name))
+                .unwrap_or_else(|| panic!("{name} not placed"))
         };
-        let adapter = worker_of("Adapter Content");
-        let gc = worker_of("Per sequence GC content");
+        let heavy = [
+            worker_of("Basic Statistics"),
+            worker_of("Adapter Content"),
+            worker_of("Per base sequence quality"),
+        ];
         assert!(
-            adapter.is_some() && gc.is_some(),
-            "expected both heavy modules"
-        );
-        assert_ne!(
-            adapter, gc,
-            "the two heaviest modules should land on different workers"
+            heavy[0] != heavy[1] && heavy[0] != heavy[2] && heavy[1] != heavy[2],
+            "the three heaviest modules should land on different workers: {heavy:?}"
         );
 
         // Every module is placed exactly once, with original indices preserved.
