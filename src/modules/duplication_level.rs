@@ -12,6 +12,7 @@ use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
 use crate::report::charts::CHART_WIDTH;
 use crate::sequence::Sequence;
 use crate::utils::format::java_format_double;
+use crate::utils::java_hashmap;
 
 pub struct DuplicationLevel {
     shared_data: Arc<Mutex<OverRepresentedData>>,
@@ -57,22 +58,25 @@ impl DuplicationLevel {
         }
 
         // Apply statistical correction to each duplication level
-        let mut corrected_counts: HashMap<u64, f64> = HashMap::new();
-        for (&dup_level, &num_observations) in &collated_counts {
-            let corrected = get_corrected_count(
-                data.count_at_unique_limit,
-                data.count,
-                dup_level,
-                num_observations,
-            );
-            corrected_counts.insert(dup_level, corrected);
-        }
+        let mut corrected_counts: Vec<(u64, f64)> = collated_counts
+            .into_iter()
+            .map(|(dup_level, num_observations)| {
+                let corrected = get_corrected_count(
+                    data.count_at_unique_limit,
+                    data.count,
+                    dup_level,
+                    num_observations,
+                );
+                (dup_level, corrected)
+            })
+            .collect();
+        sort_in_java_hashmap_order(&mut corrected_counts);
 
         // Calculate raw and deduplicated totals from corrected counts
         let mut dedup_total: f64 = 0.0;
         let mut raw_total: f64 = 0.0;
 
-        for (&dup_level, &count) in &corrected_counts {
+        for &(dup_level, count) in &corrected_counts {
             dedup_total += count;
             raw_total += count * dup_level as f64;
 
@@ -128,6 +132,18 @@ impl DuplicationLevel {
         };
         self.computed.as_ref().unwrap_or(&DEFAULT)
     }
+}
+
+/// JAVA COMPAT: Java sums corrected counts in `HashMap<Long, Double>` order, and
+/// float addition is order-sensitive.
+fn sort_in_java_hashmap_order(entries: &mut [(u64, f64)]) {
+    let capacity = java_hashmap::table_capacity(entries.len());
+    entries.sort_unstable_by_key(|&(key, _)| {
+        (
+            java_hashmap::bucket(java_hashmap::long_hash(key), capacity),
+            key,
+        )
+    });
 }
 
 /// Replicates getCorrectedCount() from DuplicationLevel.java.
@@ -281,5 +297,69 @@ impl QCModule for DuplicationLevel {
     }
     fn generate_chart_svg(&self) -> Option<String> {
         Some(self.build_chart_svg())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn java_order(keys: impl IntoIterator<Item = u64>) -> Vec<u64> {
+        let mut entries: Vec<(u64, f64)> = keys.into_iter().map(|k| (k, 0.0)).collect();
+        sort_in_java_hashmap_order(&mut entries);
+        entries.into_iter().map(|(k, _)| k).collect()
+    }
+
+    #[test]
+    fn test_java_hashmap_order() {
+        // 12 keys fit 16 buckets, so 32 and 17 wrap to buckets 0 and 1.
+        assert_eq!(
+            java_order([32, 3, 17, 1, 2, 4, 5, 6, 7, 8, 9, 10]),
+            [32, 1, 17, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        );
+        // A 13th key grows the table to 32 buckets.
+        assert_eq!(
+            java_order((1..=12).chain([40])),
+            [1, 2, 3, 4, 5, 6, 7, 8, 40, 9, 10, 11, 12]
+        );
+    }
+
+    #[test]
+    fn test_levels_match_java_past_unique_limit() {
+        // Expected values from Java's calculateLevels() on the same counts.
+        let mut data = OverRepresentedData::new();
+        data.count = 2_000_000;
+        data.count_at_unique_limit = 150_000;
+        let levels = [(1, 90_000), (17, 200), (32, 100)]
+            .into_iter()
+            .chain((2..=12).map(|level| (level, 1_000)));
+        for (level, n) in levels {
+            for _ in 0..n {
+                let key = format!("S{}", data.sequences.len());
+                data.sequences.insert(key, level);
+            }
+        }
+
+        let mut module = DuplicationLevel::new(Arc::new(Mutex::new(data)), &Limits::new());
+        module.calculate_levels();
+        let computed = module.ensure_calculated();
+
+        assert_eq!(computed.percent_different_seqs, 88.61009166696547);
+        assert_eq!(
+            computed.total_percentages[..10],
+            [
+                86.21369673475012,
+                0.9952516712377281,
+                1.033504541142911,
+                1.072685751499248,
+                1.1127913683889874,
+                1.153816362824301,
+                1.1957546322473545,
+                1.238599026439594,
+                1.2823413776257666,
+                4.701558533844009,
+            ]
+        );
+        assert!(computed.total_percentages[10..].iter().all(|&p| p == 0.0));
     }
 }
