@@ -70,19 +70,19 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 </table></div>
 <div class="note"><strong>ERR16962265.fastq.gz</strong> is listed for completeness but left out of the results: the local copy is an incomplete download (the first 22.7 GB of the 66.6 GB file on ENA), so the gzip stream ends early and it can't be read to the end. The April 2026 report's figures for this file came from the same partial copy.</div>
 <h2>Output Correctness</h2>
-<p>fastqc_data.txt and summary.txt from Rust 2.0 were compared module by module against Java 0.13.0, and between Rust 2.0&#x27;s -t 1 and default runs. Every module is byte-identical except, on the large inputs, the last digit or two of Sequence Duplication Levels (at most 2 parts in 10^15). That module sums floating-point values in hash-map order, which varies between runs. Summing in Java&#x27;s order, which makes it byte-identical too, is a separate fix (pull request #12).</p>
+<p>fastqc_data.txt and summary.txt from Rust 2.0 were compared module by module against Java 0.13.0, and between Rust 2.0&#x27;s -t 1 and default runs. Every file is byte-identical in both comparisons.</p>
 <div class="table-wrap"><table>
 <tr><th>File</th><th>Rust 2.0 <code>-t 6</code> vs Java 0.13.0</th><th>Rust 2.0 <code>-t 1</code> vs <code>-t 6</code></th></tr>
-<tr><td>tumor_1.fastq.gz</td><td>identical except the last digits of Sequence Duplication Levels</td><td>identical except the last digits of Sequence Duplication Levels</td></tr>
-<tr><td>tumor_2.fastq.gz</td><td>identical except the last digits of Sequence Duplication Levels</td><td>identical except the last digits of Sequence Duplication Levels</td></tr>
-<tr><td>normal_1.fastq.gz</td><td>identical except the last digits of Sequence Duplication Levels</td><td>identical except the last digits of Sequence Duplication Levels</td></tr>
-<tr><td>normal_2.fastq.gz</td><td>identical except the last digits of Sequence Duplication Levels</td><td>identical except the last digits of Sequence Duplication Levels</td></tr>
+<tr><td>tumor_1.fastq.gz</td><td>identical</td><td>identical</td></tr>
+<tr><td>tumor_2.fastq.gz</td><td>identical</td><td>identical</td></tr>
+<tr><td>normal_1.fastq.gz</td><td>identical</td><td>identical</td></tr>
+<tr><td>normal_2.fastq.gz</td><td>identical</td><td>identical</td></tr>
 <tr><td>ERR16944282_1.fastq.gz</td><td>identical</td><td>identical</td></tr>
 <tr><td>ERR16944282_2.fastq.gz</td><td>identical</td><td>identical</td></tr>
 <tr><td>ERR16944299_1.fastq.gz</td><td>identical</td><td>identical</td></tr>
 <tr><td>ERR16944299_2.fastq.gz</td><td>identical</td><td>identical</td></tr>
-<tr><td>SRR37915503.fastq.gz</td><td>identical except the last digits of Sequence Duplication Levels</td><td>identical except the last digits of Sequence Duplication Levels</td></tr>
-<tr><td>GM12878.bam</td><td>identical except the last digits of Sequence Duplication Levels</td><td>identical except the last digits of Sequence Duplication Levels</td></tr>
+<tr><td>SRR37915503.fastq.gz</td><td>identical</td><td>identical</td></tr>
+<tr><td>GM12878.bam</td><td>identical</td><td>identical</td></tr>
 </table></div>
 <h2>Per-File Results</h2>
 <h3>Wall Clock Time</h3>
