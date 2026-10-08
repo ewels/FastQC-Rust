@@ -9,6 +9,7 @@ use crate::config::{Limits, LimitsExt};
 use crate::modules::QCModule;
 use crate::sequence::Sequence;
 use crate::utils::format::java_format_double;
+use crate::utils::java_hashmap;
 
 /// Shared data between OverRepresentedSeqs and DuplicationLevel.
 /// In Java, DuplicationLevel directly accesses OverRepresentedSeqs' fields.
@@ -307,11 +308,12 @@ impl OverRepresentedSeqs {
             }
         }
 
-        // JAVA COMPAT: Sort by count descending, then by sequence ascending as tiebreaker.
-        // Java's Arrays.sort is stable and preserves HashMap iteration order for equal counts,
-        // but Rust's HashMap has different iteration order. Using sequence as tiebreaker
-        // ensures deterministic output regardless of HashMap order.
-        keepers.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.seq.cmp(&b.seq)));
+        // JAVA COMPAT: Java's stable sort by count leaves ties in `HashMap<String, Long>` order.
+        let capacity = java_hashmap::table_capacity(data.sequences.len());
+        keepers.sort_by_cached_key(|k| {
+            let bucket = java_hashmap::bucket(java_hashmap::string_hash(&k.seq), capacity);
+            (std::cmp::Reverse(k.count), bucket, k.seq.clone())
+        });
 
         self.computed = Some(keepers);
     }
@@ -442,5 +444,47 @@ impl QCModule for OverRepresentedSeqs {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ties_in_java_order() {
+        // Expected order from Java FastQC on 12 sequences seen 20 times among 2000 singletons.
+        let java_order = [
+            "GCGGTGTTAAGTGTCGAGCTACATCACTTCTCATGTAGCC",
+            "CAGATTTTCATATTATGCAGAAAATCTACTTCGCCTGATA",
+            "GATCCTATGCTTGTGAGTACCCAGAAAATAGCGACGGACC",
+            "CCGGGGCTAATCCGTCATTGTCAAGAGACATCTTTCGTCT",
+            "CGAGTCGGTTATCTTCGGATACTGTATAGTCCCACCTGGT",
+            "GATGTCAAACCCCGGGGGGAGCTCAGATATCCGATACAGG",
+            "AGAAAAGGTTCAGACCCCGGAGCCCAGCCGTCACGATTGT",
+            "GATGAAGAAATAACCTCATCCCATTGGTGACGAAAGGTTG",
+            "TAAGTAGCTGGCCGCCGAGATAGCTGAGCGGCGAACCACT",
+            "CATTAGGCTACTAACGCCGCCGGGTCGTTACTCGAAAAGC",
+            "AGAAGGCTGCAACTCATCGACTCTATGTAGTGACCGCGTC",
+            "TATGCGTATAAGCCCGGTTCACTACGTCCGTTCTGGCAAG",
+        ];
+        let mut data = OverRepresentedData::new();
+        data.count = 2240;
+        for seq in java_order.iter().rev() {
+            data.sequences.insert(seq.to_string(), 20);
+        }
+        for i in 0..2000 {
+            data.sequences.insert(format!("S{i}"), 1);
+        }
+
+        let shared = Arc::new(Mutex::new(data));
+        let mut module = OverRepresentedSeqs::new(&Limits::new(), 0, &[], shared);
+        module.get_overrepresented_seqs();
+        let order: Vec<&str> = module
+            .ensure_calculated()
+            .iter()
+            .map(|k| k.seq.as_str())
+            .collect();
+        assert_eq!(order, java_order);
     }
 }
