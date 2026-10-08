@@ -92,4 +92,11 @@ pub trait SequenceFile: Send {
 
     /// Estimated percentage complete (0.0 - 100.0), for progress display.
     fn percent_complete(&self) -> f64;
+
+    /// Threads decompressing this file in the background, beside the one
+    /// calling [`next`](Self::next), so the runner can count them against the
+    /// thread budget.
+    fn background_threads(&self) -> usize {
+        0
+    }
 }

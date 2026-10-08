@@ -27,8 +27,15 @@ impl QualityCount {
         if idx >= self.actual_counts.len() {
             // Java throws ArrayIndexOutOfBoundsException here; clamp to the last
             // slot so a corrupt quality char doesn't abort the run.
-            warn_out_of_range(quality_char, self.actual_counts.len() - 1);
-            self.actual_counts[self.actual_counts.len() - 1] += 1;
+            let max = self.actual_counts.len() - 1;
+            static WARNED: crate::progress::OncePerRun = crate::progress::OncePerRun::new();
+            WARNED.log(|| {
+                format!(
+                    "Warning: quality character '{}' (ASCII {}) exceeds maximum {}; clamping",
+                    quality_char as char, quality_char, max
+                )
+            });
+            self.actual_counts[max] += 1;
             self.total_counts += 1;
             return;
         }
@@ -106,19 +113,6 @@ impl QualityCount {
 
         // JAVA COMPAT: Java returns -1 when no value found (cast to double = -1.0).
         -1.0
-    }
-}
-
-/// Out of line so the per-base `add_value` stays inlinable.
-#[cold]
-#[inline(never)]
-fn warn_out_of_range(quality_char: u8, max: usize) {
-    static WARNED: crate::progress::OncePerRun = crate::progress::OncePerRun::new();
-    if WARNED.should_say() {
-        crate::progress::log_line(&format!(
-            "Warning: quality character '{}' (ASCII {}) exceeds maximum {}; clamping",
-            quality_char as char, quality_char, max
-        ));
     }
 }
 

@@ -71,26 +71,30 @@ Output matches Java FastQC v0.13.0. Many of these changes came from this project
   pinned to one core. Builds on the upstream Java three-stage pipeline
   ([s-andrews/FastQC#197](https://github.com/s-andrews/FastQC/pull/197)).
   A single file scales until its one gzip decoder is the limit (36 s on a
-  7.9 GB WES file, flat from `-t 3`); modules can't be split across workers
+  7.9 GB WES file, flat from `-t 4`); modules can't be split across workers
   without changing output either, so beyond that extra cores are best spent on
   more files at once, which scales linearly.
 - **Faster analysis**, byte-identical output: Adapter Content finds all adapters
   in one SIMD multi-pattern pass per read instead of one search per adapter;
   Basic Statistics and per-sequence GC count bases with vectorised counters;
-  FASTQ lines are parsed straight into the record buffers. On a 7.9 GB WES
-  `.fastq.gz` (M1 Pro) `-t 1` drops from 126 s to 68 s and CPU per file by
-  ~36%; 58 GB of long reads at `-t 1` from 1273 s to 404 s.
-- **`-t/--threads` is a ceiling on the whole run**, each file's decoder
-  included. Give it and the run stays inside it — `-t 1` really does mean one
-  analysis thread and one decoder, which is what a workflow engine passing
-  `task.cpus` needs. Leave it out and the budget defaults to **the available
+  FASTQ lines are parsed straight into the record buffers. With one analysis
+  thread beside the gzip decoder (`-t 2`), a 7.9 GB WES `.fastq.gz` (M1 Pro)
+  drops from 126 s to 68 s and CPU per file by ~36%; 58 GB of long reads from
+  1273 s to 404 s.
+- **`-t/--threads` is a ceiling on the whole run**, each file's gzip decoder
+  included. Give it and the run stays inside it — `-t 1` decodes and analyses
+  on one thread, which is what a workflow engine passing `task.cpus` needs. Leave it out and the budget defaults to **the available
   CPUs, up to 6** — a plain `fastqc sample.fastq.gz` gets the parallel pipeline
   without being asked, but a big shared machine is not treated as idle just
   because it is big. (Java FastQC defaults to 1; output is byte-identical
   whatever the budget.) The thread budget honours cgroup quotas and CPU
   affinity, so a container or a scheduler-pinned job sees its own allowance,
-  not the host's cores. Six is where a single file's returns flatten; at most 6
-  analysis workers run per file, and any budget beyond that is left idle.
+  not the host's cores. A single file's returns flatten from about `-t 4`; at
+  most 6 analysis workers run per file, and any budget beyond that is left
+  idle.
+  Inputs whose reports would land on the same path (`run1/S1.fastq.gz` and
+  `run2/S1.fastq.gz` into one `-o`) are warned about and written one at a
+  time, so files analysed together can't interleave into a corrupt zip.
 - **Bounded pipeline memory on long reads.** The analysis pipeline capped its
   in-flight batches by record count alone, which is a few MB of Illumina reads
   but gigabytes of nanopore or PacBio ones. Batches are now capped by bytes as
@@ -100,9 +104,11 @@ Output matches Java FastQC v0.13.0. Many of these changes came from this project
   [`rapidgzip-core`](https://crates.io/crates/rapidgzip-core). `.fastq.gz` is
   decoded on a background thread, overlapped with the analysis, with
   byte-identical output. One decoder keeps up with the full parallel pipeline;
-  the new `--decompress-threads N` option (default `1`, not counted in
-  `--threads`) decodes in parallel chunks, but on typical data that costs CPU
-  and memory without speeding the run up.
+  the new `--decompress-threads N` option (default `1`; decoders past the first
+  are not counted in `--threads`) decodes in parallel chunks, but on typical
+  data that costs CPU and memory without speeding the run up. `0` decodes on
+  the reading thread. Named pipes and other non-seekable `.gz` inputs are
+  decoded as a stream.
 - **Removed the flate2/system-zlib gzip path**, the `rapidgzip`/`native-zlib`
   Cargo features, and the `FASTQC_GZIP_BACKEND` switch. The binary is now pure
   Rust (zlib-rs) with no C toolchain or system-library dependency, so builds are
@@ -153,8 +159,8 @@ Output matches Java FastQC v0.13.0. Many of these changes came from this project
 ### Breaking changes for library users
 
 - `FastQCConfig::threads` is now `Option<usize>`; `None` (the default) means
-  "not specified", which is what lets an explicit budget bound decompression
-  while an absent one does not. Pass `Some(n)` where you passed `n`.
+  "not specified", so the default budget can be worked out from the machine.
+  Pass `Some(n)` where you passed `n`.
 - `BasicStats::format_length` is now the free function
   `modules::basic_stats::format_length`. The behaviour is unchanged.
 

@@ -67,9 +67,8 @@ impl Read for ReaderKind {
 }
 
 /// How a reader estimates its `percent_complete`. The three reader families
-/// track the compressed position differently; making it an enum keeps the modes
-/// mutually exclusive (previously two `Option` fields that must never both be
-/// `Some`) and drives the `percent_complete` match directly.
+/// track the compressed position differently, so each mode carries what it
+/// needs and no more.
 enum Progress {
     /// stdin has no seekable position; report 0% until EOF (matching Java).
     Stdin,
@@ -87,10 +86,10 @@ enum Progress {
 const MAX_PLAUSIBLE_RATIO: u64 = 1000;
 
 /// gzip records the uncompressed size modulo this, so a file larger than it
-/// wraps and the trailer has to be unwrapped against what has been read.
+/// wraps and the trailer has to be unwrapped.
 const ISIZE_MODULUS: u64 = 1 << 32;
 
-/// Progress tracking for the parallel gzip decoder.
+/// Progress tracking for the gzip decoder.
 ///
 /// The obvious measure — compressed bytes served to the decoder over the file
 /// size — is badly wrong here, because rapidgzip's workers read *far* ahead of
@@ -107,7 +106,8 @@ const ISIZE_MODULUS: u64 = 1 << 32;
 ///
 /// **The gzip trailer**, when it is trustworthy, is exact and free — see
 /// [`gzip_trailer_size`]. Every `gzip`/`pigz`-compressed `.fastq.gz` is a
-/// single member and lands here.
+/// single member and lands here. Past 4 GiB the trailer has wrapped, and the
+/// ratio estimate below picks which wrap it is — see [`unwrap_isize`].
 ///
 /// **Otherwise** — concatenated members, BGZF — fall back to scaling the file
 /// size by the ratio the decoder has achieved so far. That ratio is an
@@ -117,7 +117,7 @@ const ISIZE_MODULUS: u64 = 1 << 32;
 /// end. That is the same weakness the old whole-file estimate had, but confined
 /// to inputs whose true size genuinely cannot be known up front.
 struct GzipProgress {
-    /// Compressed bytes served to the decoder, counted by [`CountingReadAt`].
+    /// Compressed bytes served to the decoder, counted by [`CountingSource`].
     compressed: Arc<AtomicU64>,
     /// Lock-free telemetry from the decoder: decompressed bytes produced, and
     /// decompressed bytes actually returned through `Read`.
@@ -130,10 +130,10 @@ struct GzipProgress {
 
 #[derive(Default)]
 struct GzipEstimate {
-    /// Best estimate of the file's total decompressed size.
-    total: u64,
+    /// Running maximum of the ratio-scaled size estimate.
+    ratio_total: u64,
     /// Highest permille reported so far. A bar that goes backwards looks
-    /// broken, and the fallback estimate does move as it settles.
+    /// broken, and the estimates do move as they settle.
     high_water: u64,
 }
 
@@ -157,22 +157,17 @@ impl GzipProgress {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        let total = match self.trailer_total {
-            // The trailer counts modulo 4 GiB. Reading past it means the file
-            // is larger than that, and the true size is the recorded one plus
-            // however many whole wraps have been consumed -- still exact.
-            Some(trailer) => {
-                let wraps = parsed.saturating_sub(1) / ISIZE_MODULUS;
-                trailer + wraps * ISIZE_MODULUS
-            }
-            // Underestimates while the read-ahead is outstanding and converges
-            // up to the truth, so keep the largest seen.
-            None => {
-                let ratio = stats.decompressed_bytes as f64 / compressed as f64;
-                estimate.total.max((file_size as f64 * ratio) as u64)
-            }
+        let ratio = stats.decompressed_bytes as f64 / compressed as f64;
+        estimate.ratio_total = estimate.ratio_total.max((file_size as f64 * ratio) as u64);
+
+        // The trailer describes only the last member, so a member completing
+        // before the decoder has reached the end of the file means there are
+        // several and the trailer is not the file's size.
+        let single_member = stats.member_count == 0 || compressed >= file_size;
+        let total = match self.trailer_total.filter(|_| single_member) {
+            Some(trailer) => unwrap_isize(trailer, parsed, estimate.ratio_total),
+            None => estimate.ratio_total,
         };
-        estimate.total = total;
         if total == 0 {
             return None;
         }
@@ -183,19 +178,33 @@ impl GzipProgress {
     }
 }
 
+/// The true uncompressed size given a trailer recorded modulo 4 GiB: the
+/// candidate `trailer + k * 4 GiB` nearest the `hint` (the ratio estimate),
+/// and never less than the `parsed` bytes already seen.
+///
+/// The hint only has to be within 2 GiB of the truth to pick the right wrap,
+/// which a ratio measured over the first few hundred MB comfortably is.
+fn unwrap_isize(trailer: u64, parsed: u64, hint: u64) -> u64 {
+    let nearest = (hint.saturating_sub(trailer) + ISIZE_MODULUS / 2) / ISIZE_MODULUS;
+    let at_least = parsed.saturating_sub(trailer).div_ceil(ISIZE_MODULUS);
+    trailer + nearest.max(at_least) * ISIZE_MODULUS
+}
+
 /// The uncompressed size recorded in a gzip file's `ISIZE` trailer (the last
 /// four bytes, little-endian), when it is worth believing.
 ///
 /// Exact for a single-member file, which is what `gzip` and `pigz` produce and
-/// so what almost every `.fastq.gz` is. Sizes over 4 GiB wrap, which the caller
-/// unwraps against the bytes it has read.
+/// so what almost every `.fastq.gz` is. Sizes over 4 GiB wrap, which
+/// [`unwrap_isize`] undoes.
 ///
 /// For concatenated members the trailer describes only the *last* one, so it
 /// has to be rejected: requiring the implied ratio to be at least 1:1 catches
 /// that (a trailing member is a small fraction of the file, and BGZF's empty
 /// end-of-file member records zero), as well as the pathological case of a
-/// stored-not-deflated stream. [`MAX_PLAUSIBLE_RATIO`] catches a truncated
-/// file whose last four bytes are not a trailer at all.
+/// stored-not-deflated stream. A trailing member that is still larger than the
+/// file gets past this, and is caught by [`GzipProgress::percent`] once the
+/// first member ends. [`MAX_PLAUSIBLE_RATIO`] catches a truncated file whose
+/// last four bytes are not a trailer at all.
 fn gzip_trailer_size(path: &Path, file_size: u64) -> Option<u64> {
     // Smaller than the smallest possible member: header, empty deflate block,
     // trailer.
@@ -239,14 +248,15 @@ fn detect_compression_from_magic(path: &Path) -> io::Result<&'static str> {
 // gzip decompression (parallel & multi-member, via rapidgzip)
 // ---------------------------------------------------------------------------
 
-/// A [`rapidgzip_core::ReadAt`] source that counts the compressed bytes served,
-/// so the FASTQ reader can report progress while rapidgzip owns the file.
-struct CountingReadAt {
+/// A gzip source that counts the compressed bytes served, so the FASTQ reader
+/// can report progress while rapidgzip owns the file. Read positionally by the
+/// parallel decoder, or sequentially when decoding on the reading thread.
+struct CountingSource {
     file: File,
     counter: Arc<AtomicU64>,
 }
 
-impl rapidgzip_core::ReadAt for CountingReadAt {
+impl rapidgzip_core::ReadAt for CountingSource {
     fn len(&self) -> io::Result<u64> {
         self.file.metadata().map(|metadata| metadata.len())
     }
@@ -258,35 +268,66 @@ impl rapidgzip_core::ReadAt for CountingReadAt {
     }
 }
 
-/// Open a gzip file through the parallel rapidgzip decoder.
+impl Read for CountingSource {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        let read = self.file.read(buffer)?;
+        self.counter.fetch_add(read as u64, Ordering::Relaxed);
+        Ok(read)
+    }
+}
+
+/// A gzip file opened through rapidgzip.
+struct OpenedGzip {
+    reader: rapidgzip_core::DecoderReader,
+    progress: GzipProgress,
+    /// Threads decoding in the background, beside the one reading.
+    background_threads: usize,
+}
+
+/// Open a gzip file through rapidgzip.
 ///
-/// The returned [`GzipProgress`] pairs the compressed-byte counter with the
-/// decoder's telemetry handle; see that type for how the two combine into a
-/// progress estimate. The decoder streams with backpressure, so peak memory is
-/// bounded by the in-flight-chunk budget regardless of input size.
+/// `threads` decoders run in the background on a regular file. With
+/// `threads == 0`, or a FIFO or other non-regular file that the positional
+/// decoder cannot read, the stream is decoded on the reading thread instead,
+/// inside its `read` calls.
+///
+/// See [`GzipProgress`] for how the returned telemetry becomes a progress
+/// estimate. The decoder streams with backpressure, so peak memory is bounded
+/// by the in-flight-chunk budget regardless of input size.
 fn open_rapidgzip(
     file: File,
     threads: usize,
     trailer_total: Option<u64>,
-) -> io::Result<(rapidgzip_core::DecoderReader, GzipProgress)> {
+) -> io::Result<OpenedGzip> {
+    let positional = threads > 0
+        && file
+            .metadata()
+            .is_ok_and(|metadata| metadata.file_type().is_file());
     let compressed = Arc::new(AtomicU64::new(0));
-    let source = CountingReadAt {
+    let source = CountingSource {
         file,
         counter: Arc::clone(&compressed),
     };
     let decoder = rapidgzip_core::Decoder::builder()
         .decoder_threads(threads.max(1))
         .build()?;
-    let reader = decoder
-        .reader(source)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let reader = if positional {
+        decoder.reader(source)
+    } else {
+        decoder.stream_reader(source)
+    }
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     let progress = GzipProgress {
         compressed,
         handle: reader.handle(),
         trailer_total,
         estimate: std::sync::Mutex::new(GzipEstimate::default()),
     };
-    Ok((reader, progress))
+    Ok(OpenedGzip {
+        reader,
+        progress,
+        background_threads: if positional { threads } else { 0 },
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -305,6 +346,8 @@ pub struct FastQFile {
     file_size: u64,
     /// How this reader reports progress. See [`Progress`] and `percent_complete`.
     progress: Progress,
+    /// Decoder threads working in the background for this file.
+    background_threads: usize,
 
     /// The next sequence ready to be returned (look-ahead buffer).
     next_sequence: Option<Sequence>,
@@ -352,10 +395,11 @@ impl FastQFile {
         // fis.getChannel().position() for progress tracking. We clone the File
         // handle before wrapping it in decompression so we can seek on the clone
         // to get the compressed byte position.
-        let (reader, progress) = if is_stdin {
+        let (reader, progress, background_threads) = if is_stdin {
             (
                 ReaderKind::Stdin(BufReader::new(io::stdin())),
                 Progress::Stdin,
+                0,
             )
         } else {
             let lower_name = name.to_lowercase();
@@ -370,15 +414,16 @@ impl FastQFile {
             let file = File::open(path)?;
 
             match compression {
-                // .gz is decompressed in parallel by rapidgzip; progress is
-                // tracked by the compressed-byte counter it returns.
                 "gz" => {
-                    let threads = config.decompress_threads;
                     let trailer = gzip_trailer_size(path, file_size);
-                    let (reader, progress) = open_rapidgzip(file, threads, trailer)?;
+                    let gz = open_rapidgzip(file, config.decompress_threads, trailer)?;
                     (
-                        ReaderKind::Gzip(Box::new(BufReader::with_capacity(READ_BUFFER, reader))),
-                        Progress::Gzip(progress),
+                        ReaderKind::Gzip(Box::new(BufReader::with_capacity(
+                            READ_BUFFER,
+                            gz.reader,
+                        ))),
+                        Progress::Gzip(gz.progress),
+                        gz.background_threads,
                     )
                 }
                 // bzip2 and plain text are read on this thread; progress uses a
@@ -388,6 +433,7 @@ impl FastQFile {
                     (
                         ReaderKind::Bzip2(Box::new(BufReader::new(DecoderReader::new(file)))),
                         Progress::FilePosition(pos_handle),
+                        0,
                     )
                 }
                 _ => {
@@ -395,6 +441,7 @@ impl FastQFile {
                     (
                         ReaderKind::Plain(BufReader::with_capacity(READ_BUFFER, file)),
                         Progress::FilePosition(pos_handle),
+                        0,
                     )
                 }
             }
@@ -408,6 +455,7 @@ impl FastQFile {
             name,
             file_size,
             progress,
+            background_threads,
             next_sequence: None,
             line_number: 0,
             is_colorspace: false,
@@ -424,7 +472,8 @@ impl FastQFile {
     }
 
     /// Read the next line, without its line ending, into `out` (cleared first),
-    /// incrementing `line_number`. Returns `false` at EOF.
+    /// incrementing `line_number`. Returns `false` at EOF. The line is not
+    /// UTF-8 validated; callers do that once, where the bytes are used.
     ///
     /// Not `read_until`: its newline search is measurably slower than the
     /// `memchr` crate's SIMD search on this, the parser's hottest loop.
@@ -456,13 +505,6 @@ impl FastQFile {
         }
         while out.last() == Some(&b'\r') {
             out.pop();
-        }
-        // Match `BufRead::read_line`'s UTF-8 error.
-        if std::str::from_utf8(out).is_err() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "stream did not contain valid UTF-8",
-            ));
         }
         Ok(true)
     }
@@ -497,8 +539,7 @@ impl FastQFile {
                 format!("ID line didn't start with '@' at line {}", self.line_number),
             ));
         }
-        let id = String::from_utf8(id_bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let id = String::from_utf8(id_bytes).map_err(|_| invalid_utf8())?;
 
         // -- Sequence line --
         let mut seq_bytes = Vec::new();
@@ -517,6 +558,7 @@ impl FastQFile {
                 "Ran out of data in the middle of a fastq entry. Your file is probably truncated",
             ));
         }
+        check_utf8(&quality_bytes)?;
         if !quality_bytes.starts_with(b"+") {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -535,11 +577,14 @@ impl FastQFile {
                 "Ran out of data in the middle of a fastq entry. Your file is probably truncated",
             ));
         }
+        check_utf8(&quality_bytes)?;
 
         // Track lowest quality character for Phred encoding detection.
         if let Some(lowest) = quality_bytes.iter().copied().min() {
             self.lowest_char = self.lowest_char.min(lowest);
         }
+
+        let seq_str = std::str::from_utf8(&seq_bytes).map_err(|_| invalid_utf8())?;
 
         // -- Colorspace detection (first record only) --
         // Java checks only the very first sequence for colorspace and
@@ -547,8 +592,6 @@ impl FastQFile {
         // `nextSequence` is null (i.e. no prior record) and `seq` is non-null.
         if !self.colorspace_checked {
             self.colorspace_checked = true;
-            // read_line has validated UTF-8.
-            let seq_str = std::str::from_utf8(&seq_bytes).unwrap_or("");
             self.is_colorspace = check_colorspace(seq_str);
         }
 
@@ -562,8 +605,6 @@ impl FastQFile {
         let mut sequence = if self.is_colorspace {
             // For colorspace, `seq.toUpperCase()` is passed to both
             // `convertColorspaceToBases` and stored as `colorspaceSequence`.
-            // read_line has validated UTF-8.
-            let seq_str = String::from_utf8(seq_bytes).unwrap_or_default();
             let upper = seq_str.to_ascii_uppercase();
             let bases = convert_colorspace_to_bases(&upper);
             let mut s = Sequence::new(id, bases.into_bytes(), quality_bytes);
@@ -605,6 +646,10 @@ impl SequenceFile for FastQFile {
 
     fn is_colorspace(&self) -> bool {
         self.is_colorspace
+    }
+
+    fn background_threads(&self) -> usize {
+        self.background_threads
     }
 
     /// Java reads `fis.getChannel().position()` which gives the
@@ -649,6 +694,20 @@ impl SequenceFile for FastQFile {
             }
         }
     }
+}
+
+/// The error `BufRead::read_line` gives for a line that is not UTF-8.
+fn invalid_utf8() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        "stream did not contain valid UTF-8",
+    )
+}
+
+fn check_utf8(bytes: &[u8]) -> io::Result<()> {
+    std::str::from_utf8(bytes)
+        .map(|_| ())
+        .map_err(|_| invalid_utf8())
 }
 
 // ---------------------------------------------------------------------------
@@ -951,7 +1010,9 @@ mod tests {
         let trailer = gzip_trailer_size(&gz, gz_len).expect("a plausible trailer");
 
         let mut decoded = 0u64;
-        let (mut reader, _) = open_rapidgzip(File::open(&gz).unwrap(), 1, None).unwrap();
+        let mut reader = open_rapidgzip(File::open(&gz).unwrap(), 1, None)
+            .unwrap()
+            .reader;
         let mut buffer = [0u8; 8192];
         loop {
             match reader.read(&mut buffer).unwrap() {
@@ -968,6 +1029,85 @@ mod tests {
         assert_eq!(gzip_trailer_size(&gz, trailer + 1), None);
         // ...and one implying an absurd ratio is not a trailer at all.
         assert_eq!(gzip_trailer_size(&gz, 1), None);
+    }
+
+    /// A trailer recorded modulo 4 GiB is unwrapped to the candidate nearest
+    /// the ratio estimate, and never below what has already been parsed.
+    #[test]
+    fn test_unwrap_isize() {
+        const GIB: u64 = 1 << 30;
+        // Under 4 GiB the trailer is the size.
+        assert_eq!(unwrap_isize(GIB, 0, GIB), GIB);
+        assert_eq!(unwrap_isize(GIB, GIB / 2, 2 * GIB), GIB);
+        // A 6 GiB file records 2 GiB; a rough ratio estimate picks the wrap
+        // long before the parser reaches 2 GiB.
+        assert_eq!(unwrap_isize(2 * GIB, GIB / 10, 5 * GIB), 6 * GIB);
+        assert_eq!(unwrap_isize(2 * GIB, GIB / 10, 7 * GIB), 6 * GIB);
+        // A poor estimate early is corrected once parsing passes the trailer.
+        assert_eq!(unwrap_isize(2 * GIB, 3 * GIB, GIB), 6 * GIB);
+        // Several wraps.
+        assert_eq!(unwrap_isize(GIB, 0, 13 * GIB), 13 * GIB);
+    }
+
+    /// With no background decoder the file is decoded on the reading thread,
+    /// to the same records.
+    #[test]
+    fn test_gzip_inline_decoding() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/realistic.fastq.gz");
+        let background = FastQFile::open(&FastQCConfig::default(), path).unwrap();
+        assert_eq!(background.background_threads(), 1);
+
+        let config = FastQCConfig {
+            decompress_threads: 0,
+            ..FastQCConfig::default()
+        };
+        let mut inline = FastQFile::open(&config, path).unwrap();
+        assert_eq!(inline.background_threads(), 0);
+        let mut count = 0u64;
+        let mut seen_partial = false;
+        while let Some(result) = inline.next() {
+            result.unwrap();
+            count += 1;
+            seen_partial |= inline.percent_complete() < 100.0;
+        }
+        assert_eq!(count, 1009);
+        assert!(seen_partial, "progress was saturated for the whole file");
+    }
+
+    /// A named pipe has no length and cannot be read positionally, so it is
+    /// streamed rather than rejected.
+    #[cfg(unix)]
+    #[test]
+    fn test_gzip_from_a_fifo() {
+        let dir = std::env::temp_dir().join(format!("fastqc_fifo_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let fifo = dir.join("reads.fastq.gz");
+        let _ = std::fs::remove_file(&fifo);
+        let status = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .expect("mkfifo");
+        assert!(status.success());
+
+        let source = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/realistic.fastq.gz");
+        let writer = {
+            let fifo = fifo.clone();
+            std::thread::spawn(move || {
+                let data = std::fs::read(source).unwrap();
+                std::fs::write(&fifo, data).unwrap();
+            })
+        };
+
+        let mut reader = FastQFile::open(&FastQCConfig::default(), &fifo).unwrap();
+        assert_eq!(reader.background_threads(), 0);
+        let mut count = 0u64;
+        while let Some(result) = reader.next() {
+            result.unwrap();
+            count += 1;
+        }
+        writer.join().unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(count, 1009);
     }
 
     /// Progress must come from the bytes handed to the parser, not from the

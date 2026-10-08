@@ -534,7 +534,7 @@ fn test_colour_can_be_forced_on_a_pipe() {
     }
 
     // NO_COLOR wins over CLICOLOR_FORCE when both are set, per NO_COLOR's spec.
-    let stderr = run_binary_stderr(&[], &[("NO_COLOR", "1"), ("CLICOLOR", "0")]);
+    let stderr = run_binary_stderr(&[], &[("NO_COLOR", "1"), ("CLICOLOR_FORCE", "1")]);
     assert!(
         !stderr.contains('\u{1b}'),
         "NO_COLOR must suppress colour: {:?}",
@@ -933,10 +933,12 @@ fn run_on_a_pty(args: &[&str], rows: u16, columns: u16) -> String {
 #[cfg(unix)]
 #[test]
 fn test_display_on_a_real_terminal() {
-    let broken = std::env::temp_dir().join("fastqc_pty_broken.fastq");
+    let broken_dir = std::env::temp_dir().join(format!("fastqc_pty_broken_{}", std::process::id()));
+    std::fs::create_dir_all(&broken_dir).expect("create dir");
+    let broken = broken_dir.join("fastqc_pty_broken.fastq");
     std::fs::write(&broken, "not a fastq file at all\n").expect("write");
     let stderr = run_on_a_pty(&[MINIMAL, broken.to_str().unwrap()], 45, 140);
-    std::fs::remove_file(&broken).ok();
+    std::fs::remove_dir_all(&broken_dir).ok();
 
     // Drawn in place, in colour, with bars: this is the live display.
     assert!(stderr.contains('━'), "no progress bar drawn: {stderr:?}");

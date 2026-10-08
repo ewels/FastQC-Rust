@@ -155,13 +155,13 @@ impl QCModule for PerSequenceQualityScores {
             let slot = (average_quality as usize).min(MAX_QUALITY_SCORE - 1);
             if slot != average_quality as usize {
                 static WARNED: crate::progress::OncePerRun = crate::progress::OncePerRun::new();
-                if WARNED.should_say() {
-                    crate::progress::log_line(&format!(
+                WARNED.log(|| {
+                    format!(
                         "Warning: mean quality {} exceeds maximum {}; clamping",
                         average_quality,
                         MAX_QUALITY_SCORE - 1
-                    ));
-                }
+                    )
+                });
             }
             self.average_score_counts[slot] += 1;
             self.has_data = true;

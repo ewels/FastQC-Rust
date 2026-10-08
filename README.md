@@ -74,23 +74,23 @@ fastqc --help
 ### Threads
 
 `-t`/`--threads` is the whole run's thread budget. It is spread across the files
-processed at once and then within each file (a reader plus analysis workers),
-and each file's gzip decoder counts as part of its reader — so `-t 1` means one
-analysis thread and one decoder, which is what a workflow engine passing
-`task.cpus` expects. The
-budget honours cgroup quotas and CPU affinity, so a container or a
-scheduler-pinned job sees its own allowance rather than the host's core count.
+processed at once and then within each file: a reader, the file's gzip decoder,
+and analysis workers. `-t 1` decodes and analyses on a single thread, so the run
+stays inside what a workflow engine passing `task.cpus` asked for. The budget
+honours cgroup quotas and CPU affinity, so a container or a scheduler-pinned job
+sees its own allowance rather than the host's core count.
 
 Leave `--threads` out and the budget is the available CPUs, up to 6, so a plain
 `fastqc sample.fastq.gz` runs in parallel without taking over a shared machine.
-A single `.fastq.gz` stops getting faster at around `-t 3`–`4`, where the
+A single `.fastq.gz` stops getting faster at around `-t 4`, where the
 analysis outpaces the file's one gzip decoder. Above that, `--threads` only helps by
 processing more files at once.
 
 Decompression is rarely worth tuning. A single-member `.gz` (what `gzip` and
 `pigz` write) can only be split across decoders speculatively, so extra
-decoders (`--decompress-threads N`, not counted in `--threads`) cost several
-times the CPU and hundreds of MB for little or no gain.
+decoders (`--decompress-threads N`; only the first counts towards `--threads`)
+cost several times the CPU and hundreds of MB for little or no gain.
+`--decompress-threads 0` decodes on the reading thread, as `-t 1` does.
 
 ### Progress display
 

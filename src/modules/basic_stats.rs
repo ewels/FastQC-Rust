@@ -2,6 +2,7 @@
 // Corresponds to Modules/BasicStats.java
 
 use std::io;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::config::Limits;
@@ -10,12 +11,10 @@ use crate::sequence::Sequence;
 use crate::utils::base_counts::{count_acgt, IDX_A, IDX_C, IDX_G, IDX_T};
 use crate::utils::phred;
 
-/// Sequences between publications of the counters to the live snapshot.
-///
-/// Only an upper bound on the update rate: the display samples the snapshot on
-/// its own schedule, so this just has to be small enough that a slow file
-/// (nanopore reads take orders of magnitude longer than Illumina ones) still
-/// looks alive, and large enough that the per-read cost rounds to nothing.
+/// How often to check whether the display wants a fresh snapshot. Small enough
+/// that a slow file (nanopore reads take orders of magnitude longer than
+/// Illumina ones) still looks alive, and large enough that the per-read cost
+/// rounds to nothing.
 const PUBLISH_INTERVAL: u32 = 256;
 
 /// The raw accumulated counters behind the Basic Statistics table.
@@ -138,14 +137,39 @@ impl BasicStatsCounters {
 ///
 /// `None` until the first publication, which lets the reader distinguish
 /// "nothing counted yet" from "genuinely zero".
-#[derive(Default)]
+///
+/// Publishing costs a pass over the read-length histogram for the median,
+/// which for long reads is far more than the module's per-read work. So the
+/// module only publishes when asked: once to start with, and then each time
+/// the display has drawn the last snapshot and wants another. A table that is
+/// hidden asks for nothing.
 pub struct LiveStats {
     snapshot: Mutex<Option<BasicStatsCounters>>,
+    wanted: AtomicBool,
+}
+
+impl Default for LiveStats {
+    fn default() -> Self {
+        Self {
+            snapshot: Mutex::new(None),
+            wanted: AtomicBool::new(true),
+        }
+    }
 }
 
 impl LiveStats {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Ask the module for a fresh snapshot at its next opportunity.
+    pub fn request(&self) {
+        self.wanted.store(true, Ordering::Relaxed);
+    }
+
+    /// Whether a snapshot has been asked for, clearing the request.
+    fn take_request(&self) -> bool {
+        self.wanted.load(Ordering::Relaxed) && self.wanted.swap(false, Ordering::Relaxed)
     }
 
     /// The most recently published counters, or `None` if the module has not
@@ -268,7 +292,10 @@ impl QCModule for BasicStats {
         // Taken before this sequence is added so that nothing is published
         // until there is something to show.
         let seen = self.counters.actual_count;
-        if seen != 0 && seen.is_multiple_of(PUBLISH_INTERVAL as u64) {
+        if seen != 0
+            && seen.is_multiple_of(PUBLISH_INTERVAL as u64)
+            && self.live.as_ref().is_some_and(|live| live.take_request())
+        {
             self.publish();
         }
 
@@ -469,6 +496,36 @@ mod tests {
             .map(|(k, v)| (k.to_string(), v))
             .collect();
         assert_eq!(text_rows(&module), expected);
+    }
+
+    /// After the first snapshot, the module publishes only when the display
+    /// asks for one, so a hidden table costs nothing.
+    #[test]
+    fn test_live_stats_publish_on_request() {
+        let limits = Limits::new();
+        let live = Arc::new(LiveStats::new());
+        let mut module = BasicStats::new(&limits);
+        module.attach_live_stats(Arc::clone(&live));
+
+        let seqs = sequences(PUBLISH_INTERVAL as usize * 4);
+        let (first, rest) = seqs.split_at(PUBLISH_INTERVAL as usize * 2);
+        for seq in first {
+            module.process_sequence(seq);
+        }
+        let published = live.snapshot().expect("first snapshot").actual_count;
+        assert_eq!(published, PUBLISH_INTERVAL as u64);
+
+        let (unasked, asked) = rest.split_at(PUBLISH_INTERVAL as usize);
+        for seq in unasked {
+            module.process_sequence(seq);
+        }
+        assert_eq!(live.snapshot().unwrap().actual_count, published);
+
+        live.request();
+        for seq in asked {
+            module.process_sequence(seq);
+        }
+        assert!(live.snapshot().unwrap().actual_count > published);
     }
 
     /// Publishing is opt-in: a module with no sink attached must behave

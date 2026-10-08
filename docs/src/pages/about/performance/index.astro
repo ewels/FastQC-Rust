@@ -64,9 +64,9 @@ const base = import.meta.env.BASE_URL;
         </div>
         <div class="bench-row">
           <span class="bench-label bench-label-version">Rust 2.0</span>
-          <div class="bench-bar bench-bar-rust" style="width: 13.1%"></div>
-          <span class="bench-time">1m 8s</span>
-          <span class="bench-speedup">6.6x</span>
+          <div class="bench-bar bench-bar-rust" style="width: 19.5%"></div>
+          <span class="bench-time">1m 42s</span>
+          <span class="bench-speedup">5.1x</span>
         </div>
       </div>
     </div>
@@ -104,7 +104,7 @@ const base = import.meta.env.BASE_URL;
   <p style="color: var(--ink-muted); font-size: 0.875rem; margin-bottom: 2.5rem">
     Rust 1.0 is the current release (v1.0.1) and Rust 2.0 the next. Defaults are one thread per
     file for Java v0.12.1 and Rust 1.0, <code>-t 4</code> for Java v0.13.0 and up to 6 threads for
-    Rust 2.0. Java ran on OpenJDK 21. Measured October 2026; Java v0.13.0 at <code>-t 1</code> is the best of two separate runs, as the report doesn't include it.
+    Rust 2.0. Java ran on OpenJDK 21. Measured October 2026; Java v0.13.0 at <code>-t 1</code> is the best of two separate runs, as the report doesn't include it. Rust 2.0 at <code>-t 1</code> and the thread scaling below were re-measured once the gzip decoder counted towards <code>-t</code>; the full report predates that.
   </p>
 
   <div style="margin-bottom: 2.5rem">
@@ -178,41 +178,42 @@ const base = import.meta.env.BASE_URL;
         <div class="bench-row">
           <span class="bench-label bench-label-wide">-t 1</span>
           <div class="bench-bar bench-bar-rust" style="width: 100%"></div>
-          <span class="bench-time">68.2 s</span>
+          <span class="bench-time">101.7 s</span>
         </div>
         <div class="bench-row">
           <span class="bench-label bench-label-wide">-t 2</span>
-          <div class="bench-bar bench-bar-rust" style="width: 78%"></div>
-          <span class="bench-time">53.2 s</span>
-          <span class="bench-speedup">1.28x</span>
+          <div class="bench-bar bench-bar-rust" style="width: 65.5%"></div>
+          <span class="bench-time">66.6 s</span>
+          <span class="bench-speedup">1.53x</span>
         </div>
         <div class="bench-row">
           <span class="bench-label bench-label-wide">-t 3</span>
-          <div class="bench-bar bench-bar-rust" style="width: 53%"></div>
-          <span class="bench-time">36.2 s</span>
+          <div class="bench-bar bench-bar-rust" style="width: 53.2%"></div>
+          <span class="bench-time">54.1 s</span>
           <span class="bench-speedup">1.88x</span>
         </div>
         <div class="bench-row">
           <span class="bench-label bench-label-wide">-t 4</span>
-          <div class="bench-bar bench-bar-rust" style="width: 53%"></div>
-          <span class="bench-time">35.9 s</span>
-          <span class="bench-speedup">1.90x</span>
+          <div class="bench-bar bench-bar-rust" style="width: 35.6%"></div>
+          <span class="bench-time">36.2 s</span>
+          <span class="bench-speedup">2.81x</span>
         </div>
         <div class="bench-row">
           <span class="bench-label bench-label-wide">-t 6</span>
-          <div class="bench-bar bench-bar-rust" style="width: 53%"></div>
-          <span class="bench-time">35.9 s</span>
-          <span class="bench-speedup">1.90x</span>
+          <div class="bench-bar bench-bar-rust" style="width: 35.2%"></div>
+          <span class="bench-time">35.8 s</span>
+          <span class="bench-speedup">2.84x</span>
         </div>
       </div>
     </div>
     <p style="color: var(--ink-muted); margin-bottom: 1rem">
-      A single file stops getting faster at around <code>-t 3</code>, where the analysis
-      outpaces the file's one gzip decoder. Past that point, extra cores are better spent on
+      Each file's gzip decoder counts towards <code>-t</code>, so <code>-t 1</code> decodes
+      and analyses on a single thread. A single file stops getting faster at around
+      <code>-t 4</code>, where the analysis outpaces the file's one gzip decoder. Past that point, extra cores are better spent on
       more files at once.
     </p>
     <p style="color: var(--ink-muted)">
-      For <code>.fastq.gz</code> input, decompression runs on its own thread via
+      Given two or more threads, <code>.fastq.gz</code> decompression runs on its own thread via
       <a href="https://crates.io/crates/rapidgzip-core">rapidgzip-core</a> with a
       <a href="https://crates.io/crates/zlib-rs">zlib-rs</a> inflate, so it overlaps with the
       analysis. rapidgzip can split a file across decoders (<code>--decompress-threads</code>),

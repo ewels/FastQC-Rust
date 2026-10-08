@@ -74,12 +74,13 @@ struct Cli {
 
     /// Total thread budget for the run [default: available CPUs, up to 6].
     /// Spread across the files processed simultaneously and then within each
-    /// file (a reader/decoder plus analysis workers).
+    /// file (a reader, its gzip decoder, and analysis workers).
     #[arg(short, long, value_name = "N")]
     threads: Option<usize>,
 
-    /// Parallel gzip decoders per .fastq.gz file, not counted in --threads.
-    /// The default (1) keeps up with the analysis.
+    /// Background gzip decoders per .fastq.gz file. The first counts towards
+    /// --threads and keeps up with the analysis; any more do not count. 0
+    /// decodes on the reading thread, as -t 1 does.
     #[arg(long = "decompress-threads", value_name = "N", default_value = "1")]
     decompress_threads: usize,
 

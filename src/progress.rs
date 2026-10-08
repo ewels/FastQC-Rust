@@ -56,9 +56,10 @@
 //! to measure. `never` always takes the plain path.
 //!
 //! **Colour** follows [`console::colors_enabled_stderr`], which implements the
-//! usual conventions with no help from us: `NO_COLOR` disables colour, the
-//! [clicolors spec](https://bixense.com/clicolors/) `CLICOLOR=0` disables it and
-//! `CLICOLOR_FORCE=1` forces it on even for a pipe, and `TERM=dumb` disables it.
+//! usual conventions: the [clicolors spec](https://bixense.com/clicolors/)
+//! `CLICOLOR=0` disables colour and `CLICOLOR_FORCE=1` forces it on even for a
+//! pipe, and `TERM=dumb` disables it. A non-empty `NO_COLOR` disables it over
+//! all of those, which console does not do on its own.
 //! indicatif's template styling reads the same function, so one signal covers
 //! this module's styling and the bars alike.
 //!
@@ -191,16 +192,11 @@ struct LogSink {
 impl LogSink {
     fn print(&self, message: &str) {
         self.padding.set_message(" ");
-        // Erase the region, write the line as ordinary scrollback, and let the
-        // next update redraw the display beneath it.
-        //
-        // Not `println` or `suspend`: both erase using the line count from the
-        // last frame indicatif drew, and with bars updating from several
-        // threads that count lags what is on screen, which strands a stale copy
-        // of the whole display above the live one. `clear` resets the count to
-        // zero, so there is no bookkeeping left to be wrong.
-        let _ = self.multi.clear();
-        eprint!("{}{}", message, self.line_ending);
+        // Erase the region, write the line as ordinary scrollback, and redraw
+        // the display beneath it, all under indicatif's draw lock so no other
+        // thread's frame can land between the erase and the line.
+        self.multi
+            .suspend(|| eprint!("{}{}", message, self.line_ending));
     }
 }
 
@@ -260,6 +256,16 @@ impl OncePerRun {
         let run = RUN.load(Ordering::Relaxed);
         self.0.swap(run, Ordering::Relaxed) != run
     }
+
+    /// [`log_line`] the warning `message` builds, the first time this run.
+    /// Out of line so the hot loop it is raised from stays tight.
+    #[cold]
+    #[inline(never)]
+    pub fn log(&self, message: impl FnOnce() -> String) {
+        if self.should_say() {
+            log_line(&message());
+        }
+    }
 }
 
 /// The terminal progress display for a whole run.
@@ -297,6 +303,8 @@ struct Live {
     stop: Arc<AtomicBool>,
 }
 
+/// Cheap to clone: the ticker thread holds its own handle.
+#[derive(Clone)]
 enum Bars {
     /// One bar per file, indexed by file group.
     PerFile(Arc<Vec<FileBar>>),
@@ -319,33 +327,18 @@ struct FileBar {
     started: AtomicBool,
 }
 
-/// The bars the ticker animates, cheap to hand to the background thread.
-enum TickerBars {
-    PerFile(Arc<Vec<FileBar>>),
-    Aggregate(ProgressBar),
-}
-
 impl Bars {
-    fn clone_for_ticker(&self) -> TickerBars {
-        match self {
-            Bars::PerFile(bars) => TickerBars::PerFile(Arc::clone(bars)),
-            Bars::Aggregate(bar) => TickerBars::Aggregate(bar.clone()),
-        }
-    }
-}
-
-impl TickerBars {
     /// The bars whose spinner should be advancing: the ones whose file is
     /// actually being worked on. A file still queued behind another has nothing
     /// happening, and a spinning spinner would say otherwise.
     fn spinners(&self) -> Box<dyn Iterator<Item = &ProgressBar> + '_> {
         match self {
-            TickerBars::PerFile(bars) => Box::new(
+            Bars::PerFile(bars) => Box::new(
                 bars.iter()
                     .filter(|file| file.started.load(Ordering::Relaxed))
                     .map(|file| &file.bar),
             ),
-            TickerBars::Aggregate(bar) => Box::new(std::iter::once(bar)),
+            Bars::Aggregate(bar) => Box::new(std::iter::once(bar)),
         }
     }
 }
@@ -441,6 +434,11 @@ impl ProgressPlan {
     /// Decide how this run will report, and announce it. Call this first:
     /// the clock it starts is the one the closing summary reports.
     pub fn new(quiet: bool) -> Self {
+        // console lets CLICOLOR_FORCE override NO_COLOR; the NO_COLOR spec
+        // says it wins over everything.
+        if std::env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty()) {
+            console::set_colors_enabled_stderr(false);
+        }
         let choice = current_choice(quiet);
         // "Once per run" for [`OncePerRun`] means once per plan.
         RUN.fetch_add(1, Ordering::Relaxed);
@@ -722,7 +720,7 @@ impl Live {
     /// to advance a spinner. One thread does both jobs.
     fn start_ticker(&self) {
         let table = self.table.as_ref().map(Arc::clone);
-        let bars = self.bars.clone_for_ticker();
+        let bars = self.bars.clone();
         let stop = Arc::clone(&self.stop);
         let handle = std::thread::Builder::new()
             .name("fastqc-progress".into())
@@ -1196,9 +1194,13 @@ impl Table {
         let values: Vec<Vec<String>> = self
             .columns
             .iter()
-            .map(|column| match column.live.snapshot() {
-                None => vec!["-".to_string(); geometry.row_labels.len()],
-                Some(counters) => counters.rows().into_iter().map(|(_, v)| v).collect(),
+            .map(|column| {
+                let snapshot = column.live.snapshot();
+                column.live.request();
+                match snapshot {
+                    None => vec!["-".to_string(); geometry.row_labels.len()],
+                    Some(counters) => counters.rows().into_iter().map(|(_, v)| v).collect(),
+                }
             })
             .collect();
 

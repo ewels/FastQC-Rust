@@ -3,51 +3,71 @@
 // SequenceFactory which creates a SequenceFile backed by multiple files.
 // We replicate this with a wrapper that iterates through files in order.
 
+use std::collections::VecDeque;
 use std::io;
 
 use super::{Sequence, SequenceFile};
+
+/// Opens one member of a [`SequenceFileGroup`] when its turn comes.
+pub type FileOpener = Box<dyn FnOnce() -> io::Result<Box<dyn SequenceFile>> + Send>;
 
 /// A group of sequence files presented as a single logical stream.
 ///
 /// In Java, when CASAVA grouping produces multiple files for
 /// one sample, they are passed as `File[]` to `SequenceFactory.getSequenceFile()`,
 /// which creates a single SequenceFile that reads all files sequentially.
-/// This struct replicates that behavior by wrapping multiple `SequenceFile`
-/// objects and advancing to the next when one is exhausted.
+/// This struct replicates that behavior by advancing to the next file when one
+/// is exhausted.
+///
+/// Each file is opened only when the previous one is exhausted: opening a
+/// `.gz` starts its decoder thread reading ahead, which for a sample split
+/// into many chunks would otherwise mean a decoder and its buffers per chunk,
+/// all idle but one.
 pub struct SequenceFileGroup {
-    files: Vec<Box<dyn SequenceFile>>,
-    current: usize,
+    current: Option<Box<dyn SequenceFile>>,
+    pending: VecDeque<FileOpener>,
+    /// Files fully read, for `percent_complete`.
+    finished: usize,
+    total: usize,
     name: String,
 }
 
 impl SequenceFileGroup {
-    /// Create a new group with the given display name and sequence files.
-    ///
-    /// The files are read in order: when the first file reaches EOF, reading
-    /// continues from the second file, and so on.
-    pub fn new(name: String, files: Vec<Box<dyn SequenceFile>>) -> Self {
-        Self {
-            files,
-            current: 0,
+    /// Create a group with the given display name, reading the files the
+    /// `openers` open in order. The first is opened straight away, so a file
+    /// that cannot be read at all fails here rather than mid-run.
+    pub fn new(name: String, openers: Vec<FileOpener>) -> io::Result<Self> {
+        let total = openers.len();
+        let mut pending: VecDeque<FileOpener> = openers.into();
+        let current = pending.pop_front().map(|open| open()).transpose()?;
+        Ok(Self {
+            current,
+            pending,
+            finished: 0,
+            total,
             name,
-        }
+        })
     }
 }
 
 impl SequenceFile for SequenceFileGroup {
     fn next(&mut self) -> Option<io::Result<Sequence>> {
-        // Read from the current file. When it returns None (EOF),
-        // advance to the next file in the group and try again.
-        while self.current < self.files.len() {
-            match self.files[self.current].next() {
-                Some(result) => return Some(result),
-                None => {
-                    // Current file exhausted, move to next
-                    self.current += 1;
+        loop {
+            if let Some(file) = self.current.as_mut() {
+                if let Some(result) = file.next() {
+                    return Some(result);
+                }
+                self.current = None;
+                self.finished += 1;
+            }
+            match self.pending.pop_front()?() {
+                Ok(file) => self.current = Some(file),
+                Err(e) => {
+                    self.finished += 1;
+                    return Some(Err(e));
                 }
             }
         }
-        None // All files exhausted
     }
 
     fn name(&self) -> &str {
@@ -56,30 +76,27 @@ impl SequenceFile for SequenceFileGroup {
 
     fn is_colorspace(&self) -> bool {
         // Colorspace is a property of the file format, not the group.
-        // Return the colorspace status of the current (or first) file.
-        if self.current < self.files.len() {
-            self.files[self.current].is_colorspace()
-        } else if !self.files.is_empty() {
-            self.files[0].is_colorspace()
-        } else {
-            false
-        }
+        self.current
+            .as_ref()
+            .is_some_and(|file| file.is_colorspace())
     }
 
     fn percent_complete(&self) -> f64 {
-        if self.files.is_empty() {
+        if self.total == 0 {
             return 100.0;
         }
-        // Estimate progress across all files in the group.
         // Weight each file equally (simplification - Java does similar rough estimation).
-        let total = self.files.len() as f64;
-        let completed = self.current as f64;
-        let current_progress = if self.current < self.files.len() {
-            self.files[self.current].percent_complete() / 100.0
-        } else {
-            0.0
-        };
-        ((completed + current_progress) / total) * 100.0
+        let current = self
+            .current
+            .as_ref()
+            .map_or(0.0, |file| file.percent_complete() / 100.0);
+        ((self.finished as f64 + current) / self.total as f64) * 100.0
+    }
+
+    fn background_threads(&self) -> usize {
+        self.current
+            .as_ref()
+            .map_or(0, |file| file.background_threads())
     }
 }
 
@@ -128,12 +145,17 @@ mod tests {
         }
     }
 
+    fn opener(name: &'static str, count: usize) -> FileOpener {
+        Box::new(move || Ok(Box::new(MockSequenceFile::new(name, count)) as Box<dyn SequenceFile>))
+    }
+
     #[test]
     fn test_group_reads_all_files() {
-        let f1: Box<dyn SequenceFile> = Box::new(MockSequenceFile::new("a", 2));
-        let f2: Box<dyn SequenceFile> = Box::new(MockSequenceFile::new("b", 3));
-
-        let mut group = SequenceFileGroup::new("test_group".to_string(), vec![f1, f2]);
+        let mut group = SequenceFileGroup::new(
+            "test_group".to_string(),
+            vec![opener("a", 2), opener("b", 3)],
+        )
+        .unwrap();
 
         let mut count = 0;
         while group.next().is_some() {
@@ -142,15 +164,44 @@ mod tests {
         assert_eq!(count, 5); // 2 + 3
     }
 
+    /// Only the file being read is open; the next is opened once the one
+    /// before it is exhausted.
+    #[test]
+    fn test_group_opens_files_one_at_a_time() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let opened = Arc::new(AtomicUsize::new(0));
+        let counting = |count: usize| -> FileOpener {
+            let opened = Arc::clone(&opened);
+            Box::new(move || {
+                opened.fetch_add(1, Ordering::Relaxed);
+                Ok(Box::new(MockSequenceFile::new("f", count)) as Box<dyn SequenceFile>)
+            })
+        };
+        let mut group =
+            SequenceFileGroup::new("g".to_string(), vec![counting(2), counting(2), counting(2)])
+                .unwrap();
+        assert_eq!(opened.load(Ordering::Relaxed), 1);
+        group.next();
+        group.next();
+        assert_eq!(opened.load(Ordering::Relaxed), 1);
+        group.next();
+        assert_eq!(opened.load(Ordering::Relaxed), 2);
+        while group.next().is_some() {}
+        assert_eq!(opened.load(Ordering::Relaxed), 3);
+        assert_eq!(group.percent_complete(), 100.0);
+    }
+
     #[test]
     fn test_group_empty() {
-        let mut group = SequenceFileGroup::new("empty".to_string(), vec![]);
+        let mut group = SequenceFileGroup::new("empty".to_string(), vec![]).unwrap();
         assert!(group.next().is_none());
     }
 
     #[test]
     fn test_group_name() {
-        let group = SequenceFileGroup::new("my_sample".to_string(), vec![]);
+        let group = SequenceFileGroup::new("my_sample".to_string(), vec![]).unwrap();
         assert_eq!(group.name(), "my_sample");
     }
 }

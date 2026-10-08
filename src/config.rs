@@ -50,8 +50,9 @@ pub struct FastQCConfig {
     pub png_output: bool,
     pub temp_dir: Option<PathBuf>,
     pub template: TemplateName,
-    /// Per-file worker budget for the parallel gzip (rapidgzip) backend.
-    /// Applies to `.gz` inputs only; `0` is treated as `1`.
+    /// Background gzip decoders per `.gz` file; `0` decodes on the reading
+    /// thread. The runner lowers the default `1` to `0` for a file given only
+    /// one thread.
     pub decompress_threads: usize,
 }
 
