@@ -104,7 +104,7 @@ const base = import.meta.env.BASE_URL;
   <p style="color: var(--ink-muted); font-size: 0.875rem; margin-bottom: 2.5rem">
     Rust 1.0 is the current release (v1.0.1) and Rust 2.0 the next. Defaults are one thread per
     file for Java v0.12.1 and Rust 1.0, <code>-t 4</code> for Java v0.13.0 and up to 6 threads for
-    Rust 2.0. Java ran on OpenJDK 21. Measured October 2026; Java v0.13.0 at <code>-t 1</code> is the best of two separate runs, as the report doesn't include it. Rust 2.0 at <code>-t 1</code> and the thread scaling below were re-measured once the gzip decoder counted towards <code>-t</code>; the full report predates that.
+    Rust 2.0. Java ran on OpenJDK 21. Measured October 2026; Java v0.13.0 at <code>-t 1</code> is the best of two separate runs, as the report doesn't include it. Rust 2.0 at <code>-t 1</code> and the thread scaling below were measured after the gzip decoder began counting towards <code>-t</code>.
   </p>
 
   <div style="margin-bottom: 2.5rem">

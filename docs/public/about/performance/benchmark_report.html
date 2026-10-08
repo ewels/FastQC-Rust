@@ -40,12 +40,12 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 <li><strong>Java 0.12.1</strong>: the FastQC release most pipelines ran until October 2026. One thread per file, whatever <code>-t</code> is set to.</li>
 <li><strong>Java 0.13.0</strong>: adds a parallel pipeline within each file, <a href="../../upstream/">contributed upstream</a> from this project. Default <code>-t 4</code>.</li>
 <li><strong>Rust 1.0</strong>: FastQC-Rust v1.0.1, the current release. One thread per file.</li>
-<li><strong>Rust 2.0</strong>: the next release (<a href="https://github.com/ewels/FastQC-Rust/pull/7">#7</a>). Parallel analysis within each file, parallel-capable gzip decoding, default of the available CPUs up to 6. Also measured at <code>-t 1</code>.</li>
+<li><strong>Rust 2.0</strong>: the next release (<a href="https://github.com/ewels/FastQC-Rust/pull/7">#7</a>). Parallel analysis within each file, parallel-capable gzip decoding, default of the available CPUs up to 6. Also measured at <code>-t 2</code>: one analysis thread plus its gzip decoder thread. (These runs were made as <code>-t 1</code>, before the decoder counted towards <code>-t</code>; it is the same configuration.)</li>
 </ul>
 <p>Each tool runs at its default settings, one file at a time, one run per file. Java ran on OpenJDK 21 with the launcher's defaults, except that the long-read files got <code>--memory 4096</code>: the default 512 MB heap is too small for them, as FastQC's own help notes. Speedups are relative to Java 0.12.1 unless stated. macOS Spotlight indexing was using about one core in the background throughout; WES results matched earlier runs on a quiet machine to within 2%.</p>
 <h2>Summary</h2>
 <div class="table-wrap"><table>
-<tr><th>Data</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 2.0</th><th class="right">Rust 2.0 <code>-t 1</code></th></tr>
+<tr><th>Data</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 2.0</th><th class="right">Rust 2.0 <code>-t 2</code></th></tr>
 <tr><td>Illumina WES (short-read, 126 bp)</td><td class="right">1.0x</td><td class="right">2.7x</td><td class="right">2.6x</td><td class="right better">12.5x</td><td class="right">6.6x</td></tr>
 <tr><td>Element AVITI (short-read)</td><td class="right">1.0x</td><td class="right">2.5x</td><td class="right">2.5x</td><td class="right better">9.7x</td><td class="right">6.4x</td></tr>
 <tr><td>ONT PromethION (long-read)</td><td class="right">1.0x</td><td class="right">2.4x</td><td class="right">2.1x</td><td class="right better">9.5x</td><td class="right">7.3x</td></tr>
@@ -70,9 +70,9 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 </table></div>
 <div class="note"><strong>ERR16962265.fastq.gz</strong> is listed for completeness but left out of the results: the local copy is an incomplete download (the first 22.7 GB of the 66.6 GB file on ENA), so the gzip stream ends early and it can't be read to the end. The April 2026 report's figures for this file came from the same partial copy.</div>
 <h2>Output Correctness</h2>
-<p>fastqc_data.txt and summary.txt from Rust 2.0 were compared module by module against Java 0.13.0, and between Rust 2.0&#x27;s -t 1 and default runs. Every file is byte-identical in both comparisons.</p>
+<p>fastqc_data.txt and summary.txt from Rust 2.0 were compared module by module against Java 0.13.0, and between Rust 2.0&#x27;s -t 2 and default runs. Every file is byte-identical in both comparisons.</p>
 <div class="table-wrap"><table>
-<tr><th>File</th><th>Rust 2.0 <code>-t 6</code> vs Java 0.13.0</th><th>Rust 2.0 <code>-t 1</code> vs <code>-t 6</code></th></tr>
+<tr><th>File</th><th>Rust 2.0 <code>-t 6</code> vs Java 0.13.0</th><th>Rust 2.0 <code>-t 2</code> vs <code>-t 6</code></th></tr>
 <tr><td>tumor_1.fastq.gz</td><td>identical</td><td>identical</td></tr>
 <tr><td>tumor_2.fastq.gz</td><td>identical</td><td>identical</td></tr>
 <tr><td>normal_1.fastq.gz</td><td>identical</td><td>identical</td></tr>
@@ -146,7 +146,7 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 <p>Rust 2.0 uses more memory than Rust 1.0, because batches of reads are in flight between its threads, but still 3–13x less than either Java version on short reads. Long reads need far more memory in every implementation, because the per-position arrays grow with read length. Java's long-read figures reflect the 4 GB heap it was given: Java 0.13.0 used all of it.</p>
 <h2>Throughput by Platform</h2>
 <div class="table-wrap"><table>
-<tr><th>Platform</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 2.0</th><th class="right">Rust 2.0 <code>-t 1</code></th></tr>
+<tr><th>Platform</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 2.0</th><th class="right">Rust 2.0 <code>-t 2</code></th></tr>
 <tr><td>Illumina WES (short-read, 126 bp)</td><td class="right">17 MB/s</td><td class="right">48 MB/s</td><td class="right">46 MB/s</td><td class="right better">218 MB/s</td><td class="right">116 MB/s</td></tr>
 <tr><td>Element AVITI (short-read)</td><td class="right">18 MB/s</td><td class="right">46 MB/s</td><td class="right">45 MB/s</td><td class="right better">174 MB/s</td><td class="right">115 MB/s</td></tr>
 <tr><td>ONT PromethION (long-read)</td><td class="right">21 MB/s</td><td class="right">51 MB/s</td><td class="right">44 MB/s</td><td class="right better">200 MB/s</td><td class="right">154 MB/s</td></tr>
@@ -154,19 +154,20 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 </table></div>
 <p>Throughput is compressed file size divided by wall-clock time.</p>
 <h2>Thread Scaling (Rust 2.0)</h2>
-<p>One 7.3 GB WES file at each <code>-t</code> value (minimum of 2 interleaved runs, measured separately from the table above):</p>
+<p>One 7.3 GB WES file at each <code>-t</code> value (one run each, measured separately from the table above, after the gzip decoder began counting towards <code>-t</code>):</p>
 <div class="table-wrap"><table>
 <tr><th><code>-t</code></th><th class="right">Wall time</th><th class="right">Speedup</th><th class="right">CPU time</th><th class="right">Peak RSS</th></tr>
-<tr><td>1</td><td class="right">68.2s</td><td class="right">1.00x</td><td class="right">102s</td><td class="right">50 MB</td></tr>
-<tr><td>2</td><td class="right">53.2s</td><td class="right">1.28x</td><td class="right">106s</td><td class="right">68 MB</td></tr>
-<tr><td>3</td><td class="right">36.2s</td><td class="right">1.88x</td><td class="right">107s</td><td class="right">50 MB</td></tr>
-<tr><td>4</td><td class="right">35.9s</td><td class="right">1.90x</td><td class="right">109s</td><td class="right">50 MB</td></tr>
-<tr><td>6 (default)</td><td class="right">35.9s</td><td class="right">1.90x</td><td class="right">115s</td><td class="right">50 MB</td></tr>
+<tr><td>1</td><td class="right">101.7s</td><td class="right">1.00x</td><td class="right">101s</td><td class="right">32 MB</td></tr>
+<tr><td>2</td><td class="right">66.6s</td><td class="right">1.53x</td><td class="right">102s</td><td class="right">50 MB</td></tr>
+<tr><td>3</td><td class="right">54.1s</td><td class="right">1.88x</td><td class="right">106s</td><td class="right">61 MB</td></tr>
+<tr><td>4</td><td class="right">36.2s</td><td class="right">2.81x</td><td class="right">108s</td><td class="right">45 MB</td></tr>
+<tr><td>6 (default)</td><td class="right">35.8s</td><td class="right">2.84x</td><td class="right">109s</td><td class="right">43 MB</td></tr>
 </table></div>
-<p>A single short-read <code>.fastq.gz</code> stops getting faster at about <code>-t 3</code>: from there, the file's one gzip decoder is the slowest stage. One zlib-rs decoder produces about 1.1 GB/s of decompressed data, the same as system <code>gzip</code>. rapidgzip can split a file across several decoders (<code>--decompress-threads</code>), but a normal single-member <code>.gz</code> can only be split speculatively: 4 decoders were 1.35x faster for 2.8x the CPU and ~900 MB of memory, so one decoder per file is the default. Spare cores are better spent on more files at once.</p>
+<p>At <code>-t 1</code> the file is decoded and analysed on a single thread; from <code>-t 2</code> the decoder gets a thread of its own.</p>
+<p>A single short-read <code>.fastq.gz</code> stops getting faster at about <code>-t 4</code>: from there, the file's one gzip decoder is the slowest stage. One zlib-rs decoder produces about 1.1 GB/s of decompressed data, the same as system <code>gzip</code>. rapidgzip can split a file across several decoders (<code>--decompress-threads</code>), but a normal single-member <code>.gz</code> can only be split speculatively: 4 decoders were 1.35x faster for 2.8x the CPU and ~900 MB of memory, so one decoder per file is the default. Spare cores are better spent on more files at once.</p>
 <p>BAM is decoded on the reader thread, which caps it at about 1.6x however many threads it gets.</p>
 <h2>Where the Time Goes (Rust 2.0)</h2>
-<p>CPU profile of Rust 2.0 on the 7.3 GB WES file at <code>-t 1</code>: one analysis thread plus its gzip decoder thread, sampled for 40 seconds mid-run with macOS <code>sample</code> (39,386 active samples across both threads, idle waits excluded).</p>
+<p>CPU profile of Rust 2.0 on the 7.3 GB WES file at <code>-t 2</code>: one analysis thread plus its gzip decoder thread, sampled for 40 seconds mid-run with macOS <code>sample</code> (39,386 active samples across both threads, idle waits excluded).</p>
 <div class="table-wrap"><table>
 <tr><th>Component</th><th class="right">Share of CPU</th></tr>
 <tr><td>Gzip decompression (zlib-rs, on its own thread)</td><td class="right">32%</td></tr>
@@ -186,7 +187,7 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 <h3>1. Parallel analysis within a file</h3>
 <p>A reader thread parses records and hands batches to worker threads, each of which owns a subset of the QC modules. Every module still sees every read, in order, on one thread, so no results need merging and the output is identical at any thread count. Modules are assigned to workers by their measured cost, so the expensive ones don't share a worker. Batches are capped by bytes as well as by read count, which keeps memory flat on long reads (552 MB → 66 MB on 10 kb reads at <code>-t 8</code>). The same design was <a href="../../upstream/">ported to Java</a> and shipped in FastQC 0.13.0.</p>
 <h3>2. Gzip decoding on its own thread</h3>
-<p><code>.fastq.gz</code> is decompressed by <a href="https://crates.io/crates/rapidgzip-core">rapidgzip-core</a> with a <a href="https://crates.io/crates/zlib-rs">zlib-rs</a> inflate, on a separate thread from the parser, so decompression overlaps with the analysis even at <code>-t 1</code>. A 1 MiB read buffer keeps hand-offs between the two rare. Everything is pure Rust: there is no system zlib to link.</p>
+<p><code>.fastq.gz</code> is decompressed by <a href="https://crates.io/crates/rapidgzip-core">rapidgzip-core</a> with a <a href="https://crates.io/crates/zlib-rs">zlib-rs</a> inflate, on a separate thread from the parser, so decompression overlaps with the analysis from <code>-t 2</code>. At <code>-t 1</code> it runs on the reading thread. A 1 MiB read buffer keeps hand-offs between the two rare. Everything is pure Rust: there is no system zlib to link.</p>
 <h3>3. One SIMD pass for every adapter</h3>
 <p>FastQC looks for six adapter sequences in every read. Java calls <code>String.indexOf()</code> once per adapter. Rust 1.0 used SIMD <code>memchr</code> per adapter; Rust 2.0 finds all of them in a single pass with <code>aho-corasick</code>'s Teddy algorithm, 3.6–5.2x faster again. Hits are tallied once per read at the first match position and summed at the end, instead of incrementing every later position.</p>
 <h3>4. Vectorised counting</h3>
