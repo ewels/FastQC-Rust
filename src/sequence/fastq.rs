@@ -114,16 +114,18 @@ const ISIZE_MODULUS: u64 = 1 << 32;
 /// underestimate while the read-ahead is outstanding (the compressed tally is
 /// ahead of the decompressed one) and converges up to the true ratio by EOF, so
 /// the running maximum is taken and the bar can run ahead and stall near the
-/// end. That is the same weakness the old whole-file estimate had, but confined
-/// to inputs whose true size genuinely cannot be known up front.
+/// end.
+///
+/// The trailer only describes the *last* member, and a concatenated file
+/// (`cat L001.gz L002.gz`) looks single-member until the decoder finishes the
+/// first one. The ratio estimate catches that early: it only ever errs low, so
+/// once it clearly exceeds the trailer the trailer is dropped for good.
 struct GzipProgress {
-    /// Compressed bytes served to the decoder, counted by [`CountingSource`].
+    /// Furthest compressed offset the decoder has read, from [`CountingSource`].
     compressed: Arc<AtomicU64>,
     /// Lock-free telemetry from the decoder: decompressed bytes produced, and
     /// decompressed bytes actually returned through `Read`.
     handle: rapidgzip_core::DecoderHandle,
-    /// Total decompressed size from the gzip trailer, if it looked plausible.
-    trailer_total: Option<u64>,
     /// Contended once per [`PROGRESS_INTERVAL`](crate::runner) records at most.
     estimate: std::sync::Mutex<GzipEstimate>,
 }
@@ -132,9 +134,9 @@ struct GzipProgress {
 struct GzipEstimate {
     /// Running maximum of the ratio-scaled size estimate.
     ratio_total: u64,
-    /// Highest permille reported so far. A bar that goes backwards looks
-    /// broken, and the estimates do move as they settle.
-    high_water: u64,
+    /// Total decompressed size from the gzip trailer while it is still
+    /// believed; taken once the file turns out to have several members.
+    trailer: Option<u64>,
 }
 
 impl GzipProgress {
@@ -158,13 +160,26 @@ impl GzipProgress {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         let ratio = stats.decompressed_bytes as f64 / compressed as f64;
-        estimate.ratio_total = estimate.ratio_total.max((file_size as f64 * ratio) as u64);
+        estimate.ratio_total = estimate
+            .ratio_total
+            .max((file_size as f64 * ratio) as u64)
+            .max(stats.decompressed_bytes);
 
-        // The trailer describes only the last member, so a member completing
-        // before the decoder has reached the end of the file means there are
-        // several and the trailer is not the file's size.
-        let single_member = stats.member_count == 0 || compressed >= file_size;
-        let total = match self.trailer_total.filter(|_| single_member) {
+        // Output is emitted in member order, so once a member has completed,
+        // output that no longer matches the trailer must be a later member's.
+        if let Some(trailer) = estimate.trailer {
+            let past_first_member = match stats.member_count {
+                0 => false,
+                1 => stats.decompressed_bytes % ISIZE_MODULUS != trailer,
+                _ => true,
+            };
+            // The quarter is headroom for the ratio varying along the file.
+            let wrapped = unwrap_isize(trailer, 0, estimate.ratio_total);
+            if past_first_member || estimate.ratio_total > wrapped + wrapped / 4 {
+                estimate.trailer = None;
+            }
+        }
+        let total = match estimate.trailer {
             Some(trailer) => unwrap_isize(trailer, parsed, estimate.ratio_total),
             None => estimate.ratio_total,
         };
@@ -172,9 +187,7 @@ impl GzipProgress {
             return None;
         }
 
-        let permille = ((parsed as f64 / total as f64) * 1000.0).clamp(0.0, 1000.0) as u64;
-        estimate.high_water = estimate.high_water.max(permille);
-        Some(estimate.high_water as f64 / 10.0)
+        Some((parsed as f64 / total as f64 * 100.0).clamp(0.0, 100.0))
     }
 }
 
@@ -202,8 +215,8 @@ fn unwrap_isize(trailer: u64, parsed: u64, hint: u64) -> u64 {
 /// that (a trailing member is a small fraction of the file, and BGZF's empty
 /// end-of-file member records zero), as well as the pathological case of a
 /// stored-not-deflated stream. A trailing member that is still larger than the
-/// file gets past this, and is caught by [`GzipProgress::percent`] once the
-/// first member ends. [`MAX_PLAUSIBLE_RATIO`] catches a truncated file whose
+/// file gets past this, and is caught by [`GzipProgress::percent`].
+/// [`MAX_PLAUSIBLE_RATIO`] catches a truncated file whose
 /// last four bytes are not a trailer at all.
 fn gzip_trailer_size(path: &Path, file_size: u64) -> Option<u64> {
     // Smaller than the smallest possible member: header, empty deflate block,
@@ -248,9 +261,11 @@ fn detect_compression_from_magic(path: &Path) -> io::Result<&'static str> {
 // gzip decompression (parallel & multi-member, via rapidgzip)
 // ---------------------------------------------------------------------------
 
-/// A gzip source that counts the compressed bytes served, so the FASTQ reader
-/// can report progress while rapidgzip owns the file. Read positionally by the
-/// parallel decoder, or sequentially when decoding on the reading thread.
+/// A gzip source that tracks how far into the file the decoder has read, so the
+/// FASTQ reader can report progress while rapidgzip owns the file. Read
+/// positionally by the parallel decoder, or sequentially when decoding on the
+/// reading thread. The decoder re-reads some ranges, so a sum of bytes served
+/// would overcount.
 struct CountingSource {
     file: File,
     counter: Arc<AtomicU64>,
@@ -263,7 +278,8 @@ impl rapidgzip_core::ReadAt for CountingSource {
 
     fn read_at(&self, offset: u64, buffer: &mut [u8]) -> io::Result<usize> {
         let read = rapidgzip_core::ReadAt::read_at(&self.file, offset, buffer)?;
-        self.counter.fetch_add(read as u64, Ordering::Relaxed);
+        self.counter
+            .fetch_max(offset + read as u64, Ordering::Relaxed);
         Ok(read)
     }
 }
@@ -320,8 +336,10 @@ fn open_rapidgzip(
     let progress = GzipProgress {
         compressed,
         handle: reader.handle(),
-        trailer_total,
-        estimate: std::sync::Mutex::new(GzipEstimate::default()),
+        estimate: std::sync::Mutex::new(GzipEstimate {
+            ratio_total: 0,
+            trailer: trailer_total,
+        }),
     };
     Ok(OpenedGzip {
         reader,
@@ -1111,8 +1129,8 @@ mod tests {
     }
 
     /// Progress must come from the bytes handed to the parser, not from the
-    /// compressed bytes the decoder's workers have raced ahead to read, and it
-    /// must never go backwards.
+    /// compressed bytes the decoder's workers have raced ahead to read. With a
+    /// single member the trailer is exact, so the bar must also never go back.
     #[test]
     fn test_gzip_progress_tracks_consumed_bytes() {
         let config = FastQCConfig::default();
@@ -1144,6 +1162,39 @@ mod tests {
             "progress was saturated for the whole file, which is the bug this guards"
         );
         assert_eq!(reader.percent_complete(), 100.0, "did not finish at 100%");
+    }
+
+    /// A concatenated file's trailer holds only the last member's size; trusting
+    /// it reads 100% halfway through and then sits there.
+    #[test]
+    fn test_gzip_progress_concatenated_members() {
+        let source = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/realistic.fastq.gz");
+        let member = std::fs::read(source).unwrap();
+        let dir = std::env::temp_dir().join(format!("fastqc_concat_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("reads.fastq.gz");
+        std::fs::write(&path, [member.as_slice(), member.as_slice()].concat()).unwrap();
+
+        let mut reader = FastQFile::open(&FastQCConfig::default(), &path).unwrap();
+        let mut count = 0u64;
+        let mut at_halfway = None;
+        while let Some(result) = reader.next() {
+            result.unwrap();
+            count += 1;
+            // Polled throughout, as the runner does, so it can spot the extra member.
+            let percent = reader.percent_complete();
+            if count == 1009 {
+                at_halfway = Some(percent);
+            }
+        }
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(count, 2018);
+        let at_halfway = at_halfway.unwrap();
+        assert!(
+            (35.0..=65.0).contains(&at_halfway),
+            "halfway through the reads but progress says {at_halfway}%"
+        );
+        assert_eq!(reader.percent_complete(), 100.0);
     }
 
     /// Plain-file progress must not count what the read buffer has fetched

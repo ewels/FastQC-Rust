@@ -985,9 +985,7 @@ fn test_display_on_a_real_terminal() {
 ///
 /// indicatif starts a bar's clock when the bar is created, and all the bars are
 /// created together before any file is opened. With one thread the second file
-/// waits for the first, so its bar used to count throughout the wait — a tiny
-/// file finishing "behind" a huge one at a *longer* elapsed time than the huge
-/// one took.
+/// waits for the first, and its bar must not count that wait.
 #[cfg(unix)]
 #[test]
 fn test_queued_files_do_not_accumulate_elapsed_time() {

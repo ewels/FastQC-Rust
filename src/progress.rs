@@ -1,7 +1,4 @@
-//! Live terminal progress reporting.
-//!
-//! Replaces the line-per-5% `Approx N% complete for <file>` output inherited
-//! from Java FastQC with a rich, in-place display:
+//! Live terminal progress reporting, drawn in place:
 //!
 //! ```text
 //! FastQC-Rust v1.0.2-dev0
@@ -318,9 +315,8 @@ enum Bars {
 /// *created*, and all the bars are created together before any file is opened.
 /// A run with more files than parallel slots would otherwise show a queued file
 /// counting up the time it spent waiting, and then report that as how long it
-/// took: `small.fastq` finishing in "13.9s" behind a `big.fastq` that took
-/// "9.8s". So the clock is reset when the file starts, and until then the bar
-/// is left alone entirely — not even ticked, so its spinner does not animate as
+/// took. So the clock is reset when the file starts, and until then the bar is
+/// left alone entirely — not even ticked, so its spinner does not animate as
 /// though something were happening.
 struct FileBar {
     bar: ProgressBar,
@@ -543,7 +539,7 @@ impl ProgressReporter {
                     paint("Complete.", |s| s.green().bold()),
                     paint(&summary, |s| s.dim()),
                 ));
-                live.finish();
+                live.finish(analysed);
             }
         }
     }
@@ -623,8 +619,6 @@ impl Live {
     /// `bypass_detection` means stderr is not something indicatif will draw a
     /// redrawn region to, and the display has been forced on anyway.
     fn new(names: &[String], bypass_detection: bool) -> Self {
-        let term = ForcedTerm::new();
-
         // The default stderr draw target hides itself when stderr is not an
         // interactive terminal. `FASTQC_PROGRESS=always` asks for the display
         // anyway, so bypass that check by handing indicatif the terminal
@@ -634,7 +628,7 @@ impl Live {
         // refresh rate `ProgressDrawTarget::stderr` uses.
         let multi = if bypass_detection {
             MultiProgress::with_draw_target(ProgressDrawTarget::term_like_with_hz(
-                Box::new(term),
+                Box::new(ForcedTerm::new()),
                 DRAW_RATE_HZ,
             ))
         } else {
@@ -841,9 +835,13 @@ impl Live {
         }
     }
 
-    fn finish(&self) {
+    fn finish(&self, analysed: usize) {
         if let Bars::Aggregate(bar) = &self.bars {
-            bar.set_style(aggregate_done_style());
+            bar.set_style(if bar.length() == Some(analysed as u64) {
+                aggregate_done_style()
+            } else {
+                aggregate_failed_style()
+            });
             bar.finish();
         }
         self.stop.store(true, Ordering::Relaxed);
@@ -1317,11 +1315,10 @@ const PROGRESS_CHARS: &str = "━╸━";
 /// Spinner frames. Inert for the styles whose template has no `{spinner}`.
 const TICK_CHARS: &str = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ ";
 
-/// Build a bar style. The five the display uses differ only in the marker
-/// before the bar, the bar's colour, and the field between the bar and the
-/// elapsed time; everything else — the column layout, the bar characters and
-/// the elapsed-time key — is shared, so that a change to the layout is made
-/// once rather than five times.
+/// Build a bar style. The display's styles differ only in the marker before
+/// the bar, the bar's colour, and the field between the bar and the elapsed
+/// time; everything else — the column layout, the bar characters and the
+/// elapsed-time key — is shared, so that a change to the layout is made once.
 ///
 /// `marker` and `middle` are substituted into the template, and `format!` does
 /// not re-scan a substituted value for braces, so both can carry placeholders
@@ -1368,6 +1365,10 @@ fn aggregate_done_style() -> ProgressStyle {
     bar_style(&paint("✔", |s| s.green().bold()), "green", AGGREGATE_FIELDS)
 }
 
+fn aggregate_failed_style() -> ProgressStyle {
+    bar_style(&paint("✘", |s| s.red().bold()), "red", AGGREGATE_FIELDS)
+}
+
 /// Wall-clock elapsed time for the closing summary: `mm:ss`, widening to
 /// `hh:mm:ss` past an hour rather than letting the minutes run past 59.
 fn clock_duration(d: Duration) -> String {
@@ -1381,10 +1382,13 @@ fn clock_duration(d: Duration) -> String {
 
 /// Compact elapsed time: `4.2s`, `1m12s`, `1h04m`.
 fn short_duration(d: Duration) -> String {
-    let secs = d.as_secs();
-    if secs < 60 {
-        format!("{:.1}s", d.as_secs_f64())
-    } else if secs < 3600 {
+    // Rounded before choosing the unit, so 59.96s reads `1m00s`, not `60.0s`.
+    let tenths = (d.as_secs_f64() * 10.0).round() as u64;
+    if tenths < 600 {
+        return format!("{}.{}s", tenths / 10, tenths % 10);
+    }
+    let secs = d.as_secs().max(60);
+    if secs < 3600 {
         format!("{}m{:02}s", secs / 60, secs % 60)
     } else {
         format!("{}h{:02}m", secs / 3600, (secs % 3600) / 60)
@@ -1432,6 +1436,7 @@ mod tests {
     #[test]
     fn test_short_duration() {
         assert_eq!(short_duration(Duration::from_millis(4200)), "4.2s");
+        assert_eq!(short_duration(Duration::from_millis(59_960)), "1m00s");
         assert_eq!(short_duration(Duration::from_secs(72)), "1m12s");
         assert_eq!(short_duration(Duration::from_secs(3840)), "1h04m");
     }

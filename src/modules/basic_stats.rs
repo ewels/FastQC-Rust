@@ -342,7 +342,6 @@ impl QCModule for BasicStats {
                 crate::progress::log_line(&warning);
             }
         }
-        self.counters.median_length = median_length(&self.length_counts);
         self.publish();
     }
 
@@ -399,7 +398,11 @@ impl QCModule for BasicStats {
         // Row 0: Filename
         writeln!(writer, "Filename\t{}", self.name.as_deref().unwrap_or(""))?;
 
-        for (measure, value) in self.counters.rows() {
+        let counters = BasicStatsCounters {
+            median_length: median_length(&self.length_counts),
+            ..self.counters
+        };
+        for (measure, value) in counters.rows() {
             writeln!(writer, "{}\t{}", measure, value)?;
         }
 

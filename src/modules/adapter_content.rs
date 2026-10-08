@@ -170,7 +170,8 @@ impl AdapterContent {
             .iter()
             .any(|(_, seq)| seq.len() != longest_adapter)
         {
-            eprintln!("[Warning] You are using adapter sequences with different lengths. Matches will only be reported up to the position where the longest adapter could match. Matches to shorter adapters at the end of sequences will not be recorded.");
+            static WARNED: crate::progress::OncePerRun = crate::progress::OncePerRun::new();
+            WARNED.log(|| "[Warning] You are using adapter sequences with different lengths. Matches will only be reported up to the position where the longest adapter could match. Matches to shorter adapters at the end of sequences will not be recorded.".to_string());
         }
 
         AdapterContent {

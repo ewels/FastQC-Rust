@@ -43,16 +43,13 @@ const DEFAULT_THREADS: usize = 6;
 /// Byte ceiling on a single batch, applied alongside [`BATCH_SIZE`].
 ///
 /// A record count alone does not bound memory: at [`QUEUE_CAPACITY`] batches of
-/// [`BATCH_SIZE`] records the pipeline holds ~32k records however big they are.
-/// That is a few MB of Illumina reads and gigabytes of long reads — measured on
-/// a 10 kb-read FASTQ, peak RSS went from 36 MB at `-t 1` to 552 MB at `-t 8`,
-/// and nanopore or PacBio means of 20-30 kb would multiply that again, per file
+/// [`BATCH_SIZE`] records the pipeline holds ~32k records however big they are,
+/// which is a few MB of Illumina reads but gigabytes of long reads, per file
 /// analysed concurrently.
 ///
 /// Capping the bytes too holds the pipeline to roughly
 /// `QUEUE_CAPACITY * BATCH_BYTES` per file whatever the read length. Short
-/// reads never reach the cap (1024 x ~250 B is well under it), so the Illumina
-/// path batches exactly as before.
+/// reads never reach the cap (1024 x ~250 B is well under it).
 const BATCH_BYTES: usize = 1024 * 1024;
 
 /// Bounded capacity of each processor's batch queue. Provides backpressure so the
@@ -188,6 +185,18 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
         crate::utils::available_parallelism(),
     );
 
+    // With a single thread for the file there is no room for a background
+    // decoder, so gzip is decoded on the reading thread.
+    let config = if threads_per_file == 1 && config.decompress_threads == 1 {
+        Cow::Owned(FastQCConfig {
+            decompress_threads: 0,
+            ..config.clone()
+        })
+    } else {
+        Cow::Borrowed(config)
+    };
+    let config = config.as_ref();
+
     // Build the outer rayon pool: one slot per file group analysed in parallel.
     // Each slot drives a per-file pipeline of up to `threads_per_file` threads,
     // so the total stays inside the -t budget rather than outer_slots alone.
@@ -213,11 +222,11 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
         file_groups
             .par_iter()
             .enumerate()
-            .filter(|(index, group)| {
-                let file_progress = progress.file(*index);
+            .map(|(index, group)| {
+                let file_progress = progress.file(index);
                 file_progress.start(&group.name);
 
-                let report_lock = report_locks[*index].as_deref();
+                let report_lock = report_locks[index].as_deref();
                 match process_group(
                     config,
                     &limits,
@@ -237,6 +246,7 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
                     }
                 }
             })
+            .filter(|&analysed| analysed)
             .count()
     });
 
@@ -306,6 +316,8 @@ fn report_locks(config: &FastQCConfig, groups: &[FileGroup]) -> Vec<Option<Arc<M
     let mut by_location: HashMap<PathBuf, Vec<usize>> = HashMap::new();
     for (index, group) in groups.iter().enumerate() {
         let (dir, base) = report_location(config, group);
+        // `run1` and `./run1` are the same directory but unequal paths.
+        let dir = dir.canonicalize().unwrap_or(dir);
         by_location.entry(dir.join(base)).or_default().push(index);
     }
 
@@ -369,18 +381,6 @@ fn process_group(
     report_lock: Option<&Mutex<()>>,
     file_progress: FileProgress<'_>,
 ) -> io::Result<u64> {
-    // With a single thread for the file there is no room for a background
-    // decoder, so gzip is decoded on the reading thread.
-    let config = if threads_per_file == 1 && config.decompress_threads == 1 {
-        Cow::Owned(FastQCConfig {
-            decompress_threads: 0,
-            ..config.clone()
-        })
-    } else {
-        Cow::Borrowed(config)
-    };
-    let config = config.as_ref();
-
     let mut seq_file = open_group(config, group)?;
 
     let file_display_name = group.name.clone();
@@ -559,12 +559,12 @@ fn process_sequences_sequential(
 /// Partition the modules across `num_workers` groups to balance their estimated
 /// cost, using the classic longest-processing-time (LPT) greedy: take modules
 /// heaviest-first (by [`QCModule::cost_hint`]) and drop each onto the currently
-/// lightest group. This keeps the few expensive modules (adapter, GC, per-base
-/// quality, ...) on separate workers rather than piling two onto one, which is
-/// what bounds the makespan of the pipeline. Each module is tagged with its
-/// original index so report order can be restored afterwards; the assignment
-/// never changes results, only how evenly the work is spread. Pure and
-/// deterministic (ties break to the lowest group index).
+/// lightest group. This keeps the few expensive modules (per-base quality and
+/// content, adapter, ...) on separate workers rather than piling two onto one,
+/// which is what bounds the makespan of the pipeline. Each module is tagged
+/// with its original index so report order can be restored afterwards; the
+/// assignment never changes results, only how evenly the work is spread. Pure
+/// and deterministic (ties break to the lowest group index).
 ///
 /// This is free to place any module on any worker *because every module's
 /// per-sequence processing is independent* — a module accumulates only into
@@ -612,10 +612,9 @@ fn partition_modules_by_cost(
 /// (which drives decompression and record parsing).
 ///
 /// Modules are distributed across workers by longest-processing-time bin-packing
-/// (see the partition below) so the few expensive modules (overrepresented
-/// sequences, adapter and k-mer content) land on different workers, giving an even
-/// load balance. Ownership of each module is returned to the caller in the original
-/// order for finalisation and reporting.
+/// (see the partition below) so the few expensive modules land on different
+/// workers, giving an even load balance. Ownership of each module is returned
+/// to the caller in the original order for finalisation and reporting.
 ///
 /// Returns the modules in report order along with the number of records read.
 fn process_sequences_parallel(
