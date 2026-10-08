@@ -75,7 +75,7 @@ struct Cli {
     /// Total thread budget for the run [default: available CPUs, up to 6].
     /// Spread across the files processed simultaneously and then within each
     /// file (a reader, its gzip decoder, and analysis workers).
-    #[arg(short, long, value_name = "N")]
+    #[arg(short, long, value_name = "N", value_parser = parse_threads)]
     threads: Option<usize>,
 
     /// Background gzip decoders per .fastq.gz file. The first counts towards
@@ -150,6 +150,14 @@ struct Cli {
     /// Input files (one or more FastQ, BAM, or SAM files).
     #[arg(required = true)]
     files: Vec<PathBuf>,
+}
+
+fn parse_threads(value: &str) -> Result<usize, String> {
+    match value.parse::<usize>() {
+        Ok(0) => Err("must be at least 1".to_string()),
+        Ok(n) => Ok(n),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 fn main() {

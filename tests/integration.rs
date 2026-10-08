@@ -1090,3 +1090,14 @@ fn test_table_headings_are_coloured_by_progress() {
         heading
     );
 }
+
+#[test]
+fn test_zero_threads_is_rejected() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
+        .args(["-t", "0", MINIMAL])
+        .output()
+        .expect("Failed to run fastqc");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("must be at least 1"), "stderr: {stderr}");
+}
