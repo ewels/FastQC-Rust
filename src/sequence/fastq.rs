@@ -149,8 +149,11 @@ impl GzipProgress {
         }
         let stats = self.handle.stats();
         let parsed = stats.consumed_bytes.saturating_sub(buffered);
+        // The decoder hands a chunk over before counting it, so the reader can
+        // briefly be ahead of `decompressed_bytes`.
+        let produced = stats.decompressed_bytes.max(stats.consumed_bytes);
         let compressed = self.compressed.load(Ordering::Relaxed);
-        if compressed == 0 || stats.decompressed_bytes == 0 {
+        if compressed == 0 || produced == 0 {
             return None;
         }
 
@@ -159,18 +162,18 @@ impl GzipProgress {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        let ratio = stats.decompressed_bytes as f64 / compressed as f64;
+        let ratio = produced as f64 / compressed as f64;
         estimate.ratio_total = estimate
             .ratio_total
             .max((file_size as f64 * ratio) as u64)
-            .max(stats.decompressed_bytes);
+            .max(produced);
 
         // Output is emitted in member order, so once a member has completed,
         // output that no longer matches the trailer must be a later member's.
         if let Some(trailer) = estimate.trailer {
             let past_first_member = match stats.member_count {
                 0 => false,
-                1 => stats.decompressed_bytes % ISIZE_MODULUS != trailer,
+                1 => produced % ISIZE_MODULUS != trailer,
                 _ => true,
             };
             // The quarter is headroom for the ratio varying along the file.
