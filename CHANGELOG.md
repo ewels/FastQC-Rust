@@ -5,7 +5,7 @@
 > [!NOTE]
 > Tracking: FastQC [v0.13.0](https://github.com/s-andrews/FastQC/releases/tag/v0.13.0)
 
-### Upstream v0.13.0
+### Upstream changes (Java FastQC v0.13.0)
 
 Output matches Java FastQC v0.13.0 ([#11](https://github.com/ewels/FastQC-Rust/pull/11)). Many of its changes came from this project: see [upstream contributions](https://ewels.github.io/FastQC-Rust/about/upstream/).
 
@@ -14,19 +14,23 @@ Output matches Java FastQC v0.13.0 ([#11](https://github.com/ewels/FastQC-Rust/p
 - **`--min_length` now filters reads** instead of padding plots. New `--max_length` does the same for long reads.
 - **SVG graphs are the default** in the HTML report. Use `--png` for PNG.
 
-### Faster
+### FastQC-Rust changes
+
+These are specific to the Rust rewrite.
+
+#### Performance
 
 - **Multi-threaded by default.** `-t/--threads` is now a total budget for the whole run (default: available CPUs, up to 6), so a single `.fastq.gz` uses several cores. `-t 1` keeps everything, gzip decoding included, on one thread. ([#7](https://github.com/ewels/FastQC-Rust/pull/7), [#8](https://github.com/ewels/FastQC-Rust/pull/8))
 - **Parallel gzip decompression** via [rapidgzip](https://crates.io/crates/rapidgzip-core). Binaries are now pure Rust and fully static.
-- **Quicker analysis** ([#13](https://github.com/ewels/FastQC-Rust/pull/13)): about 2x faster on a 7.9 GB WES file and 3x on long reads, with much lower memory on long reads. See the [benchmarks](https://ewels.github.io/FastQC-Rust/about/performance/).
+- **Quicker analysis** ([#13](https://github.com/ewels/FastQC-Rust/pull/13)): about 2x faster than v1.0 on a 7.9 GB WES file and 3x on long reads, with much lower memory on long reads. See the [benchmarks](https://ewels.github.io/FastQC-Rust/about/performance/).
 
 Output stays byte-identical whatever the thread count.
 
-### Live progress display
+#### Live progress display
 
 Per-file progress bars with a live Basic Statistics table replace the `Approx N% complete` lines ([#9](https://github.com/ewels/FastQC-Rust/pull/9)). Logs and pipes get plain one-line-per-file output; override with `FASTQC_PROGRESS=always|never`.
 
-### Bug fixes
+#### Bug fixes
 
 - BAM/SAM input always uses Phred+33 ([#10](https://github.com/ewels/FastQC-Rust/pull/10))
 - Sequence Duplication Levels are deterministic and match Java on large inputs ([#12](https://github.com/ewels/FastQC-Rust/pull/12))
@@ -34,7 +38,7 @@ Per-file progress bars with a live Basic Statistics table replace the `Approx N%
 - `--template` no longer uses `-t`, which clashed with `--threads`
 - Quality characters of 128 or above no longer crash the run
 
-### Breaking changes for library users
+#### Breaking changes for library users
 
 `FastQCConfig::threads` is now `Option<usize>`, `FastQCConfig` has a new `decompress_threads` field, and `SequenceFileGroup::new` takes file openers. The `native-zlib` feature is gone. See the [library docs](https://ewels.github.io/FastQC-Rust/library/).
 
