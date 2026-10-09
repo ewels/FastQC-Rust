@@ -250,9 +250,10 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
             .count()
     });
 
-    progress.finish(analysed);
+    let failed = something_failed || analysed != file_groups.len();
+    progress.finish(analysed, failed);
 
-    if something_failed || analysed != file_groups.len() {
+    if failed {
         Err(1)
     } else {
         Ok(())

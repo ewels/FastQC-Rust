@@ -39,7 +39,7 @@
 //!
 //! These are two independent switches, each auto-detected and each overridable
 //! through the environment — there are no command-line flags for them.
-//! `--quiet` beats both and says nothing but errors.
+//! `--quiet` beats both and says nothing but warnings and errors.
 //!
 //! **Animation** (`FASTQC_PROGRESS=auto|always|never`) — the default `auto`
 //! draws the display only for an interactive stderr. When stderr is a pipe, a
@@ -249,9 +249,10 @@ impl OncePerRun {
 
     /// True for exactly one caller per run. Racing threads all swap in the
     /// current run, and only the one that displaced an older value speaks.
+    /// The plain load first keeps repeats off the cache line's write path.
     pub fn should_say(&self) -> bool {
         let run = RUN.load(Ordering::Relaxed);
-        self.0.swap(run, Ordering::Relaxed) != run
+        self.0.load(Ordering::Relaxed) != run && self.0.swap(run, Ordering::Relaxed) != run
     }
 
     /// [`log_line`] the warning `message` builds, the first time this run.
@@ -504,8 +505,7 @@ impl ProgressReporter {
         }
     }
 
-    /// Print an error line above the display. Shown even under `--quiet`,
-    /// matching the previous behaviour of the runner.
+    /// Print an error line above the display. Shown even under `--quiet`.
     ///
     /// Routed through [`log_line`] rather than matched on the mode: the two
     /// would say the same thing, since a log sink is registered exactly while
@@ -519,26 +519,27 @@ impl ProgressReporter {
     ///
     /// `analysed` is the number of file groups that completed successfully;
     /// anything that failed has already been reported as an error line.
-    pub fn finish(&self, analysed: usize) {
+    /// `failed` turns the closing "Complete." red.
+    pub fn finish(&self, analysed: usize, failed: bool) {
         let summary = format!(
             "Analysed {} {} in {}",
             analysed,
             if analysed == 1 { "file" } else { "files" },
             clock_duration(self.started.elapsed()),
         );
+        let complete = paint("Complete.", |s| {
+            if failed { s.red() } else { s.green() }.bold()
+        });
         match &self.mode {
             // --quiet stays quiet: the run said nothing, so it ends saying
             // nothing.
             Mode::Silent => {}
-            Mode::Plain => eprintln!("{} {}", paint("Complete.", |s| s.green().bold()), summary),
+            Mode::Plain => eprintln!("{} {}", complete, summary),
             Mode::Live(live) => {
                 // The last line of the redrawn region, so it lands below the
                 // bars and the table rather than scrolling past above them.
-                live.summary.set_message(format!(
-                    "{} {}",
-                    paint("Complete.", |s| s.green().bold()),
-                    paint(&summary, |s| s.dim()),
-                ));
+                live.summary
+                    .set_message(format!("{} {}", complete, paint(&summary, |s| s.dim())));
                 live.finish(analysed);
             }
         }
@@ -844,20 +845,40 @@ impl Live {
             });
             bar.finish();
         }
-        self.stop.store(true, Ordering::Relaxed);
-        if let Some(handle) = self.ticker.lock().unwrap_or_else(|e| e.into_inner()).take() {
-            let _ = handle.join();
-        }
+        self.shut_down();
         // indicatif erases any bar that is still unfinished when it is dropped,
         // so the static lines have to be explicitly finished for the completed
         // display to survive the end of the run.
-        *ACTIVE_LOG.lock().unwrap_or_else(|e| e.into_inner()) = None;
         if let Some(table) = &self.table {
             table.finish();
         }
         self.log.padding.finish();
         self.summary.finish();
         self.trailer.finish();
+    }
+
+    /// Stop the redraw thread and detach this display from the log sink.
+    /// Idempotent, so [`Drop`] can repeat it after [`Live::finish`].
+    fn shut_down(&self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.ticker.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            let _ = handle.join();
+        }
+        let mut active = ACTIVE_LOG.lock().unwrap_or_else(|e| e.into_inner());
+        if active
+            .as_ref()
+            .is_some_and(|sink| Arc::ptr_eq(sink, &self.log))
+        {
+            *active = None;
+        }
+    }
+}
+
+/// A run that unwinds before [`Live::finish`] must not leave the ticker
+/// redrawing a dead display, or log lines routed into it.
+impl Drop for Live {
+    fn drop(&mut self) {
+        self.shut_down();
     }
 }
 
@@ -1697,6 +1718,6 @@ mod tests {
         file.finish("a.fastq", 2000);
         file.fail();
         assert!(file.live_stats().is_none());
-        reporter.finish(1);
+        reporter.finish(1, false);
     }
 }

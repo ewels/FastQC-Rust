@@ -101,7 +101,7 @@ output.
 
 It needs an interactive stderr. When stderr is a pipe or a log file, or `TERM`
 is `dumb`/unset, it degrades to one plain line per file at start and finish so
-pipeline logs stay readable. `--quiet` silences everything but errors.
+pipeline logs stay readable. `--quiet` silences everything but warnings and errors.
 
 Two independent environment switches, neither with a command-line equivalent:
 

@@ -34,7 +34,7 @@ Output matches Java FastQC v0.13.0. Many of these changes came from this project
   an interactive stderr: when stderr is a pipe or a log file, or `TERM` is
   `dumb`/unset, it degrades to one plain line per file at start and finish so
   pipeline logs stay readable, and `--quiet` still silences everything but
-  errors. The name and version are printed before the run does anything else,
+  warnings and errors. The name and version are printed before the run does anything else,
   so everything it goes on to say — including complaints about the input files
   themselves — appears beneath them in the order it happened.
 - **`FASTQC_PROGRESS=auto|always|never`** overrides the display auto-detection
@@ -159,13 +159,21 @@ Output matches Java FastQC v0.13.0. Many of these changes came from this project
 - New equivalence test cases for mixed read lengths, `--min_length`/`--max_length`, empty input and Phred+64 (26 cases in total).
 - `generate_reference.sh` works with an unpacked upstream release zip. The new `update_svg_patches.py` regenerates the SVG patches.
 - New docs page: [upstream contributions](https://ewels.github.io/FastQC-Rust/about/upstream/).
+
 ### Breaking changes for library users
 
 - `FastQCConfig::threads` is now `Option<usize>`; `None` (the default) means
   "not specified", so the default budget can be worked out from the machine.
   Pass `Some(n)` where you passed `n`.
+- `FastQCConfig` has a new public field, `decompress_threads`. Struct literals
+  must set it or end in `..FastQCConfig::default()`.
+- `SequenceFileGroup::new` takes a `Vec<FileOpener>` (closures that open each
+  file when its turn comes) instead of opened files, and returns
+  `io::Result<Self>`.
 - `BasicStats::format_length` is now the free function
   `modules::basic_stats::format_length`. The behaviour is unchanged.
+- The `native-zlib` Cargo feature is gone; depending on it is now a build
+  error.
 
 ## v1.0.1
 

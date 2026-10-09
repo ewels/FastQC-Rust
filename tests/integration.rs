@@ -497,10 +497,10 @@ fn test_no_ansi_escapes_when_stderr_is_piped() {
             env,
             stderr
         );
-        // The percentage lines the display replaced must not come back.
+        // No Java-style `Approx N% complete` lines.
         assert!(
             !stderr.contains("Approx"),
-            "percentage progress line resurfaced with env {:?}: {:?}",
+            "percentage progress line printed with env {:?}: {:?}",
             env,
             stderr
         );
@@ -796,8 +796,7 @@ fn test_quiet_suppresses_the_completion_summary() {
 
 /// Whether the statistics table appears is decided by the terminal width, not
 /// by how many files there are: the same run gains and loses the table as the
-/// width changes, and a wide enough terminal shows it for more files than the
-/// old four-column cap allowed.
+/// width changes.
 #[test]
 fn test_table_visibility_follows_terminal_width() {
     let run = |files: &[&str], columns: &str| {

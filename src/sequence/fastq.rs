@@ -240,6 +240,10 @@ fn gzip_trailer_size(path: &Path, file_size: u64) -> Option<u64> {
 /// Returns "gz", "bz2", or "none".
 fn detect_compression_from_magic(path: &Path) -> io::Result<&'static str> {
     let mut f = File::open(path)?;
+    // Sniffing a pipe would consume the bytes the reader then needs.
+    if !f.metadata()?.is_file() {
+        return Ok("none");
+    }
     let mut magic = [0u8; 2];
     let n = f.read(&mut magic)?;
     if n >= 2 {
@@ -624,7 +628,7 @@ impl FastQFile {
             // For colorspace, `seq.toUpperCase()` is passed to both
             // `convertColorspaceToBases` and stored as `colorspaceSequence`.
             let upper = seq_str.to_ascii_uppercase();
-            let bases = convert_colorspace_to_bases(&upper);
+            let bases = convert_colorspace_to_bases(&upper)?;
             let mut s = Sequence::new(id, bases.into_bytes(), quality_bytes);
             s.colorspace = Some(upper.into_bytes());
             s
@@ -695,16 +699,16 @@ impl SequenceFile for FastQFile {
             }
             // Java queries fis.getChannel().position() on the raw FileInputStream
             // to get the compressed byte position, then divides by fileSize. We
-            // do the same via a cloned handle (seek(Current)) so we need only
-            // `&self`; a clone or seek failure degrades to 0%.
+            // do the same via `Seek for &File` on a handle sharing the reader's
+            // offset, so we need only `&self`; a seek failure degrades to 0%.
             Progress::FilePosition(handle) => {
                 let buffered = match &self.reader {
                     ReaderKind::Plain(r) => r.buffer().len() as u64,
                     _ => 0,
                 };
+                let mut handle: &File = handle;
                 handle
-                    .try_clone()
-                    .and_then(|mut h| h.stream_position())
+                    .stream_position()
                     .map(|pos| {
                         (pos.saturating_sub(buffered) as f64 / self.file_size as f64) * 100.0
                     })
@@ -762,12 +766,12 @@ fn check_colorspace(seq: &str) -> bool {
 /// This is a direct translation of `convertColorspaceToBases()` from
 /// FastQFile.java, preserving the exact same lookup table and the behavior where
 /// encountering '.', '4', '5', or '6' causes all remaining positions to become 'N'.
-fn convert_colorspace_to_bases(s: &str) -> String {
-    let cs: Vec<u8> = s.as_bytes().to_vec();
+fn convert_colorspace_to_bases(s: &str) -> io::Result<String> {
+    let cs = s.as_bytes();
 
     // Java returns "" for zero-length input.
     if cs.is_empty() {
-        return String::new();
+        return Ok(String::new());
     }
 
     // Output is one shorter than input (the leading reference base is consumed).
@@ -828,14 +832,17 @@ fn convert_colorspace_to_bases(s: &str) -> String {
                 break;
             }
             other => {
-                // Java throws IllegalArgumentException for unexpected chars.
-                panic!("Unexpected colorspace char '{}'", other as char);
+                // Java throws IllegalArgumentException, failing just this file.
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Unexpected colorspace char '{}'", other as char),
+                ));
             }
         };
     }
 
     // Safety: bp contains only ASCII DNA letters or 'N'
-    String::from_utf8(bp).expect("colorspace output should be valid UTF-8")
+    Ok(String::from_utf8(bp).expect("colorspace output should be valid UTF-8"))
 }
 
 // ---------------------------------------------------------------------------
@@ -863,39 +870,51 @@ mod tests {
         assert!(!check_colorspace("X012")); // invalid lead
     }
 
+    fn colorspace(s: &str) -> String {
+        convert_colorspace_to_bases(s).unwrap()
+    }
+
     #[test]
     fn test_convert_colorspace_basic() {
         // A0 -> same as A = A
-        assert_eq!(convert_colorspace_to_bases("A0"), "A");
+        assert_eq!(colorspace("A0"), "A");
         // A1 -> A->C
-        assert_eq!(convert_colorspace_to_bases("A1"), "C");
+        assert_eq!(colorspace("A1"), "C");
         // A2 -> A->G
-        assert_eq!(convert_colorspace_to_bases("A2"), "G");
+        assert_eq!(colorspace("A2"), "G");
         // A3 -> A->T
-        assert_eq!(convert_colorspace_to_bases("A3"), "T");
+        assert_eq!(colorspace("A3"), "T");
     }
 
     #[test]
     fn test_convert_colorspace_chained() {
         // A00 -> A,A (ref=A->A, then ref=A->A)
-        assert_eq!(convert_colorspace_to_bases("A00"), "AA");
+        assert_eq!(colorspace("A00"), "AA");
         // A01 -> A, C (ref=A->A, then ref=A->C)
-        assert_eq!(convert_colorspace_to_bases("A01"), "AC");
+        assert_eq!(colorspace("A01"), "AC");
         // G10 -> T, T (ref=G->T, then ref=T->T)
-        assert_eq!(convert_colorspace_to_bases("G10"), "TT");
+        assert_eq!(colorspace("G10"), "TT");
     }
 
     #[test]
     fn test_convert_colorspace_unknown_fills_n() {
         // '.' causes rest to be N
-        assert_eq!(convert_colorspace_to_bases("A.12"), "NNN");
+        assert_eq!(colorspace("A.12"), "NNN");
         // '4' also fills rest with N
-        assert_eq!(convert_colorspace_to_bases("A04"), "AN");
+        assert_eq!(colorspace("A04"), "AN");
     }
 
     #[test]
     fn test_convert_colorspace_empty() {
-        assert_eq!(convert_colorspace_to_bases(""), "");
+        assert_eq!(colorspace(""), "");
+    }
+
+    /// Only the first record is checked for colorspace, so a later record in
+    /// base space must fail the file rather than panic the whole run.
+    #[test]
+    fn test_convert_colorspace_rejects_bases() {
+        let err = convert_colorspace_to_bases("TACGT").unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
     }
 
     // ---- FastQFile reading ----

@@ -339,7 +339,11 @@ impl QCModule for BasicStats {
     fn finalize(&mut self) {
         if self.counters.known_encoding.is_none() {
             if let Some(warning) = phred::phred64_suspicion(self.counters.lowest_char) {
-                crate::progress::log_line(&warning);
+                // Files run concurrently, so say which one this is about.
+                crate::progress::log_line(&match &self.name {
+                    Some(name) => format!("{name}: {warning}"),
+                    None => warning,
+                });
             }
         }
         self.publish();
@@ -531,8 +535,7 @@ mod tests {
         assert!(live.snapshot().unwrap().actual_count > published);
     }
 
-    /// Publishing is opt-in: a module with no sink attached must behave
-    /// exactly as before.
+    /// Publishing is opt-in: a module with no sink attached still reports.
     #[test]
     fn test_no_live_stats_by_default() {
         let limits = Limits::new();
