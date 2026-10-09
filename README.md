@@ -39,7 +39,7 @@ fastqc sample.fastq.gz
 ### Using Docker
 
 ```bash
-docker run ghcr.io/ewels/fastqc-rust:dev fastqc sample.fastq.gz
+docker run ghcr.io/ewels/fastqc-rust:latest fastqc sample.fastq.gz
 ```
 
 ### With Cargo

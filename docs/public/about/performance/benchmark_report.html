@@ -39,13 +39,13 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 <ul>
 <li><strong>Java 0.12.1</strong>: the FastQC release most pipelines ran until October 2026. One thread per file, whatever <code>-t</code> is set to.</li>
 <li><strong>Java 0.13.0</strong>: adds a parallel pipeline within each file, <a href="../../upstream/">contributed upstream</a> from this project. Default <code>-t 4</code>.</li>
-<li><strong>Rust 1.0</strong>: FastQC-Rust v1.0.1, the current release. One thread per file.</li>
-<li><strong>Rust 2.0</strong>: the next release (<a href="https://github.com/ewels/FastQC-Rust/pull/7">#7</a>). Parallel analysis within each file, parallel-capable gzip decoding, default of the available CPUs up to 6. Also measured at <code>-t 2</code>: one analysis thread plus its gzip decoder thread. (These runs were made as <code>-t 1</code>, before the decoder counted towards <code>-t</code>; it is the same configuration.)</li>
+<li><strong>Rust 1.0</strong>: FastQC-Rust v1.0.1, the previous release. One thread per file.</li>
+<li><strong>Rust 1.1</strong>: FastQC-Rust v1.1.0 (<a href="https://github.com/ewels/FastQC-Rust/pull/7">#7</a>). Parallel analysis within each file, parallel-capable gzip decoding, default of the available CPUs up to 6. Also measured at <code>-t 2</code>: one analysis thread plus its gzip decoder thread. (These runs were made as <code>-t 1</code>, before the decoder counted towards <code>-t</code>; it is the same configuration.)</li>
 </ul>
 <p>Each tool runs at its default settings, one file at a time, one run per file. Java ran on OpenJDK 21 with the launcher's defaults, except that the long-read files got <code>--memory 4096</code>: the default 512 MB heap is too small for them, as FastQC's own help notes. Speedups are relative to Java 0.12.1 unless stated. macOS Spotlight indexing was using about one core in the background throughout; WES results matched earlier runs on a quiet machine to within 2%.</p>
 <h2>Summary</h2>
 <div class="table-wrap"><table>
-<tr><th>Data</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 2.0</th><th class="right">Rust 2.0 <code>-t 2</code></th></tr>
+<tr><th>Data</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 1.1</th><th class="right">Rust 1.1 <code>-t 2</code></th></tr>
 <tr><td>Illumina WES (short-read, 126 bp)</td><td class="right">1.0x</td><td class="right">2.7x</td><td class="right">2.6x</td><td class="right better">12.5x</td><td class="right">6.6x</td></tr>
 <tr><td>Element AVITI (short-read)</td><td class="right">1.0x</td><td class="right">2.5x</td><td class="right">2.5x</td><td class="right better">9.7x</td><td class="right">6.4x</td></tr>
 <tr><td>ONT PromethION (long-read)</td><td class="right">1.0x</td><td class="right">2.4x</td><td class="right">2.1x</td><td class="right better">9.5x</td><td class="right">7.3x</td></tr>
@@ -70,9 +70,9 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 </table></div>
 <div class="note"><strong>ERR16962265.fastq.gz</strong> is listed for completeness but left out of the results: the local copy is an incomplete download (the first 22.7 GB of the 66.6 GB file on ENA), so the gzip stream ends early and it can't be read to the end. The April 2026 report's figures for this file came from the same partial copy.</div>
 <h2>Output Correctness</h2>
-<p>fastqc_data.txt and summary.txt from Rust 2.0 were compared module by module against Java 0.13.0, and between Rust 2.0&#x27;s -t 2 and default runs. Every file is byte-identical in both comparisons.</p>
+<p>fastqc_data.txt and summary.txt from Rust 1.1 were compared module by module against Java 0.13.0, and between Rust 1.1&#x27;s -t 2 and default runs. Every file is byte-identical in both comparisons.</p>
 <div class="table-wrap"><table>
-<tr><th>File</th><th>Rust 2.0 <code>-t 6</code> vs Java 0.13.0</th><th>Rust 2.0 <code>-t 2</code> vs <code>-t 6</code></th></tr>
+<tr><th>File</th><th>Rust 1.1 <code>-t 6</code> vs Java 0.13.0</th><th>Rust 1.1 <code>-t 2</code> vs <code>-t 6</code></th></tr>
 <tr><td>tumor_1.fastq.gz</td><td>identical</td><td>identical</td></tr>
 <tr><td>tumor_2.fastq.gz</td><td>identical</td><td>identical</td></tr>
 <tr><td>normal_1.fastq.gz</td><td>identical</td><td>identical</td></tr>
@@ -86,9 +86,9 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 </table></div>
 <h2>Per-File Results</h2>
 <h3>Wall Clock Time</h3>
-<div class="legend"><div class="legend-item"><span class="legend-swatch bar-java-old"></span>Java 0.12.1</div><div class="legend-item"><span class="legend-swatch bar-java"></span>Java 0.13.0</div><div class="legend-item"><span class="legend-swatch bar-rust-old"></span>Rust 1.0</div><div class="legend-item"><span class="legend-swatch bar-rust"></span>Rust 2.0</div></div>
+<div class="legend"><div class="legend-item"><span class="legend-swatch bar-java-old"></span>Java 0.12.1</div><div class="legend-item"><span class="legend-swatch bar-java"></span>Java 0.13.0</div><div class="legend-item"><span class="legend-swatch bar-rust-old"></span>Rust 1.0</div><div class="legend-item"><span class="legend-swatch bar-rust"></span>Rust 1.1</div></div>
 <div class="table-wrap"><table>
-<tr><th>File</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 2.0</th><th class="right">Rust 2.0 vs<br>Java 0.12.1</th><th class="right">Rust 2.0 vs<br>Java 0.13.0</th><th></th></tr>
+<tr><th>File</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 1.1</th><th class="right">Rust 1.1 vs<br>Java 0.12.1</th><th class="right">Rust 1.1 vs<br>Java 0.13.0</th><th></th></tr>
 <tr class="platform-header"><td colspan="8">Illumina WES (short-read, 126 bp)</td></tr>
 <tr class="chart-row"><td>tumor_1.fastq.gz</td><td class="right">7m 32s</td><td class="right">2m 47s</td><td class="right">2m 52s</td><td class="right better">37s</td><td class="right better">12.4x</td><td class="right better">4.6x</td><td class="bars"><div class="bar bar-java-old" style="width:100.0%"></div><div class="bar bar-java" style="width:36.9%"></div><div class="bar bar-rust-old" style="width:38.1%"></div><div class="bar bar-rust" style="width:8.1%"></div></td></tr>
 <tr class="chart-row"><td>tumor_2.fastq.gz</td><td class="right">7m 32s</td><td class="right">2m 47s</td><td class="right">2m 53s</td><td class="right better">37s</td><td class="right better">12.4x</td><td class="right better">4.6x</td><td class="bars"><div class="bar bar-java-old" style="width:100.0%"></div><div class="bar bar-java" style="width:37.0%"></div><div class="bar bar-rust-old" style="width:38.3%"></div><div class="bar bar-rust" style="width:8.1%"></div></td></tr>
@@ -105,9 +105,9 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 <tr class="chart-row"><td>GM12878.bam</td><td class="right">7m 54s</td><td class="right">3m 37s</td><td class="right">4m 07s</td><td class="right better">2m 28s</td><td class="right better">3.2x</td><td class="right better">1.5x</td><td class="bars"><div class="bar bar-java-old" style="width:100.0%"></div><div class="bar bar-java" style="width:45.8%"></div><div class="bar bar-rust-old" style="width:52.2%"></div><div class="bar bar-rust" style="width:31.2%"></div></td></tr>
 </table></div>
 <h3>CPU Time (user + system)</h3>
-<div class="legend"><div class="legend-item"><span class="legend-swatch bar-java-old"></span>Java 0.12.1</div><div class="legend-item"><span class="legend-swatch bar-java"></span>Java 0.13.0</div><div class="legend-item"><span class="legend-swatch bar-rust-old"></span>Rust 1.0</div><div class="legend-item"><span class="legend-swatch bar-rust"></span>Rust 2.0</div></div>
+<div class="legend"><div class="legend-item"><span class="legend-swatch bar-java-old"></span>Java 0.12.1</div><div class="legend-item"><span class="legend-swatch bar-java"></span>Java 0.13.0</div><div class="legend-item"><span class="legend-swatch bar-rust-old"></span>Rust 1.0</div><div class="legend-item"><span class="legend-swatch bar-rust"></span>Rust 1.1</div></div>
 <div class="table-wrap"><table>
-<tr><th>File</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 2.0</th><th class="right">Rust 2.0 vs<br>Java 0.12.1</th><th class="right">Rust 2.0 vs<br>Java 0.13.0</th><th></th></tr>
+<tr><th>File</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 1.1</th><th class="right">Rust 1.1 vs<br>Java 0.12.1</th><th class="right">Rust 1.1 vs<br>Java 0.13.0</th><th></th></tr>
 <tr class="platform-header"><td colspan="8">Illumina WES (short-read, 126 bp)</td></tr>
 <tr class="chart-row"><td>tumor_1.fastq.gz</td><td class="right">7m 31s</td><td class="right">9m 21s</td><td class="right">2m 52s</td><td class="right better">1m 55s</td><td class="right better">3.9x less</td><td class="right better">4.9x less</td><td class="bars"><div class="bar bar-java-old" style="width:80.3%"></div><div class="bar bar-java" style="width:100.0%"></div><div class="bar bar-rust-old" style="width:30.6%"></div><div class="bar bar-rust" style="width:20.5%"></div></td></tr>
 <tr class="chart-row"><td>tumor_2.fastq.gz</td><td class="right">7m 32s</td><td class="right">9m 22s</td><td class="right">2m 53s</td><td class="right better">1m 55s</td><td class="right better">3.9x less</td><td class="right better">4.9x less</td><td class="bars"><div class="bar bar-java-old" style="width:80.4%"></div><div class="bar bar-java" style="width:100.0%"></div><div class="bar bar-rust-old" style="width:30.8%"></div><div class="bar bar-rust" style="width:20.5%"></div></td></tr>
@@ -123,11 +123,11 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 <tr class="platform-header"><td colspan="8">BAM</td></tr>
 <tr class="chart-row"><td>GM12878.bam</td><td class="right">7m 53s</td><td class="right">9m 36s</td><td class="right">4m 07s</td><td class="right better">4m 15s</td><td class="right better">1.9x less</td><td class="right better">2.3x less</td><td class="bars"><div class="bar bar-java-old" style="width:82.2%"></div><div class="bar bar-java" style="width:100.0%"></div><div class="bar bar-rust-old" style="width:42.8%"></div><div class="bar bar-rust" style="width:44.4%"></div></td></tr>
 </table></div>
-<p>CPU time is what a cluster or cloud bill charges for. Java 0.13.0 and Rust 2.0 spend some extra CPU to finish sooner; Rust 2.0 still uses a fraction of the CPU of either Java version.</p>
+<p>CPU time is what a cluster or cloud bill charges for. Java 0.13.0 and Rust 1.1 spend some extra CPU to finish sooner; Rust 1.1 still uses a fraction of the CPU of either Java version.</p>
 <h3>Peak Memory (RSS)</h3>
-<div class="legend"><div class="legend-item"><span class="legend-swatch bar-java-old"></span>Java 0.12.1</div><div class="legend-item"><span class="legend-swatch bar-java"></span>Java 0.13.0</div><div class="legend-item"><span class="legend-swatch bar-rust-old"></span>Rust 1.0</div><div class="legend-item"><span class="legend-swatch bar-rust"></span>Rust 2.0</div></div>
+<div class="legend"><div class="legend-item"><span class="legend-swatch bar-java-old"></span>Java 0.12.1</div><div class="legend-item"><span class="legend-swatch bar-java"></span>Java 0.13.0</div><div class="legend-item"><span class="legend-swatch bar-rust-old"></span>Rust 1.0</div><div class="legend-item"><span class="legend-swatch bar-rust"></span>Rust 1.1</div></div>
 <div class="table-wrap"><table>
-<tr><th>File</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 2.0</th><th class="right">Rust 2.0 vs<br>Java 0.12.1</th><th class="right">Rust 2.0 vs<br>Java 0.13.0</th><th></th></tr>
+<tr><th>File</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 1.1</th><th class="right">Rust 1.1 vs<br>Java 0.12.1</th><th class="right">Rust 1.1 vs<br>Java 0.13.0</th><th></th></tr>
 <tr class="platform-header"><td colspan="8">Illumina WES (short-read, 126 bp)</td></tr>
 <tr class="chart-row"><td>tumor_1.fastq.gz</td><td class="right">435 MB</td><td class="right">502 MB</td><td class="right">25 MB</td><td class="right better">45 MB</td><td class="right better">9.7x less</td><td class="right better">11.2x less</td><td class="bars"><div class="bar bar-java-old" style="width:86.6%"></div><div class="bar bar-java" style="width:100.0%"></div><div class="bar bar-rust-old" style="width:5.1%"></div><div class="bar bar-rust" style="width:8.9%"></div></td></tr>
 <tr class="chart-row"><td>tumor_2.fastq.gz</td><td class="right">436 MB</td><td class="right">495 MB</td><td class="right">26 MB</td><td class="right better">40 MB</td><td class="right better">10.8x less</td><td class="right better">12.3x less</td><td class="bars"><div class="bar bar-java-old" style="width:88.0%"></div><div class="bar bar-java" style="width:100.0%"></div><div class="bar bar-rust-old" style="width:5.2%"></div><div class="bar bar-rust" style="width:8.1%"></div></td></tr>
@@ -143,17 +143,17 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 <tr class="platform-header"><td colspan="8">BAM</td></tr>
 <tr class="chart-row"><td>GM12878.bam</td><td class="right">405 MB</td><td class="right">510 MB</td><td class="right">28 MB</td><td class="right better">32 MB</td><td class="right better">12.8x less</td><td class="right better">16.1x less</td><td class="bars"><div class="bar bar-java-old" style="width:79.3%"></div><div class="bar bar-java" style="width:100.0%"></div><div class="bar bar-rust-old" style="width:5.5%"></div><div class="bar bar-rust" style="width:6.2%"></div></td></tr>
 </table></div>
-<p>Rust 2.0 uses more memory than Rust 1.0, because batches of reads are in flight between its threads, but still 3–13x less than either Java version on short reads. Long reads need far more memory in every implementation, because the per-position arrays grow with read length. Java's long-read figures reflect the 4 GB heap it was given: Java 0.13.0 used all of it.</p>
+<p>Rust 1.1 uses more memory than Rust 1.0, because batches of reads are in flight between its threads, but still 3–13x less than either Java version on short reads. Long reads need far more memory in every implementation, because the per-position arrays grow with read length. Java's long-read figures reflect the 4 GB heap it was given: Java 0.13.0 used all of it.</p>
 <h2>Throughput by Platform</h2>
 <div class="table-wrap"><table>
-<tr><th>Platform</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 2.0</th><th class="right">Rust 2.0 <code>-t 2</code></th></tr>
+<tr><th>Platform</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 1.1</th><th class="right">Rust 1.1 <code>-t 2</code></th></tr>
 <tr><td>Illumina WES (short-read, 126 bp)</td><td class="right">17 MB/s</td><td class="right">48 MB/s</td><td class="right">46 MB/s</td><td class="right better">218 MB/s</td><td class="right">116 MB/s</td></tr>
 <tr><td>Element AVITI (short-read)</td><td class="right">18 MB/s</td><td class="right">46 MB/s</td><td class="right">45 MB/s</td><td class="right better">174 MB/s</td><td class="right">115 MB/s</td></tr>
 <tr><td>ONT PromethION (long-read)</td><td class="right">21 MB/s</td><td class="right">51 MB/s</td><td class="right">44 MB/s</td><td class="right better">200 MB/s</td><td class="right">154 MB/s</td></tr>
 <tr><td>BAM</td><td class="right">26 MB/s</td><td class="right">56 MB/s</td><td class="right">49 MB/s</td><td class="right better">82 MB/s</td><td class="right">59 MB/s</td></tr>
 </table></div>
 <p>Throughput is compressed file size divided by wall-clock time.</p>
-<h2>Thread Scaling (Rust 2.0)</h2>
+<h2>Thread Scaling (Rust 1.1)</h2>
 <p>One 7.3 GB WES file at each <code>-t</code> value (one run each, measured separately from the table above, after the gzip decoder began counting towards <code>-t</code>):</p>
 <div class="table-wrap"><table>
 <tr><th><code>-t</code></th><th class="right">Wall time</th><th class="right">Speedup</th><th class="right">CPU time</th><th class="right">Peak RSS</th></tr>
@@ -166,8 +166,8 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 <p>At <code>-t 1</code> the file is decoded and analysed on a single thread; from <code>-t 2</code> the decoder gets a thread of its own.</p>
 <p>A single short-read <code>.fastq.gz</code> stops getting faster at about <code>-t 4</code>: from there, the file's one gzip decoder is the slowest stage. One zlib-rs decoder produces about 1.1 GB/s of decompressed data, the same as system <code>gzip</code>. rapidgzip can split a file across several decoders (<code>--decompress-threads</code>), but a normal single-member <code>.gz</code> can only be split speculatively: 4 decoders were 1.35x faster for 2.8x the CPU and ~900 MB of memory, so one decoder per file is the default. Spare cores are better spent on more files at once.</p>
 <p>BAM is decoded on the reader thread, which caps it at about 1.6x however many threads it gets.</p>
-<h2>Where the Time Goes (Rust 2.0)</h2>
-<p>CPU profile of Rust 2.0 on the 7.3 GB WES file at <code>-t 2</code>: one analysis thread plus its gzip decoder thread, sampled for 40 seconds mid-run with macOS <code>sample</code> (39,386 active samples across both threads, idle waits excluded).</p>
+<h2>Where the Time Goes (Rust 1.1)</h2>
+<p>CPU profile of Rust 1.1 on the 7.3 GB WES file at <code>-t 2</code>: one analysis thread plus its gzip decoder thread, sampled for 40 seconds mid-run with macOS <code>sample</code> (39,386 active samples across both threads, idle waits excluded).</p>
 <div class="table-wrap"><table>
 <tr><th>Component</th><th class="right">Share of CPU</th></tr>
 <tr><td>Gzip decompression (zlib-rs, on its own thread)</td><td class="right">32%</td></tr>
@@ -181,7 +181,7 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 <tr><td>Basic Statistics</td><td class="right">3%</td></tr>
 <tr><td>Memory, threading, other</td><td class="right">9%</td></tr>
 </table></div>
-<p>A third of the CPU is gzip decompression, which runs on its own thread. That is why a single file stops scaling at about <code>-t 3</code>: once the analysis is spread across workers, the one decoder is the slowest stage. The analysis side has no single dominant cost any more. The largest remaining item that isn't analysis is UTF-8 validation of each record (about 6%), a possible next step.</p>
+<p>A third of the CPU is gzip decompression, which runs on its own thread. That is why a single file stops scaling at about <code>-t 4</code>: once the analysis is spread across workers, the one decoder is the slowest stage. The analysis side has no single dominant cost any more. The largest remaining item that isn't analysis is UTF-8 validation of each record (about 6%), a possible next step.</p>
 <h2>What Makes the Rust Version Faster</h2>
 <p>None of this comes from Rust being inherently faster than Java. Each change was found by CPU profiling and checked for byte-identical output.</p>
 <h3>1. Parallel analysis within a file</h3>
@@ -189,7 +189,7 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 <h3>2. Gzip decoding on its own thread</h3>
 <p><code>.fastq.gz</code> is decompressed by <a href="https://crates.io/crates/rapidgzip-core">rapidgzip-core</a> with a <a href="https://crates.io/crates/zlib-rs">zlib-rs</a> inflate, on a separate thread from the parser, so decompression overlaps with the analysis from <code>-t 2</code>. At <code>-t 1</code> it runs on the reading thread. A 1 MiB read buffer keeps hand-offs between the two rare. Everything is pure Rust: there is no system zlib to link.</p>
 <h3>3. One SIMD pass for every adapter</h3>
-<p>FastQC looks for six adapter sequences in every read. Java calls <code>String.indexOf()</code> once per adapter. Rust 1.0 used SIMD <code>memchr</code> per adapter; Rust 2.0 finds all of them in a single pass with <code>aho-corasick</code>'s Teddy algorithm, 3.6–5.2x faster again. Hits are tallied once per read at the first match position and summed at the end, instead of incrementing every later position.</p>
+<p>FastQC looks for six adapter sequences in every read. Java calls <code>String.indexOf()</code> once per adapter. Rust 1.0 used SIMD <code>memchr</code> per adapter; Rust 1.1 finds all of them in a single pass with <code>aho-corasick</code>'s Teddy algorithm, 3.6–5.2x faster again. Hits are tallied once per read at the first match position and summed at the end, instead of incrementing every later position.</p>
 <h3>4. Vectorised counting</h3>
 <p>Base counts and each read's lowest quality are computed in loops the compiler turns into SIMD instructions. In the per-position modules, a 256-byte lookup table maps each base straight to a counter index, replacing branch chains the CPU can't predict on random DNA. Together these cut CPU by about a third on 300 bp reads.</p>
 <h3>5. No per-read allocation</h3>
@@ -206,10 +206,10 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 <p>Single-threaded, Java 0.13.0 is about 14% slower than 0.12.1 on the WES file (522s vs 456s, reproduced on a quiet machine): the cost of the pipeline when it has only one thread to run on.</p>
 
 <h2>Build</h2>
-<p>FastQC-Rust 2.0 has a single build: pure Rust, with no C toolchain and no system libraries, so binaries are fully static on every platform. The <code>native-zlib</code> feature and the separate pure-Rust variant from 1.0 are gone. BAM (via noodles) and Fast5 decode through the same zlib-rs backend.</p>
+<p>FastQC-Rust 1.1 has a single build: pure Rust, with no C toolchain and no system libraries, so binaries are fully static on every platform. The <code>native-zlib</code> feature and the separate pure-Rust variant from 1.0 are gone. BAM (via noodles) and Fast5 decode through the same zlib-rs backend.</p>
 <h2>Overall Summary</h2>
 <div class="table-wrap"><table>
-<tr><th>Metric</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 2.0</th></tr>
+<tr><th>Metric</th><th class="right">Java 0.12.1</th><th class="right">Java 0.13.0</th><th class="right">Rust 1.0</th><th class="right">Rust 1.1</th></tr>
 <tr><td>Short-read speed (avg)</td><td class="right">18 MB/s</td><td class="right">47 MB/s</td><td class="right">46 MB/s</td><td class="right better">196 MB/s</td></tr>
 <tr><td>Long-read speed (avg)</td><td class="right">21 MB/s</td><td class="right">51 MB/s</td><td class="right">44 MB/s</td><td class="right better">200 MB/s</td></tr>
 <tr><td>BAM speed</td><td class="right">26 MB/s</td><td class="right">56 MB/s</td><td class="right">49 MB/s</td><td class="right better">82 MB/s</td></tr>
@@ -229,9 +229,9 @@ body.bench-standalone { max-width: 1040px; margin: 40px auto; padding: 0 20px; }
 <tr><td>Annualised</td><td class="right">~2.9 million tasks / ~877,000 CPU hours</td></tr>
 </table></div>
 <h3>Projected savings</h3>
-<p>Cloud and cluster costs follow CPU time, not wall time. On the short-read files, Rust 2.0 uses <strong>3.7x less CPU</strong> than Java 0.12.1, the version behind that usage data. Applied to the annualised Seqera Cloud usage alone:</p>
+<p>Cloud and cluster costs follow CPU time, not wall time. On the short-read files, Rust 1.1 uses <strong>3.7x less CPU</strong> than Java 0.12.1, the version behind that usage data. Applied to the annualised Seqera Cloud usage alone:</p>
 <div class="table-wrap"><table>
-<tr><th>Metric</th><th class="right">Java 0.12.1</th><th class="right">Rust 2.0</th><th class="right">Saved</th></tr>
+<tr><th>Metric</th><th class="right">Java 0.12.1</th><th class="right">Rust 1.1</th><th class="right">Saved</th></tr>
 <tr><td>Annual CPU hours</td><td class="right">877,000</td><td class="right">234,000</td><td class="right better">643,000 hours</td></tr>
 <tr><td>Annual cloud compute cost*</td><td class="right">$26,300</td><td class="right">$7,000</td><td class="right better">$19,300</td></tr>
 <tr><td>Annual CO2 emissions**</td><td class="right">61 tonnes</td><td class="right">16 tonnes</td><td class="right better">45 tonnes</td></tr>

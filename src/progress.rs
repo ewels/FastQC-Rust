@@ -1,7 +1,7 @@
 //! Live terminal progress reporting, drawn in place:
 //!
 //! ```text
-//! FastQC-Rust v1.0.2-dev0
+//! FastQC-Rust v1.1.0
 //!
 //! Failed to process notes.txt: ID line didn't start with '@' at line 1
 //!   sample_1.fastq.gz  ⠹ ━━━━━━━━━━━━━━━━━━━━╸━━━━━━━  72%  2.1M reads     4s

@@ -6,10 +6,10 @@ const base = import.meta.env.BASE_URL;
 const themes = { light: 'github-light', dark: 'github-dark' };
 
 const installBinary = `# Linux x86_64 example -- see docs for all platforms
-curl -fsSL https://github.com/ewels/FastQC-Rust/releases/download/v0.12.1/fastqc-linux-x86_64.tar.gz | tar xz --strip-components=1
+curl -fsSL https://github.com/ewels/FastQC-Rust/releases/latest/download/fastqc-linux-x86_64.tar.gz | tar xz --strip-components=1
 sudo mv ./fastqc /usr/local/bin/`;
 
-const installDocker = `docker run ghcr.io/ewels/fastqc-rust:dev fastqc sample.fastq.gz`;
+const installDocker = `docker run ghcr.io/ewels/fastqc-rust:latest fastqc sample.fastq.gz`;
 
 const installCargo = `cargo install fastqc-rust`;
 
@@ -92,8 +92,8 @@ fastqc -t 4 --format bam aligned.bam      # parallel, BAM input`;
   <section style="margin-bottom: 3rem">
     <h2>Performance</h2>
     <p style="color: var(--ink-muted); margin-bottom: 1rem">
-      One file (7.3 GB Illumina WES), each tool at its default threads. Rust 1.0 is the current
-      release and Rust 2.0 the next one. Java FastQC v0.13.0 includes parallel processing
+      One file (7.3 GB Illumina WES), each tool at its default threads. Rust 1.0 is the previous
+      release and Rust 1.1 the current one. Java FastQC v0.13.0 includes parallel processing
       <a href={`${base}about/upstream/`}>contributed upstream</a> from this project.
       <a href={`${base}about/performance/`}>Full benchmarks</a>.
     </p>
@@ -119,7 +119,7 @@ fastqc -t 4 --format bam aligned.bam      # parallel, BAM input`;
             <span class="bench-speedup">2.6x</span>
           </div>
           <div class="bench-row">
-            <span class="bench-label bench-label-version">Rust 2.0</span>
+            <span class="bench-label bench-label-version">Rust 1.1</span>
             <div class="bench-bar bench-bar-rust" style="width: 8.1%"></div>
             <span class="bench-time">37 s</span>
             <span class="bench-speedup">12.4x</span>
@@ -146,7 +146,7 @@ fastqc -t 4 --format bam aligned.bam      # parallel, BAM input`;
             <span class="bench-speedup">17x less</span>
           </div>
           <div class="bench-row">
-            <span class="bench-label bench-label-version">Rust 2.0</span>
+            <span class="bench-label bench-label-version">Rust 1.1</span>
             <div class="bench-bar bench-bar-rust" style="width: 9.0%"></div>
             <span class="bench-time">45 MB</span>
             <span class="bench-speedup">10x less</span>

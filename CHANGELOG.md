@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.0.2dev
+## v1.1.0
 
 > [!NOTE]
 > Tracking: FastQC [v0.13.0](https://github.com/s-andrews/FastQC/releases/tag/v0.13.0)
@@ -83,7 +83,8 @@ Output matches Java FastQC v0.13.0. Many of these changes came from this project
   1273 s to 404 s.
 - **`-t/--threads` is a ceiling on the whole run**, each file's gzip decoder
   included. Give it and the run stays inside it — `-t 1` decodes and analyses
-  on one thread, which is what a workflow engine passing `task.cpus` needs. Leave it out and the budget defaults to **the available
+  on one thread, which is what a workflow engine passing `task.cpus` needs.
+  `-t 0` is an error. Leave it out and the budget defaults to **the available
   CPUs, up to 6** — a plain `fastqc sample.fastq.gz` gets the parallel pipeline
   without being asked, but a big shared machine is not treated as idle just
   because it is big. (Java FastQC defaults to 1; output is byte-identical
@@ -129,6 +130,8 @@ Output matches Java FastQC v0.13.0. Many of these changes came from this project
   bytes handed to the analysis, against a total taken from the gzip trailer
   (exact for the single-member files `gzip` and `pigz` produce, including past
   4 GiB) or estimated from the achieved ratio for multi-member and BGZF input.
+  A concatenated `.gz` (`cat L001.gz L002.gz`) is recognised early, rather
+  than reading 100% halfway through.
 - **A file's elapsed time is its own.** Every bar's clock started when the
   display was built rather than when its file did, so anything queued behind
   another file counted the wait: a 2,000-read file reported 13.9s next to the
