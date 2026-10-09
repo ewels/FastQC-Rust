@@ -119,7 +119,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+        uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
@@ -179,7 +179,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+        uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
           toolchain: stable
 
@@ -340,7 +340,7 @@ jobs:
           VERSION: ${{ needs.check-release.outputs.version }}
         run: |
           RAW="${VERSION#v}"
-          if [ -f CHANGELOG.md ] && awk '/^## \[Version '"$RAW"'\]/{found=1; next} /^## \[/{if(found) exit} found' CHANGELOG.md > /tmp/release-notes.md && [ -s /tmp/release-notes.md ]; then
+          if [ -f CHANGELOG.md ] && awk -v h="## v$RAW" '$0 == h {found=1; next} /^## /{if(found) exit} found' CHANGELOG.md > /tmp/release-notes.md && [ -s /tmp/release-notes.md ]; then
             echo "has_notes=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_notes=false" >> "$GITHUB_OUTPUT"
