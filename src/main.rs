@@ -72,10 +72,17 @@ struct Cli {
     #[arg(short, long, value_name = "FILE")]
     limits: Option<PathBuf>,
 
-    /// Specifies the number of files which can be processed simultaneously.
-    /// Each thread will be allocated 250MB of memory.
-    #[arg(short, long, value_name = "N", default_value = "1")]
-    threads: usize,
+    /// Total thread budget for the run [default: available CPUs, up to 6].
+    /// Spread across the files processed simultaneously and then within each
+    /// file (a reader, its gzip decoder, and analysis workers).
+    #[arg(short, long, value_name = "N", value_parser = parse_threads)]
+    threads: Option<usize>,
+
+    /// Background gzip decoders per .fastq.gz file. The first counts towards
+    /// --threads and keeps up with the analysis; any more do not count. 0
+    /// decodes on the reading thread, as -t 1 does.
+    #[arg(long = "decompress-threads", value_name = "N", default_value = "1")]
+    decompress_threads: usize,
 
     /// Specifies the length of Kmer to look for in the Kmer content module.
     /// Specified Kmer length must be between 2 and 10. Default length is 7.
@@ -143,6 +150,14 @@ struct Cli {
     /// Input files (one or more FastQ, BAM, or SAM files).
     #[arg(required = true)]
     files: Vec<PathBuf>,
+}
+
+fn parse_threads(value: &str) -> Result<usize, String> {
+    match value.parse::<usize>() {
+        Ok(0) => Err("must be at least 1".to_string()),
+        Ok(n) => Ok(n),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 fn main() {
@@ -220,6 +235,7 @@ fn main() {
         png_output: cli.png,
         temp_dir: cli.dir,
         template: cli.template,
+        decompress_threads: cli.decompress_threads,
     };
 
     if let Err(exit_code) = runner::run(&config, &cli.files) {

@@ -1,5 +1,31 @@
 ---
 import Base from '../../layouts/Base.astro';
+import { Code } from 'astro:components';
+
+const themes = { light: 'github-light', dark: 'github-dark' };
+
+const setup = `git clone https://github.com/ewels/FastQC-Rust.git
+cd FastQC-Rust
+cargo build --release
+cargo test`;
+
+const quality = `cargo fmt --check                          # Format check
+cargo clippy --all-targets -- -D warnings  # Lint, zero warnings
+cargo test                                 # Unit + integration tests
+cargo audit                                # Dependency security audit`;
+
+const equivalence = `cargo build --release
+uv run tests/equivalence/compare.py --binary ./target/release/fastqc
+
+# A single test case
+uv run tests/equivalence/compare.py --binary ./target/release/fastqc --test minimal_default
+
+# Any two report directories
+uv run tests/equivalence/compare.py --reference /path/to/java --actual /path/to/rust --output report.html`;
+
+const reference = `gh release download vX.Y.Z -R s-andrews/FastQC -p 'fastqc_*.zip' && unzip fastqc_*.zip
+bash tests/equivalence/generate_reference.sh ./FastQC
+uv run tests/equivalence/update_svg_patches.py`;
 ---
 
 <Base title="Contributing - FastQC">
@@ -7,41 +33,51 @@ import Base from '../../layouts/Base.astro';
 
   <section style="margin-bottom: 2.5rem">
     <h2>Setup</h2>
-    <pre><code>git clone https://github.com/ewels/FastQC-Rust.git
-cd FastQC-Rust
-cargo build --release
-cargo test</code></pre>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      Pure Rust: a Rust toolchain (1.88 or newer) is all you need, no C compiler or system libraries.
+    </p>
+    <Code code={setup} lang="bash" themes={themes} defaultColor={false} />
+  </section>
+
+  <section style="margin-bottom: 2.5rem">
+    <h2>Code quality</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
+      CI runs these on every pull request into <code>main</code>, plus the equivalence tests below and
+      a build check on the minimum supported Rust version.
+    </p>
+    <Code code={quality} lang="bash" themes={themes} defaultColor={false} />
   </section>
 
   <section style="margin-bottom: 2.5rem">
     <h2>Equivalence tests</h2>
     <p style="color: var(--ink-muted); margin-bottom: 0.75rem">
-      Compares Rust output against stored Java FastQC reference data.
-      Requires <a href="https://docs.astral.sh/uv/">uv</a>.
+      Output must stay byte-identical to Java FastQC. These tests compare Rust output against stored
+      Java reference data for every CLI flag variation. Requires <a href="https://docs.astral.sh/uv/">uv</a>.
     </p>
-    <pre><code>cargo build --release
-uv run tests/equivalence/compare.py --binary ./target/release/fastqc</code></pre>
+    <Code code={equivalence} lang="bash" themes={themes} defaultColor={false} />
     <p style="margin-top: 0.75rem; color: var(--ink-muted)">
-      Writes an HTML report to <code>tests/equivalence/reports/equivalence_report.html</code>.
+      Writes an HTML report with text diffs and image comparisons to
+      <code>tests/equivalence/reports/equivalence_report.html</code>. Test cases are defined in
+      <code>tests/equivalence/test_cases.yaml</code>.
+    </p>
+    <p style="color: var(--ink-muted)">
+      Code that does something non-idiomatic only to match Java's exact output, such as integer
+      division or Java's number formatting, is marked with a <code>// JAVA COMPAT</code> comment.
     </p>
   </section>
 
   <section style="margin-bottom: 2.5rem">
-    <h2>Code quality</h2>
-    <pre><code>cargo clippy --all-targets -- -D warnings  # Lint
-cargo fmt --check                          # Format check
-cargo test                                 # Unit + integration tests</code></pre>
-  </section>
-
-  <section style="margin-bottom: 2.5rem">
-    <h2>Updating reference data</h2>
-    <p style="color: var(--ink-muted); margin-bottom: 0.5rem">When the tracked upstream version changes:</p>
-    <ol style="color: var(--ink-muted)">
-      <li>Update version in <code>UPSTREAM.toml</code>, <code>Cargo.toml</code>, <code>src/lib.rs</code></li>
-      <li>Run Java FastQC via Docker to generate new reference output</li>
-      <li>Regenerate SVG patch files</li>
-      <li>Run equivalence tests to verify</li>
+    <h2>Updating to a new upstream version</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 0.5rem">
+      A nightly CI job opens an issue when Java FastQC publishes a new release. To update:
+    </p>
+    <ol style="color: var(--ink-muted); list-style: decimal; padding-left: 1.5rem; margin-bottom: 1rem">
+      <li>Update the version in <code>UPSTREAM.toml</code> and in <code>VERSION</code> / <code>VERSION_BANNER</code> in <code>src/lib.rs</code>.</li>
+      <li>Regenerate the reference data from the release zip (needs Java 11+), then the SVG patch files.</li>
+      <li>Review the patch changes: only text and legend x-positions should differ.</li>
+      <li>Port any upstream behaviour changes and run the equivalence tests until they pass.</li>
     </ol>
+    <Code code={reference} lang="bash" themes={themes} defaultColor={false} />
   </section>
 
   <section style="margin-bottom: 2.5rem">

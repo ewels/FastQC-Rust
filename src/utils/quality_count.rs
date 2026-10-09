@@ -21,20 +21,21 @@ impl QualityCount {
     /// Record a quality character (raw ASCII value, not offset-adjusted).
     ///
     /// Matches `addValue(char c)` which indexes by `(int)c`.
+    #[inline]
     pub fn add_value(&mut self, quality_char: u8) {
         let idx = quality_char as usize;
         if idx >= self.actual_counts.len() {
-            // Java throws ArrayIndexOutOfBoundsException here, crashing
-            // the run. We clamp to the last slot instead so that corrupt quality chars
-            // don't abort the entire analysis -- the value will be wrong for that
-            // position, but the rest of the file can still be processed.
-            eprintln!(
-                "Warning: quality character '{}' (ASCII {}) exceeds maximum {}; clamping",
-                quality_char as char,
-                idx,
-                self.actual_counts.len() - 1
-            );
-            self.actual_counts[self.actual_counts.len() - 1] += 1;
+            // Java throws ArrayIndexOutOfBoundsException here; clamp to the last
+            // slot so a corrupt quality char doesn't abort the run.
+            let max = self.actual_counts.len() - 1;
+            static WARNED: crate::progress::OncePerRun = crate::progress::OncePerRun::new();
+            WARNED.log(|| {
+                format!(
+                    "Warning: quality character '{}' (ASCII {}) exceeds maximum {}; clamping",
+                    quality_char as char, quality_char, max
+                )
+            });
+            self.actual_counts[max] += 1;
             self.total_counts += 1;
             return;
         }

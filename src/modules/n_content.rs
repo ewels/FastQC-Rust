@@ -81,6 +81,10 @@ impl NContent {
 }
 
 impl QCModule for NContent {
+    fn cost_hint(&self) -> u32 {
+        8
+    }
+
     fn process_sequence(&mut self, sequence: &Sequence) {
         let seq = &sequence.sequence;
 

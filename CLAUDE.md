@@ -8,13 +8,12 @@ FastQC (Rust) is a pure Rust rewrite of [FastQC](https://github.com/s-andrews/Fa
 
 Crate name: `fastqc-rust`. Binary name: `fastqc`.
 
-By default, links system zlib for faster gzip decompression (available on all Linux/macOS). Build with `--no-default-features` for a fully static pure-Rust binary.
+Pure Rust with no C toolchain dependency: `.fastq.gz` is decompressed in parallel via [`rapidgzip-core`](https://crates.io/crates/rapidgzip-core) (zlib-rs backend). Binaries are fully static with no system libraries to link.
 
 ## Build Commands
 
 ```bash
-cargo build --release              # Build optimized binary (uses system zlib by default)
-cargo build --release --no-default-features  # Pure Rust, no C deps, fully static
+cargo build --release              # Build optimized binary (pure Rust, no C deps)
 cargo test                         # Run all Rust tests
 cargo clippy --all-targets         # Lint — must produce zero warnings
 cargo audit                        # Security audit of dependencies

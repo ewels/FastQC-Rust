@@ -20,3 +20,42 @@ pub const IDX_C: usize = 1;
 pub const IDX_G: usize = 2;
 pub const IDX_T: usize = 3;
 pub const IDX_N: usize = 4;
+
+/// Counts of uppercase `A`, `C`, `G` and `T` bytes.
+///
+/// Per-chunk byte counters let all four counts vectorise; indexing a counter
+/// array per base is a serial dependency chain.
+pub fn count_acgt(seq: &[u8]) -> [u64; 4] {
+    let mut totals = [0u64; 4];
+    for chunk in seq.chunks(u8::MAX as usize) {
+        let mut counts = [0u8; 4];
+        for &b in chunk {
+            counts[0] += (b == b'A') as u8;
+            counts[1] += (b == b'C') as u8;
+            counts[2] += (b == b'G') as u8;
+            counts[3] += (b == b'T') as u8;
+        }
+        for (total, count) in totals.iter_mut().zip(counts) {
+            *total += count as u64;
+        }
+    }
+    totals
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_count_acgt_matches_lookup_table() {
+        // Lengths either side of the 255-byte chunk, with N and other bytes.
+        for len in [0, 1, 254, 255, 256, 600, 10_000] {
+            let seq: Vec<u8> = (0..len).map(|i| b"ACGTNACGGX."[i * 7 % 11]).collect();
+            let mut expected = [0u64; 6];
+            for &b in &seq {
+                expected[BASE_INDEX[b as usize] as usize] += 1;
+            }
+            assert_eq!(count_acgt(&seq), expected[..4], "length {len}");
+        }
+    }
+}

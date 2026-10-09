@@ -7,44 +7,105 @@ const base = import.meta.env.BASE_URL;
   <p class="label">Benchmarks</p>
   <h1>Performance</h1>
   <p style="color: var(--ink-muted); margin-bottom: 1rem">
-    Single-threaded, one file (7.3 GB Illumina WES). Pipelines typically parallelise across files
-    via an external scheduler (Nextflow, Snakemake), so single-file throughput is the relevant metric.
+    One file (7.3 GB Illumina WES), Apple M1 Pro, from the full report. Java FastQC v0.13.0 is about
+    3x faster than v0.12.1 at its default four threads, thanks to parallel processing
+    <a href={`${base}about/upstream/`}>contributed upstream</a> from this project.
+    Speedups are relative to v0.12.1.
   </p>
 
-  <div class="grid-2" style="margin-bottom: 2.5rem">
+  <div class="grid-2" style="margin-bottom: 1.5rem">
     <div>
-      <h3 class="bench-title">Wall clock time</h3>
+      <h3 class="bench-title">Default threads</h3>
       <div class="bench-chart">
         <div class="bench-row">
-          <span class="bench-label">Java</span>
-          <div class="bench-bar bench-bar-java" style="width: 100%"></div>
-          <span class="bench-time">9m 46s</span>
+          <span class="bench-label bench-label-version">Java v0.12</span>
+          <div class="bench-bar bench-bar-java bench-bar-old" style="width: 100%"></div>
+          <span class="bench-time">7m 32s</span>
         </div>
         <div class="bench-row">
-          <span class="bench-label">Rust</span>
-          <div class="bench-bar bench-bar-rust" style="width: 33%"></div>
-          <span class="bench-time">3m 13s</span>
-          <span class="bench-speedup">3.0x faster</span>
+          <span class="bench-label bench-label-version">Java v0.13</span>
+          <div class="bench-bar bench-bar-java" style="width: 36.9%"></div>
+          <span class="bench-time">2m 47s</span>
+          <span class="bench-speedup">2.7x</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label bench-label-version">Rust v1.0</span>
+          <div class="bench-bar bench-bar-rust bench-bar-old" style="width: 38.1%"></div>
+          <span class="bench-time">2m 52s</span>
+          <span class="bench-speedup">2.6x</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label bench-label-version">Rust v1.1</span>
+          <div class="bench-bar bench-bar-rust" style="width: 8.1%"></div>
+          <span class="bench-time">37 s</span>
+          <span class="bench-speedup">12.4x</span>
         </div>
       </div>
     </div>
     <div>
-      <h3 class="bench-title">Peak memory (RSS)</h3>
+      <h3 class="bench-title">Single thread (<code>-t 1</code>)</h3>
       <div class="bench-chart">
         <div class="bench-row">
-          <span class="bench-label">Java</span>
-          <div class="bench-bar bench-bar-java" style="width: 100%"></div>
-          <span class="bench-time">444 MB</span>
+          <span class="bench-label bench-label-version">Java v0.12</span>
+          <div class="bench-bar bench-bar-java bench-bar-old" style="width: 86.6%"></div>
+          <span class="bench-time">7m 32s</span>
         </div>
         <div class="bench-row">
-          <span class="bench-label">Rust</span>
-          <div class="bench-bar bench-bar-rust" style="width: 6.3%"></div>
-          <span class="bench-time">28 MB</span>
-          <span class="bench-speedup">16x less</span>
+          <span class="bench-label bench-label-version">Java v0.13</span>
+          <div class="bench-bar bench-bar-java" style="width: 100%"></div>
+          <span class="bench-time">8m 42s</span>
+          <span class="bench-speedup">0.87x</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label bench-label-version">Rust v1.0</span>
+          <div class="bench-bar bench-bar-rust bench-bar-old" style="width: 33.0%"></div>
+          <span class="bench-time">2m 52s</span>
+          <span class="bench-speedup">2.6x</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label bench-label-version">Rust v1.1</span>
+          <div class="bench-bar bench-bar-rust" style="width: 19.5%"></div>
+          <span class="bench-time">1m 42s</span>
+          <span class="bench-speedup">5.1x</span>
         </div>
       </div>
     </div>
   </div>
+
+  <div class="grid-2" style="margin-bottom: 1rem">
+    <div>
+      <h3 class="bench-title">Peak memory (RSS), default threads</h3>
+      <div class="bench-chart">
+        <div class="bench-row">
+          <span class="bench-label bench-label-version">Java v0.12</span>
+          <div class="bench-bar bench-bar-java bench-bar-old" style="width: 86.7%"></div>
+          <span class="bench-time">435 MB</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label bench-label-version">Java v0.13</span>
+          <div class="bench-bar bench-bar-java" style="width: 100%"></div>
+          <span class="bench-time">502 MB</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label bench-label-version">Rust v1.0</span>
+          <div class="bench-bar bench-bar-rust bench-bar-old" style="width: 5.0%"></div>
+          <span class="bench-time">25 MB</span>
+          <span class="bench-speedup">17x less</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label bench-label-version">Rust v1.1</span>
+          <div class="bench-bar bench-bar-rust" style="width: 9.0%"></div>
+          <span class="bench-time">45 MB</span>
+          <span class="bench-speedup">10x less</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="color: var(--ink-muted); font-size: 0.875rem; margin-bottom: 2.5rem">
+    Rust v1.0 is v1.0.1 and Rust v1.1 is v1.1.0. Defaults are one thread per
+    file for Java v0.12.1 and Rust v1.0, <code>-t 4</code> for Java v0.13.0 and up to 6 threads for
+    Rust v1.1. Java ran on OpenJDK 21. Measured October 2026; Java v0.13.0 at <code>-t 1</code> is the best of two separate runs, as the report doesn't include it. Rust v1.1 at <code>-t 1</code> and the thread scaling below were measured after the gzip decoder began counting towards <code>-t</code>.
+  </p>
 
   <div style="margin-bottom: 2.5rem">
     <a href={`${base}about/performance/report/`} class="btn btn-primary">
@@ -55,40 +116,119 @@ const base = import.meta.env.BASE_URL;
   <section style="margin-bottom: 3rem">
     <h2>Where the speed comes from</h2>
     <p style="color: var(--ink-muted); margin-bottom: 1rem">
-      Three specific optimisations, each identified through CPU profiling:
+      Each change was found by CPU profiling and checked for byte-identical output.
     </p>
     <div class="grid-3">
       <div>
-        <h3 style="font-size: 1rem; margin-top: 0">SIMD adapter search</h3>
-        <p style="font-size: 0.875rem; color: var(--ink-muted)">
-          The <code>memchr</code> crate uses ARM NEON / SSE to compare 16 bytes per cycle.
-          Adapter search drops from 35% to 6% of runtime.
-        </p>
+        <h3 class="speed-title">Reading input</h3>
+        <ul class="speed-list">
+          <li>
+            <code>.fastq.gz</code> is decompressed by a zlib-rs decoder
+            (via <code>rapidgzip-core</code>) on its own thread, so it overlaps with the analysis.
+          </li>
+          <li>
+            FASTQ lines are parsed straight into reused record buffers with a SIMD newline
+            search. No per-read allocation and no garbage collection.
+          </li>
+          <li>A 1 MiB read buffer keeps hand-offs from the decoder thread rare.</li>
+        </ul>
       </div>
       <div>
-        <h3 style="font-size: 1rem; margin-top: 0">Lookup-table base counting</h3>
-        <p style="font-size: 0.875rem; color: var(--ink-muted)">
-          A 256-byte compile-time table replaces unpredictable branch chains,
-          halving time spent in per-base modules.
-        </p>
+        <h3 class="speed-title">Per-read analysis</h3>
+        <ul class="speed-list">
+          <li>
+            Every adapter is found in a single SIMD pass over each read
+            (<code>aho-corasick</code>'s Teddy), 3.6–5.2x faster than one search per adapter.
+          </li>
+          <li>
+            Base counts and per-read quality minimums run as SIMD loops, and a 256-byte lookup
+            table replaces branch chains in the per-base modules.
+          </li>
+          <li>In-place uppercase conversion and allocation-free tile ID parsing.</li>
+        </ul>
       </div>
       <div>
-        <h3 style="font-size: 1rem; margin-top: 0">Zero per-read allocation</h3>
-        <p style="font-size: 0.875rem; color: var(--ink-muted)">
-          In-place uppercase conversion, zero-copy tile parsing, byte-slice tracking.
-          No garbage collection overhead.
-        </p>
+        <h3 class="speed-title">Parallelism</h3>
+        <ul class="speed-list">
+          <li>
+            Each file's QC modules are split across worker threads, so they process the same
+            reads side by side. Output is identical at any thread count.
+          </li>
+          <li>Modules are assigned to workers by measured cost, so heavy ones don't share a worker.</li>
+          <li>
+            Batches are capped by bytes as well as reads, keeping memory flat on long reads.
+            See <a href="#multi-threading">Multi-threading</a>.
+          </li>
+        </ul>
       </div>
     </div>
+  </section>
+
+  <section id="multi-threading" style="margin-bottom: 3rem">
+    <h2>Multi-threading</h2>
+    <p style="color: var(--ink-muted); margin-bottom: 1rem">
+      When a file gets two or more threads, it runs through a pipeline: a reader thread parses
+      records and hands batches to analysis workers, each of which owns a subset of the QC
+      modules. Every module still sees every read in order on one thread, so output is the same
+      at any thread count. Without <code>-t</code>, FastQC-Rust uses the available CPUs, up to 6.
+    </p>
+    <div style="margin-bottom: 1rem; max-width: 36rem">
+      <h3 class="bench-title">Wall clock time by <code>-t</code>, one 7.3 GB WES file (M1 Pro)</h3>
+      <div class="bench-chart">
+        <div class="bench-row">
+          <span class="bench-label bench-label-wide">-t 1</span>
+          <div class="bench-bar bench-bar-rust" style="width: 100%"></div>
+          <span class="bench-time">101.7 s</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label bench-label-wide">-t 2</span>
+          <div class="bench-bar bench-bar-rust" style="width: 65.5%"></div>
+          <span class="bench-time">66.6 s</span>
+          <span class="bench-speedup">1.53x</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label bench-label-wide">-t 3</span>
+          <div class="bench-bar bench-bar-rust" style="width: 53.2%"></div>
+          <span class="bench-time">54.1 s</span>
+          <span class="bench-speedup">1.88x</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label bench-label-wide">-t 4</span>
+          <div class="bench-bar bench-bar-rust" style="width: 35.6%"></div>
+          <span class="bench-time">36.2 s</span>
+          <span class="bench-speedup">2.81x</span>
+        </div>
+        <div class="bench-row">
+          <span class="bench-label bench-label-wide">-t 6</span>
+          <div class="bench-bar bench-bar-rust" style="width: 35.2%"></div>
+          <span class="bench-time">35.8 s</span>
+          <span class="bench-speedup">2.84x</span>
+        </div>
+      </div>
+    </div>
+    <p style="color: var(--ink-muted); margin-bottom: 1rem">
+      Each file's gzip decoder counts towards <code>-t</code>, so <code>-t 1</code> decodes
+      and analyses on a single thread. A single file stops getting faster at around
+      <code>-t 4</code>, where the analysis outpaces the file's one gzip decoder. Past that point, extra cores are better spent on
+      more files at once.
+    </p>
+    <p style="color: var(--ink-muted)">
+      Given two or more threads, <code>.fastq.gz</code> decompression runs on its own thread via
+      <a href="https://crates.io/crates/rapidgzip-core">rapidgzip-core</a> with a
+      <a href="https://crates.io/crates/zlib-rs">zlib-rs</a> inflate, so it overlaps with the
+      analysis. rapidgzip can split a file across decoders (<code>--decompress-threads</code>),
+      but a single-member <code>.gz</code> can only be split speculatively, which costs several
+      times the CPU and hundreds of MB for little gain, so one decoder per file is the default.
+    </p>
   </section>
 
   <section style="margin-bottom: 3rem">
     <h2>Test dataset</h2>
     <p style="color: var(--ink-muted)">
-      119 GB across 11 files: Illumina WES, Element AVITI, ONT PromethION long-read, and BAM.
-      Apple Silicon (aarch64-apple-darwin).
-      The <a href={`${base}about/performance/report/`}>full report</a> has per-file results,
-      memory profiles, a CPU breakdown, and analysis of whether these optimisations could be back-ported to Java.
+      The <a href={`${base}about/performance/report/`}>full report</a> covers 10 files (98 GB):
+      Illumina WES, Element AVITI, ONT PromethION long reads and BAM, each run through Java v0.12.1,
+      Java v0.13.0, Rust v1.0 and Rust v1.1. It has per-file wall-clock time, CPU time and memory,
+      output correctness checks, a CPU profile, and whether these optimisations could be back-ported to Java.
     </p>
   </section>
 </Base>
@@ -116,6 +256,33 @@ const base = import.meta.env.BASE_URL;
   width: 2.5rem;
   flex-shrink: 0;
   color: var(--ink-muted);
+}
+.speed-title {
+  font-size: 1rem;
+  margin-top: 0;
+}
+.speed-list {
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+  list-style: disc;
+  padding-left: 1.1rem;
+  margin: 0;
+}
+.speed-list li {
+  margin-bottom: 0.5rem;
+}
+.bench-title code {
+  text-transform: none;
+}
+.bench-label-version {
+  width: 5.25rem;
+}
+.bench-bar-old {
+  opacity: 0.55;
+}
+.bench-label-wide {
+  width: 2.75rem;
+  font-family: var(--font-mono);
 }
 .bench-bar {
   height: 1.5rem;

@@ -80,12 +80,12 @@ impl Fast5File {
                 Err(e) => {
                     // Java throws SequenceFormatException if no valid paths found.
                     // We collect what we can and report errors for individual reads.
-                    eprintln!(
+                    crate::progress::log_line(&format!(
                         "Warning: Could not extract FASTQ from {}{}: {}",
                         path.display(),
                         prefix,
                         e
-                    );
+                    ));
                 }
             }
         }

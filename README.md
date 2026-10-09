@@ -39,7 +39,7 @@ fastqc sample.fastq.gz
 ### Using Docker
 
 ```bash
-docker run ghcr.io/ewels/fastqc-rust:dev fastqc sample.fastq.gz
+docker run ghcr.io/ewels/fastqc-rust:latest fastqc sample.fastq.gz
 ```
 
 ### With Cargo
@@ -70,6 +70,51 @@ fastqc sample.fastq.gz
 # See all options
 fastqc --help
 ```
+
+### Threads
+
+`-t`/`--threads` is the whole run's thread budget. It is spread across the files
+processed at once and then within each file: a reader, the file's gzip decoder,
+and analysis workers. `-t 1` decodes and analyses on a single thread, so the run
+stays inside what a workflow engine passing `task.cpus` asked for. The budget
+honours cgroup quotas and CPU affinity, so a container or a scheduler-pinned job
+sees its own allowance rather than the host's core count.
+
+Leave `--threads` out and the budget is the available CPUs, up to 6, so a plain
+`fastqc sample.fastq.gz` runs in parallel without taking over a shared machine.
+A single `.fastq.gz` stops getting faster at around `-t 4`, where the
+analysis outpaces the file's one gzip decoder. Above that, `--threads` only helps by
+processing more files at once.
+
+Decompression is rarely worth tuning. A single-member `.gz` (what `gzip` and
+`pigz` write) can only be split across decoders speculatively, so extra
+decoders (`--decompress-threads N`; only the first counts towards `--threads`)
+cost several times the CPU and hundreds of MB for little or no gain.
+`--decompress-threads 0` decodes on the reading thread, as `-t 1` does.
+
+### Progress display
+
+A run draws a live display on stderr: a progress bar per input file, and a
+Basic Statistics table that fills in as the analysis proceeds when the terminal
+is wide enough. Warnings and the closing summary appear around it as ordinary
+output.
+
+It needs an interactive stderr. When stderr is a pipe or a log file, or `TERM`
+is `dumb`/unset, it degrades to one plain line per file at start and finish so
+pipeline logs stay readable. `--quiet` silences everything but warnings and errors.
+
+Two independent environment switches, neither with a command-line equivalent:
+
+- `FASTQC_PROGRESS=auto|always|never` — `always` draws the display even when
+  stderr is redirected (for recording a demo, or a consumer that re-renders the
+  stream), sizing itself from `COLUMNS`/`LINES`; `never` always takes the plain
+  path.
+- Colour follows the usual conventions with no flag of ours: `NO_COLOR` and
+  `CLICOLOR=0` disable it, `CLICOLOR_FORCE=1` forces it on even for a pipe.
+
+Because the two are independent, colour off still draws the bars, and the plain
+fallback still colours its lines when colour is forced on — which is what a CI
+log viewer wants.
 
 ## Equivalence testing
 

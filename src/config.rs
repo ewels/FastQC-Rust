@@ -30,7 +30,8 @@ pub struct FastQCConfig {
     pub expgroup: bool,
     pub quiet: bool,
     pub kmer_size: u8,
-    pub threads: usize,
+    /// Total thread budget for the run; `None` means the available CPUs, capped.
+    pub threads: Option<usize>,
     pub output_dir: Option<PathBuf>,
     pub casava: bool,
     pub nano: bool,
@@ -49,6 +50,10 @@ pub struct FastQCConfig {
     pub png_output: bool,
     pub temp_dir: Option<PathBuf>,
     pub template: TemplateName,
+    /// Background gzip decoders per `.gz` file; `0` decodes on the reading
+    /// thread. The runner lowers the default `1` to `0` for a file given only
+    /// one thread.
+    pub decompress_threads: usize,
 }
 
 impl Default for FastQCConfig {
@@ -58,7 +63,7 @@ impl Default for FastQCConfig {
             expgroup: false,
             quiet: false,
             kmer_size: 7,
-            threads: 1,
+            threads: None,
             output_dir: None,
             casava: false,
             nano: false,
@@ -76,6 +81,7 @@ impl Default for FastQCConfig {
             png_output: false,
             temp_dir: None,
             template: TemplateName::Classic,
+            decompress_threads: 1,
         }
     }
 }

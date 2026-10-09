@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.0.2dev
+## v1.1.0
 
 > [!NOTE]
 > Tracking: FastQC [v0.13.0](https://github.com/s-andrews/FastQC/releases/tag/v0.13.0)
@@ -17,7 +17,134 @@ Output matches Java FastQC v0.13.0. Many of these changes came from this project
 - Empty input (for example, every read removed by `--min_length`) gives the same output as Java.
 - A warning is printed if the adapter sequences have different lengths.
 
+### Changes
+
+- **Live progress display.** The `Approx N% complete for <file>` lines inherited
+  from Java FastQC are replaced by a rich terminal display: a version banner,
+  then one progress bar per input file (in command-line order) showing that
+  file's own progress, read count and elapsed time. Runs of more than 10 files
+  collapse to a single bar counting completed files. A live Basic Statistics
+  table is drawn underneath whenever the terminal is wide enough for every
+  column to be readable, with a column per file and a row per measure from the
+  top of the report — cells start as `-` and fill in as the analysis proceeds,
+  ending on exactly the values written to the report (both are rendered from the
+  same counters). Each column heading is coloured to match its file's bar:
+  accent while it runs, green once analysed, red if it failed. Built on
+  [indicatif](https://crates.io/crates/indicatif). The display is used only for
+  an interactive stderr: when stderr is a pipe or a log file, or `TERM` is
+  `dumb`/unset, it degrades to one plain line per file at start and finish so
+  pipeline logs stay readable, and `--quiet` still silences everything but
+  warnings and errors. The name and version are printed before the run does anything else,
+  so everything it goes on to say — including complaints about the input files
+  themselves — appears beneath them in the order it happened.
+- **`FASTQC_PROGRESS=auto|always|never`** overrides the display auto-detection
+  in either direction. `always` draws the bars even when stderr is redirected —
+  for recording a demo, or a consumer that re-renders the stream — sizing itself
+  from `COLUMNS`/`LINES`; `never` always takes the plain path. Colour is a
+  separate, independent switch and follows the usual environment conventions:
+  `NO_COLOR` and `CLICOLOR=0` disable it, `CLICOLOR_FORCE=1` forces it on even
+  for a pipe. Because the two are independent, colour off still draws the bars
+  and table, and the plain fallback still colours its lines when colour is
+  forced on, which is what a CI log viewer wants. `--quiet` beats both.
+- **Warnings and errors scroll above the display** as ordinary terminal output,
+  rather than being written into the middle of the bars and erased by the next
+  frame, which is what happened to warnings raised during analysis (a bad
+  quality character, too many tiles, an unreadable nanopore read). The log can
+  then grow without bound, as the log of a long run must, and a blank line
+  separates it from the bars when there is anything to separate. The clamping
+  warning for out-of-range quality characters is also emitted once per run
+  rather than once per base — deduplicated centrally, so it is genuinely once
+  per run rather than once per process however many files are read at a time.
+- **A closing summary**: `Complete. Analysed N files in mm:ss`, counting the
+  files that were analysed successfully and widening to `hh:mm:ss` past an hour.
+  It is the last line of the redrawn region, so it always appears below the bars
+  and the table; `--quiet` suppresses it along with everything else.
+- **Parallel analysis pipeline** for a single file. `-t/--threads` is now a total
+  thread budget spread across files first and then within each file: a reader
+  batches records while worker threads each run a disjoint subset of the QC
+  modules over every sequence. Work is split by module rather than by data, so
+  each module still sees the whole stream in file order on one thread and the
+  output stays **byte-identical** to the single-threaded runner (`-t 1` is
+  unchanged). Modules are balanced across workers by estimated cost so the few
+  expensive ones don't cluster. Combined with parallel gzip decompression, a
+  single large `.fastq.gz` now benefits from extra threads instead of being
+  pinned to one core. Builds on the upstream Java three-stage pipeline
+  ([s-andrews/FastQC#197](https://github.com/s-andrews/FastQC/pull/197)).
+  A single file scales until its one gzip decoder is the limit (36 s on a
+  7.9 GB WES file, flat from `-t 4`); modules can't be split across workers
+  without changing output either, so beyond that extra cores are best spent on
+  more files at once, which scales linearly.
+- **Faster analysis**, byte-identical output: Adapter Content finds all adapters
+  in one SIMD multi-pattern pass per read instead of one search per adapter;
+  Basic Statistics and per-sequence GC count bases with vectorised counters;
+  FASTQ lines are parsed straight into the record buffers. With one analysis
+  thread beside the gzip decoder (`-t 2`), a 7.9 GB WES `.fastq.gz` (M1 Pro)
+  drops from 126 s to 68 s and CPU per file by ~36%; 58 GB of long reads from
+  1273 s to 404 s.
+- **`-t/--threads` is a ceiling on the whole run**, each file's gzip decoder
+  included. Give it and the run stays inside it — `-t 1` decodes and analyses
+  on one thread, which is what a workflow engine passing `task.cpus` needs.
+  `-t 0` is an error. Leave it out and the budget defaults to **the available
+  CPUs, up to 6** — a plain `fastqc sample.fastq.gz` gets the parallel pipeline
+  without being asked, but a big shared machine is not treated as idle just
+  because it is big. (Java FastQC defaults to 1; output is byte-identical
+  whatever the budget.) The thread budget honours cgroup quotas and CPU
+  affinity, so a container or a scheduler-pinned job sees its own allowance,
+  not the host's cores. A single file's returns flatten from about `-t 4`; at
+  most 6 analysis workers run per file, and any budget beyond that is left
+  idle.
+  Inputs whose reports would land on the same path (`run1/S1.fastq.gz` and
+  `run2/S1.fastq.gz` into one `-o`) are warned about and written one at a
+  time, so files analysed together can't interleave into a corrupt zip.
+- **Bounded pipeline memory on long reads.** The analysis pipeline capped its
+  in-flight batches by record count alone, which is a few MB of Illumina reads
+  but gigabytes of nanopore or PacBio ones. Batches are now capped by bytes as
+  well: peak RSS on a 10 kb-read FASTQ at `-t 8` drops from 552 MB to 66 MB, and
+  short-read runs batch exactly as before.
+- **rapidgzip is now the default** (and only) gzip reader, backed by
+  [`rapidgzip-core`](https://crates.io/crates/rapidgzip-core). `.fastq.gz` is
+  decoded on a background thread, overlapped with the analysis, with
+  byte-identical output. One decoder keeps up with the full parallel pipeline;
+  the new `--decompress-threads N` option (default `1`; decoders past the first
+  are not counted in `--threads`) decodes in parallel chunks, but on typical
+  data that costs CPU and memory without speeding the run up. `0` decodes on
+  the reading thread. Named pipes and other non-seekable `.gz` inputs are
+  decoded as a stream.
+- **Removed the flate2/system-zlib gzip path**, the `rapidgzip`/`native-zlib`
+  Cargo features, and the `FASTQC_GZIP_BACKEND` switch. The binary is now pure
+  Rust (zlib-rs) with no C toolchain or system-library dependency, so builds are
+  fully static by default. BAM/BGZF and Fast5 decompression (via
+  `noodles`/`hdf5-pure`) use flate2's pure-Rust zlib-rs backend instead of
+  system zlib: ~10% slower on a BAM at `-t 1` on macOS, where the default
+  `miniz_oxide` backend was ~30% slower. The `zip` dependency is likewise reduced to the `deflate`
+  feature — the only compression method FastQC ever writes or reads — which
+  drops `xz2`/`lzma-sys` and with it the last dynamically linked C library.
+
 ### Bug fixes
+
+- **The progress bar for a `.fastq.gz` no longer runs ahead of the file.** It
+  was driven by the compressed bytes the decoder had read, and rapidgzip's
+  workers read far ahead of the parser: on four cores a 99 MB `.gz` opened at
+  22% and hit 100% halfway through the run, and anything under about 20 MB was
+  pinned at 100% from the first update. Progress now comes from the decompressed
+  bytes handed to the analysis, against a total taken from the gzip trailer
+  (exact for the single-member files `gzip` and `pigz` produce, including past
+  4 GiB) or estimated from the achieved ratio for multi-member and BGZF input.
+  A concatenated `.gz` (`cat L001.gz L002.gz`) is recognised early, rather
+  than reading 100% halfway through.
+- **A file's elapsed time is its own.** Every bar's clock started when the
+  display was built rather than when its file did, so anything queued behind
+  another file counted the wait: a 2,000-read file reported 13.9s next to the
+  400,000-read file it was waiting for, which reported 9.8s. Queued files now
+  sit at zero, with an idle spinner, until they actually start.
+- **A quality byte of 128 or more no longer panics the run.** `Per sequence
+  quality scores` indexed its 128-slot tally with the mean quality directly, so
+  a mis-encoded or non-ASCII quality line aborted the analysis (and, under the
+  parallel pipeline, took a worker thread with it). It clamps and warns once,
+  like the per-position tally next to it. Pre-existing, not new in this release.
+- The live statistics table follows a terminal resized mid-run, rather than
+  staying laid out for the width the run started at.
+- Read counts just short of a unit read as `1.0M` rather than `1000.0k`.
 
 - Use Sanger / Illumina 1.9 encoding for BAM/SAM input instead of inferring it from the lowest quality character ([#6](https://github.com/ewels/FastQC-Rust/issues/6), [#10](https://github.com/ewels/FastQC-Rust/pull/10)). BAM/SAM quality is Phred+33 by specification. Java FastQC v0.13.0 now defaults to Phred+33 for all input, so the only divergence left is that `--phred64` has no effect on BAM/SAM input. The matching Java PR ([s-andrews/FastQC#210](https://github.com/s-andrews/FastQC/pull/210)) was closed as superseded by v0.13.0.
 - Per-base charts (quality, sequence content, N content, adapter, Kmer, length distribution, per-tile) are now `max(800, groups × 15)` px wide, as in Java. Before, they were always 800px, which squashed long-read and `--nogroup` plots.
@@ -32,6 +159,21 @@ Output matches Java FastQC v0.13.0. Many of these changes came from this project
 - New equivalence test cases for mixed read lengths, `--min_length`/`--max_length`, empty input and Phred+64 (26 cases in total).
 - `generate_reference.sh` works with an unpacked upstream release zip. The new `update_svg_patches.py` regenerates the SVG patches.
 - New docs page: [upstream contributions](https://ewels.github.io/FastQC-Rust/about/upstream/).
+
+### Breaking changes for library users
+
+- `FastQCConfig::threads` is now `Option<usize>`; `None` (the default) means
+  "not specified", so the default budget can be worked out from the machine.
+  Pass `Some(n)` where you passed `n`.
+- `FastQCConfig` has a new public field, `decompress_threads`. Struct literals
+  must set it or end in `..FastQCConfig::default()`.
+- `SequenceFileGroup::new` takes a `Vec<FileOpener>` (closures that open each
+  file when its turn comes) instead of opened files, and returns
+  `io::Result<Self>`.
+- `BasicStats::format_length` is now the free function
+  `modules::basic_stats::format_length`. The behaviour is unchanged.
+- The `native-zlib` Cargo feature is gone; depending on it is now a build
+  error.
 
 ## v1.0.1
 

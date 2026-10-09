@@ -1,5 +1,6 @@
 pub mod config;
 pub mod modules;
+pub mod progress;
 pub mod report;
 pub mod runner;
 pub mod sequence;

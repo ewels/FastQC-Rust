@@ -1,15 +1,117 @@
+use std::borrow::Cow;
+use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::sync_channel;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 use rayon::prelude::*;
 
 use crate::config::FastQCConfig;
 use crate::modules;
+use crate::modules::QCModule;
+use crate::progress::{self, FileProgress};
 use crate::report;
 use crate::sequence::casava;
+use crate::sequence::group::FileOpener;
 use crate::sequence::open_sequence_file;
-use crate::sequence::{SequenceFile, SequenceFileGroup};
+use crate::sequence::{Sequence, SequenceFile, SequenceFileGroup};
+
+/// Upper bound on per-file processor threads in the parallel analysis pipeline.
+/// Each processor runs a disjoint subset of the QC modules over every sequence,
+/// so the analysis stays single-threaded per module (no in-module locking,
+/// byte-identical output) while the work is spread across cores.
+///
+/// Wall-clock is bounded by the slower of the file's single gzip decoder and
+/// its heaviest worker, so a few workers already saturate a short-read file.
+/// Splitting a module's work would break byte-identical output; extra cores go
+/// to more files at once.
+const MAX_PROCESSORS_PER_FILE: usize = 6;
+
+/// Number of sequences the reader batches before publishing to the processors.
+/// Matches the Java pipeline's batch size. Large enough to amortise channel and
+/// Arc overhead, small enough to keep the processors fed and memory bounded.
+const BATCH_SIZE: usize = 1024;
+
+/// Thread budget when `-t` is not given: available CPUs up to this cap. A big
+/// shared node isn't idle just because it is big; 6 (decoder, reader and 4
+/// workers) is past where one file stops speeding up, with headroom for slower
+/// cores.
+const DEFAULT_THREADS: usize = 6;
+
+/// Byte ceiling on a single batch, applied alongside [`BATCH_SIZE`].
+///
+/// A record count alone does not bound memory: at [`QUEUE_CAPACITY`] batches of
+/// [`BATCH_SIZE`] records the pipeline holds ~32k records however big they are,
+/// which is a few MB of Illumina reads but gigabytes of long reads, per file
+/// analysed concurrently.
+///
+/// Capping the bytes too holds the pipeline to roughly
+/// `QUEUE_CAPACITY * BATCH_BYTES` per file whatever the read length. Short
+/// reads never reach the cap (1024 x ~250 B is well under it).
+const BATCH_BYTES: usize = 1024 * 1024;
+
+/// Bounded capacity of each processor's batch queue. Provides backpressure so the
+/// reader can run at most this many batches ahead of the slowest processor,
+/// keeping peak memory bounded. Matches the Java pipeline's queue capacity.
+const QUEUE_CAPACITY: usize = 32;
+
+/// How the `-t/--threads` budget and the hardware split across the two axes of
+/// concurrency, computed once per run. See [`plan_threads`].
+struct ThreadPlan {
+    /// Number of file groups analysed in parallel (outer rayon pool width).
+    outer_slots: usize,
+    /// Threads each file group may use: its reader, its gzip decoder if that
+    /// runs in the background, and its analysis workers. See
+    /// [`processors_for`].
+    threads_per_file: usize,
+}
+
+/// Split the `-t/--threads` budget across files.
+///
+/// Files are the cheapest axis to parallelise across (each scales linearly and
+/// needs no coordination), so the budget is spread over files first and
+/// whatever is left builds each file's internal pipeline:
+///
+/// ```text
+/// outer_slots      = min(files, total)
+/// threads_per_file = max(1, total / outer_slots)
+/// ```
+///
+/// A lone large file gets the whole budget as one pipeline; a run with many
+/// files mostly scales out across them.
+///
+/// Without `-t` the budget is the machine's available parallelism, capped at
+/// [`DEFAULT_THREADS`], and is then planned exactly as if it had been given.
+fn plan_threads(
+    requested_threads: Option<usize>,
+    n_files: usize,
+    hw_parallelism: usize,
+) -> ThreadPlan {
+    let total = requested_threads
+        .unwrap_or_else(|| hw_parallelism.min(DEFAULT_THREADS))
+        .max(1);
+    let n_files = n_files.max(1);
+    let outer_slots = n_files.min(total);
+    let threads_per_file = (total / outer_slots).max(1);
+
+    ThreadPlan {
+        outer_slots,
+        threads_per_file,
+    }
+}
+
+/// Analysis workers for a file given its share of the budget: whatever is
+/// left after the reader and a background gzip decoder, up to
+/// [`MAX_PROCESSORS_PER_FILE`]. `0` selects the single-threaded path.
+///
+/// Only the first decoder is counted. More than one is an explicit
+/// `--decompress-threads` request, documented as outside the budget.
+fn processors_for(threads_per_file: usize, background_threads: usize) -> usize {
+    let decoder = background_threads.min(1);
+    MAX_PROCESSORS_PER_FILE.min(threads_per_file.saturating_sub(1 + decoder))
+}
 
 /// A unit of work: one logical sample to process through all QC modules.
 /// Contains a display name and the list of file paths that constitute it.
@@ -27,6 +129,12 @@ struct FileGroup {
 /// Sequence to each module, then writes the report. With --threads, files
 /// are processed in parallel via AnalysisQueue.
 pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
+    // Announce the run before it does anything that might have something to
+    // say, so the banner really is the first line and everything else appears
+    // beneath it. The display itself cannot be drawn until the files have been
+    // grouped, since it needs one bar per group.
+    let progress_plan = progress::ProgressPlan::new(config.quiet);
+
     let limits = config.load_limits().map_err(|e| {
         eprintln!("Failed to load limits: {}", e);
         1
@@ -68,39 +176,84 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
     // Java's OfflineRunner.java lines 103-117 handles this branching.
     let file_groups = build_file_groups(config, &valid_files);
 
-    // Build rayon thread pool matching --threads
-    // Java's AnalysisQueue uses a fixed thread pool of size --threads
+    let ThreadPlan {
+        outer_slots,
+        threads_per_file,
+    } = plan_threads(
+        config.threads,
+        file_groups.len(),
+        crate::utils::available_parallelism(),
+    );
+
+    // With a single thread for the file there is no room for a background
+    // decoder, so gzip is decoded on the reading thread.
+    let config = if threads_per_file == 1 && config.decompress_threads == 1 {
+        Cow::Owned(FastQCConfig {
+            decompress_threads: 0,
+            ..config.clone()
+        })
+    } else {
+        Cow::Borrowed(config)
+    };
+    let config = config.as_ref();
+
+    // Build the outer rayon pool: one slot per file group analysed in parallel.
+    // Each slot drives a per-file pipeline of up to `threads_per_file` threads,
+    // so the total stays inside the -t budget rather than outer_slots alone.
     let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(config.threads)
+        .num_threads(outer_slots)
         .build()
         .map_err(|e| {
             eprintln!("Failed to create thread pool: {}", e);
             1
         })?;
 
-    let failed = AtomicBool::new(something_failed);
+    // The live terminal display: a progress bar per file (or one bar counting
+    // files when there are many), plus a live statistics table for small runs.
+    // It is inert under --quiet and degrades to plain start/finish lines when
+    // stderr is not a terminal, unless FASTQC_PROGRESS says otherwise.
+    let names: Vec<String> = file_groups.iter().map(|g| g.name.clone()).collect();
+    let report_locks = report_locks(config, &file_groups);
+    let progress = progress_plan.start(&names);
 
-    pool.install(|| {
-        file_groups.par_iter().for_each(|group| {
-            if !config.quiet {
-                eprintln!("Started analysis of {}", group.name);
-            }
+    // rayon counts the groups that made it through, so no shared tally is
+    // needed; the ones that did not have already been reported.
+    let analysed = pool.install(|| {
+        file_groups
+            .par_iter()
+            .enumerate()
+            .map(|(index, group)| {
+                let file_progress = progress.file(index);
+                file_progress.start(&group.name);
 
-            match process_group(config, &limits, group) {
-                Ok(()) => {
-                    if !config.quiet {
-                        eprintln!("Analysis complete for {}", group.name);
+                let report_lock = report_locks[index].as_deref();
+                match process_group(
+                    config,
+                    &limits,
+                    group,
+                    threads_per_file,
+                    report_lock,
+                    file_progress,
+                ) {
+                    Ok(reads) => {
+                        file_progress.finish(&group.name, reads);
+                        true
+                    }
+                    Err(e) => {
+                        file_progress.fail();
+                        progress.error(&format!("Failed to process {}: {}", group.name, e));
+                        false
                     }
                 }
-                Err(e) => {
-                    eprintln!("Failed to process {}: {}", group.name, e);
-                    failed.store(true, Ordering::Relaxed);
-                }
-            }
-        });
+            })
+            .filter(|&analysed| analysed)
+            .count()
     });
 
-    if failed.load(Ordering::Relaxed) {
+    let failed = something_failed || analysed != file_groups.len();
+    progress.finish(analysed, failed);
+
+    if failed {
         Err(1)
     } else {
         Ok(())
@@ -140,29 +293,96 @@ fn build_file_groups(config: &FastQCConfig, files: &[PathBuf]) -> Vec<FileGroup>
     }
 }
 
-/// Process a file group (one or more files) through all QC modules and generate reports.
+/// Where a group's reports go: the output directory (`-o`, else beside the
+/// group's first file) and the base name the `_fastqc.html` / `_fastqc.zip`
+/// suffixes are added to, taken from the group's display name.
+fn report_location(config: &FastQCConfig, group: &FileGroup) -> (PathBuf, String) {
+    let base_name = strip_extensions(&group.name.replace("stdin:", ""));
+    let output_dir = config.output_dir.clone().unwrap_or_else(|| {
+        group
+            .files
+            .first()
+            .and_then(|f| f.parent())
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or(Path::new("."))
+            .to_path_buf()
+    });
+    (output_dir, base_name)
+}
+
+/// A shared lock per set of groups whose reports land on the same path
+/// (`run1/S1.fastq.gz` and `run2/S1.fastq.gz` into one `-o`), so concurrent
+/// writers take turns instead of corrupting the zip.
+fn report_locks(config: &FastQCConfig, groups: &[FileGroup]) -> Vec<Option<Arc<Mutex<()>>>> {
+    let mut by_location: HashMap<PathBuf, Vec<usize>> = HashMap::new();
+    for (index, group) in groups.iter().enumerate() {
+        let (dir, base) = report_location(config, group);
+        // `run1` and `./run1` are the same directory but unequal paths.
+        let dir = dir.canonicalize().unwrap_or(dir);
+        by_location.entry(dir.join(base)).or_default().push(index);
+    }
+
+    let mut locks = vec![None; groups.len()];
+    let mut collisions: Vec<(PathBuf, Vec<usize>)> = by_location
+        .into_iter()
+        .filter(|(_, indices)| indices.len() > 1)
+        .collect();
+    collisions.sort_by_key(|(_, indices)| indices[0]);
+    for (location, indices) in collisions {
+        let inputs: Vec<String> = indices
+            .iter()
+            .map(|&i| match groups[i].files.as_slice() {
+                [path] => path.display().to_string(),
+                _ => groups[i].name.clone(),
+            })
+            .collect();
+        progress::log_line(&format!(
+            "Warning: {} all write the same report, {}_fastqc.{{html,zip}}; only one will be kept",
+            inputs.join(", "),
+            location.display()
+        ));
+        let lock = Arc::new(Mutex::new(()));
+        for index in indices {
+            locks[index] = Some(Arc::clone(&lock));
+        }
+    }
+    locks
+}
+
+/// Open each file of `group` for reading, as one stream.
 ///
 /// When a group has multiple files (CASAVA), they are combined
 /// into a SequenceFileGroup that reads them sequentially as one logical sample.
+fn open_group(config: &FastQCConfig, group: &FileGroup) -> io::Result<Box<dyn SequenceFile>> {
+    if let [path] = group.files.as_slice() {
+        // Uses format detection logic from SequenceFactory.java
+        return open_sequence_file(config, path);
+    }
+    let openers = group
+        .files
+        .iter()
+        .map(|path| {
+            let config = config.clone();
+            let path = path.clone();
+            Box::new(move || open_sequence_file(&config, &path)) as FileOpener
+        })
+        .collect();
+    Ok(Box::new(SequenceFileGroup::new(
+        group.name.clone(),
+        openers,
+    )?))
+}
+
+/// Process a file group (one or more files) through all QC modules and generate reports.
 fn process_group(
     config: &FastQCConfig,
     limits: &crate::config::Limits,
     group: &FileGroup,
-) -> io::Result<()> {
-    // Open the sequence file(s)
-    let mut seq_file: Box<dyn SequenceFile> = if group.files.len() == 1 {
-        // Single file - open directly
-        // Uses format detection logic from SequenceFactory.java
-        open_sequence_file(config, &group.files[0])?
-    } else {
-        // Multiple files in a CASAVA group - wrap them in a
-        // SequenceFileGroup that reads all files sequentially as one stream.
-        let mut readers: Vec<Box<dyn SequenceFile>> = Vec::new();
-        for path in &group.files {
-            readers.push(open_sequence_file(config, path)?);
-        }
-        Box::new(SequenceFileGroup::new(group.name.clone(), readers))
-    };
+    threads_per_file: usize,
+    report_lock: Option<&Mutex<()>>,
+    file_progress: FileProgress<'_>,
+) -> io::Result<u64> {
+    let mut seq_file = open_group(config, group)?;
 
     let file_display_name = group.name.clone();
 
@@ -185,68 +405,51 @@ fn process_group(
         }
     }
 
-    // Process all sequences through all modules
-    // Matches AnalysisRunner.java:64-126
-    let mut sequence_count: u64 = 0;
-    let mut last_percent: i32 = -1;
-
-    loop {
-        match seq_file.next() {
-            Some(Ok(seq)) => {
-                sequence_count += 1;
-
-                let len = seq.sequence.len();
-                if len < config.min_length || (config.max_length > 0 && len > config.max_length) {
-                    continue;
-                }
-
-                for module in modules.iter_mut() {
-                    // Skip filtered sequences for modules that request it
-                    if seq.is_filtered && module.ignore_filtered_sequences() {
-                        continue;
-                    }
-                    module.process_sequence(&seq);
-                }
-
-                // Progress reporting every 5%
-                if !config.quiet && sequence_count.is_multiple_of(1000) {
-                    let percent = seq_file.percent_complete() as i32;
-                    if percent != last_percent && percent % 5 == 0 {
-                        eprintln!("Approx {}% complete for {}", percent, file_display_name);
-                        last_percent = percent;
-                    }
-                }
-            }
-            Some(Err(e)) => {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, e));
-            }
-            None => break, // EOF
+    // If the terminal display is showing a live statistics table, give
+    // BasicStats somewhere to publish its running counters. Only BasicStats
+    // acts on this; nothing about the analysis changes.
+    if let Some(live) = file_progress.live_stats() {
+        for module in modules.iter_mut() {
+            module.attach_live_stats(Arc::clone(&live));
         }
     }
+
+    // Feed every sequence through all modules. With a budget of one thread we
+    // take the original single-threaded path (byte-identical, no pipeline
+    // overhead); otherwise a reader thread batches records and hands them to
+    // worker threads that each own a disjoint subset of the modules. Either way
+    // each module sees every sequence exactly once, in file order, on a single
+    // thread, so the accumulated state -- and the resulting report -- is
+    // identical regardless of the thread budget.
+    //
+    // There is no point in more workers than there are modules, so cap the
+    // worker count by the number of active modules.
+    let num_processors =
+        processors_for(threads_per_file, seq_file.background_threads()).min(modules.len());
+    let read_count = if num_processors == 0 {
+        process_sequences_sequential(config, seq_file.as_mut(), &mut modules, file_progress)?
+    } else {
+        let (rebuilt, count) = process_sequences_parallel(
+            config,
+            seq_file.as_mut(),
+            modules,
+            num_processors,
+            file_progress,
+        )?;
+        modules = rebuilt;
+        count
+    };
+
+    // Reading is done; the remaining work (chart rendering, HTML, zip) is not
+    // measured as a fraction of the file, so the bar switches to a stage label.
+    file_progress.stage("report");
 
     // Finalize all modules (lazy computation)
     for module in modules.iter_mut() {
         module.finalize();
     }
 
-    // Generate output filename
-    // For CASAVA groups, the display name is used as the base for
-    // output files. For single files, it's the filename.
-    // Strip extensions in order: .gz, .bz2, .txt, .fastq, .fq, .csfastq, .sam, .bam, .ubam
-    let base_name = strip_extensions(&file_display_name.replace("stdin:", ""));
-
-    // For output directory, use --outdir if specified, otherwise
-    // use the parent directory of the first file in the group.
-    let output_dir = if let Some(ref dir) = config.output_dir {
-        dir.clone()
-    } else {
-        group
-            .files
-            .first()
-            .and_then(|f| f.parent())
-            .unwrap_or_else(|| Path::new("."))
-            .to_path_buf()
-    };
+    let (output_dir, base_name) = report_location(config, group);
 
     // The Java code creates files at:
     //   {output_dir}/{base_name}_fastqc.html  (standalone HTML)
@@ -261,6 +464,8 @@ fn process_group(
         config.template,
         config.png_output,
     )?;
+
+    let _turn = report_lock.map(|lock| lock.lock().unwrap_or_else(|e| e.into_inner()));
 
     // Write standalone HTML file
     // The Java code writes the HTML via PrintWriter after creating the zip
@@ -289,7 +494,243 @@ fn process_group(
         }
     }
 
-    Ok(())
+    Ok(read_count)
+}
+
+/// Feed one sequence to one module, honouring the module's request to skip
+/// sequences flagged as filtered. Shared by the sequential and parallel paths so
+/// the filtered-skip rule lives in one place.
+#[inline]
+fn feed_module(module: &mut dyn QCModule, seq: &Sequence) {
+    if seq.is_filtered && module.ignore_filtered_sequences() {
+        return;
+    }
+    module.process_sequence(seq);
+}
+
+/// `--min_length`/`--max_length` discard reads before any module sees them.
+fn passes_length_filter(config: &FastQCConfig, seq: &Sequence) -> bool {
+    let len = seq.sequence.len();
+    len >= config.min_length && (config.max_length == 0 || len <= config.max_length)
+}
+
+/// How many records to read between updates of the terminal progress display.
+/// The display throttles its own redraws, so this only needs to be frequent
+/// enough that the bars look smooth.
+const PROGRESS_INTERVAL: u64 = 1000;
+
+/// Single-threaded analysis path: read each sequence and feed it to every module
+/// in order. Used when the file has no thread to spare for workers
+/// (AnalysisRunner.runSequential in the Java pipeline).
+///
+/// Returns the number of records read.
+fn process_sequences_sequential(
+    config: &FastQCConfig,
+    seq_file: &mut dyn SequenceFile,
+    modules: &mut [Box<dyn QCModule>],
+    file_progress: FileProgress<'_>,
+) -> io::Result<u64> {
+    let mut sequence_count: u64 = 0;
+
+    loop {
+        match seq_file.next() {
+            Some(Ok(seq)) => {
+                sequence_count += 1;
+
+                if passes_length_filter(config, &seq) {
+                    for module in modules.iter_mut() {
+                        feed_module(module.as_mut(), &seq);
+                    }
+                }
+
+                if sequence_count.is_multiple_of(PROGRESS_INTERVAL) {
+                    file_progress.update(sequence_count, || seq_file.percent_complete());
+                }
+            }
+            Some(Err(e)) => {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, e));
+            }
+            None => break, // EOF
+        }
+    }
+
+    Ok(sequence_count)
+}
+
+/// Partition the modules across `num_workers` groups to balance their estimated
+/// cost, using the classic longest-processing-time (LPT) greedy: take modules
+/// heaviest-first (by [`QCModule::cost_hint`]) and drop each onto the currently
+/// lightest group. This keeps the few expensive modules (per-base quality and
+/// content, adapter, ...) on separate workers rather than piling two onto one,
+/// which is what bounds the makespan of the pipeline. Each module is tagged
+/// with its original index so report order can be restored afterwards; the
+/// assignment never changes results, only how evenly the work is spread. Pure
+/// and deterministic (ties break to the lowest group index).
+///
+/// This is free to place any module on any worker *because every module's
+/// per-sequence processing is independent* — a module accumulates only into
+/// its own state as it sees the stream in file order. The one pair that shares
+/// state, DuplicationLevel and OverRepresentedSeqs (via an `Arc<Mutex<_>>`), is
+/// safe because only OverRepresentedSeqs writes per sequence; DuplicationLevel
+/// reads that shared data once at finalize, after all workers have joined. If a
+/// future change makes two modules write shared state per sequence, they can no
+/// longer be split blindly and must be co-located on one worker instead (see
+/// the note on `DuplicationLevel::process_sequence`).
+fn partition_modules_by_cost(
+    modules: Vec<Box<dyn QCModule>>,
+    num_workers: usize,
+) -> Vec<Vec<(usize, Box<dyn QCModule>)>> {
+    // A hard assert, not a debug one: every index below assumes a group exists,
+    // so a zero here is an out-of-bounds panic in release rather than a
+    // diagnosable one. The sequential path handles the no-worker case.
+    assert!(num_workers > 0, "partition needs at least one worker");
+
+    let mut order: Vec<(usize, Box<dyn QCModule>)> = modules.into_iter().enumerate().collect();
+    order.sort_by_key(|entry| std::cmp::Reverse(entry.1.cost_hint()));
+
+    let mut groups: Vec<Vec<(usize, Box<dyn QCModule>)>> =
+        (0..num_workers).map(|_| Vec::new()).collect();
+    let mut loads = vec![0u64; num_workers];
+    for (idx, module) in order {
+        // Drop onto the currently lightest group; ties break to the lowest index.
+        let target = (0..num_workers).min_by_key(|&i| loads[i]).unwrap_or(0);
+        loads[target] += module.cost_hint() as u64;
+        groups[target].push((idx, module));
+    }
+    groups
+}
+
+/// Multi-threaded analysis path: a reader on the calling thread batches sequences
+/// and publishes each batch to `num_processors` worker threads, each of which owns
+/// a disjoint subset of the modules and runs them over every sequence.
+///
+/// This is a Rust port of the upstream Java three-stage pipeline
+/// (AnalysisRunner.runParallel). The key property is that the work is split *by
+/// module*, not by data: every module still sees the entire sequence stream, in
+/// file order, on a single thread, so no module needs merge logic and the output
+/// is byte-identical to the sequential path. The parallelism comes from running
+/// different modules concurrently, and from overlapping analysis with the reader
+/// (which drives decompression and record parsing).
+///
+/// Modules are distributed across workers by longest-processing-time bin-packing
+/// (see the partition below) so the few expensive modules land on different
+/// workers, giving an even load balance. Ownership of each module is returned
+/// to the caller in the original order for finalisation and reporting.
+///
+/// Returns the modules in report order along with the number of records read.
+fn process_sequences_parallel(
+    config: &FastQCConfig,
+    seq_file: &mut dyn SequenceFile,
+    modules: Vec<Box<dyn QCModule>>,
+    num_processors: usize,
+    file_progress: FileProgress<'_>,
+) -> io::Result<(Vec<Box<dyn QCModule>>, u64)> {
+    let groups = partition_modules_by_cost(modules, num_processors);
+
+    // One bounded queue per worker. The reader publishes the same Arc-shared
+    // batch to every queue; workers only read from the sequences, never mutate
+    // them, so sharing is safe. Bounded capacity gives backpressure so the
+    // reader runs at most QUEUE_CAPACITY batches ahead of the slowest worker.
+    let (senders, receivers): (Vec<_>, Vec<_>) = (0..num_processors)
+        .map(|_| sync_channel::<Arc<Vec<Sequence>>>(QUEUE_CAPACITY))
+        .unzip();
+
+    let mut reader_error: Option<io::Error> = None;
+    let mut sequence_count: u64 = 0;
+
+    // thread::scope lets the workers borrow from this stack frame and guarantees
+    // they are all joined before the scope returns.
+    let processed: Vec<Vec<(usize, Box<dyn QCModule>)>> = thread::scope(|scope| {
+        let handles: Vec<_> = groups
+            .into_iter()
+            .zip(receivers)
+            .map(|(mut group, rx)| {
+                scope.spawn(move || {
+                    // Drain batches until the reader drops its senders (EOF) or
+                    // an error closes the channel.
+                    while let Ok(batch) = rx.recv() {
+                        for seq in batch.iter() {
+                            for (_, module) in group.iter_mut() {
+                                feed_module(module.as_mut(), seq);
+                            }
+                        }
+                    }
+                    group
+                })
+            })
+            .collect();
+
+        // Reader loop runs on the calling thread: pull records, fill a batch,
+        // and publish it to every worker queue. A batch is published once it is
+        // full by either measure -- record count or bytes; see [`BATCH_BYTES`]
+        // for why a count alone is not enough.
+        let mut batch: Vec<Sequence> = Vec::with_capacity(BATCH_SIZE);
+        let mut batch_bytes = 0usize;
+        'read: loop {
+            match seq_file.next() {
+                Some(Ok(seq)) => {
+                    sequence_count += 1;
+                    // Counted on records read, not batches published, so the
+                    // bar still moves when the length filter rejects most reads.
+                    if sequence_count.is_multiple_of(PROGRESS_INTERVAL) {
+                        file_progress.update(sequence_count, || seq_file.percent_complete());
+                    }
+                    if !passes_length_filter(config, &seq) {
+                        continue;
+                    }
+                    batch_bytes += seq.heap_bytes();
+                    batch.push(seq);
+                    if batch.len() == BATCH_SIZE || batch_bytes >= BATCH_BYTES {
+                        let full = std::mem::replace(&mut batch, Vec::with_capacity(BATCH_SIZE));
+                        batch_bytes = 0;
+                        let shared = Arc::new(full);
+                        for tx in &senders {
+                            // A send error means a worker panicked and dropped
+                            // its receiver; stop reading so we don't deadlock on
+                            // a full queue, and surface the panic via join below.
+                            if tx.send(Arc::clone(&shared)).is_err() {
+                                break 'read;
+                            }
+                        }
+                    }
+                }
+                Some(Err(e)) => {
+                    reader_error = Some(io::Error::new(io::ErrorKind::InvalidData, e));
+                    break;
+                }
+                None => break, // EOF
+            }
+        }
+
+        // Publish the final partial batch (unless a read error aborted the run).
+        if reader_error.is_none() && !batch.is_empty() {
+            let shared = Arc::new(batch);
+            for tx in &senders {
+                let _ = tx.send(Arc::clone(&shared));
+            }
+        }
+
+        // Dropping the senders signals EOF; workers exit their recv loop and
+        // return their (now fully-processed) module group.
+        drop(senders);
+
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("analysis worker thread panicked"))
+            .collect()
+    });
+
+    if let Some(e) = reader_error {
+        return Err(e);
+    }
+
+    // Reassemble the modules in their original report order.
+    let mut rebuilt: Vec<(usize, Box<dyn QCModule>)> = processed.into_iter().flatten().collect();
+    rebuilt.sort_by_key(|(idx, _)| *idx);
+    Ok((
+        rebuilt.into_iter().map(|(_, module)| module).collect(),
+        sequence_count,
+    ))
 }
 
 /// Strip known sequencing file extensions from a filename.
@@ -338,6 +779,288 @@ fn find_fast5_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> io::Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::modules::ModuleStatus;
+
+    /// An in-memory SequenceFile that replays a fixed list of sequences, so the
+    /// analysis paths can be exercised without touching the filesystem.
+    struct MockSeqFile {
+        seqs: Vec<Sequence>,
+        pos: usize,
+    }
+
+    impl SequenceFile for MockSeqFile {
+        fn next(&mut self) -> Option<io::Result<Sequence>> {
+            if self.pos < self.seqs.len() {
+                let s = self.seqs[self.pos].clone();
+                self.pos += 1;
+                Some(Ok(s))
+            } else {
+                None
+            }
+        }
+        fn name(&self) -> &str {
+            "mock.fastq"
+        }
+        fn is_colorspace(&self) -> bool {
+            false
+        }
+        fn percent_complete(&self) -> f64 {
+            if self.seqs.is_empty() {
+                100.0
+            } else {
+                (self.pos as f64 / self.seqs.len() as f64) * 100.0
+            }
+        }
+    }
+
+    /// Build a deterministic but varied set of sequences: a rotating base
+    /// pattern, a recurring adapter-like motif, and a handful of exact
+    /// duplicates, so the quality, content, adapter, overrepresented and
+    /// duplication modules all have something non-trivial to accumulate.
+    fn make_test_sequences(count: usize, len: usize) -> Vec<Sequence> {
+        let alphabet = b"ACGTACGTGGCCATN";
+        let adapter = b"AGATCGGAAGAGC";
+        let mut seqs = Vec::with_capacity(count);
+        for i in 0..count {
+            let mut bases = vec![0u8; len];
+            for (p, b) in bases.iter_mut().enumerate() {
+                *b = alphabet[(i * 7 + p * 3) % alphabet.len()];
+            }
+            // Splice an adapter motif near the 3' end of every 12th read.
+            if i % 12 == 0 && len > adapter.len() + 5 {
+                let start = len - adapter.len() - (i % 5);
+                bases[start..start + adapter.len()].copy_from_slice(adapter);
+            }
+            // Force some exact duplicates for the overrepresented/duplication path.
+            if i % 50 == 0 {
+                for (p, b) in bases.iter_mut().enumerate() {
+                    *b = b"ACGT"[p % 4];
+                }
+            }
+            // Quality declines toward the 3' end, clamped to a valid range.
+            let quality: Vec<u8> = (0..len)
+                .map(|p| {
+                    let q = 40i32 - (18 * p as i32) / len as i32;
+                    33 + q.clamp(2, 40) as u8
+                })
+                .collect();
+            seqs.push(Sequence::new(format!("READ{}", i), bases, quality));
+        }
+        seqs
+    }
+
+    /// The cost-balanced partition must keep the few expensive modules on
+    /// separate workers and place every module exactly once (preserving its
+    /// original index), whatever the worker count.
+    #[test]
+    fn test_partition_keeps_heavy_modules_apart() {
+        let config = FastQCConfig::default();
+        let limits = config.load_limits().expect("load limits");
+        let modules = modules::create_modules(&config, &limits);
+        let n = modules.len();
+        let groups = partition_modules_by_cost(modules, 3);
+
+        // The three heaviest modules by cost_hint (per-base quality, per-base
+        // sequence content, Adapter Content) must land on different workers.
+        let worker_of = |name: &str| {
+            groups
+                .iter()
+                .position(|g| g.iter().any(|(_, m)| m.name() == name))
+                .unwrap_or_else(|| panic!("{name} not placed"))
+        };
+        let heavy = [
+            worker_of("Per base sequence quality"),
+            worker_of("Per base sequence content"),
+            worker_of("Adapter Content"),
+        ];
+        assert!(
+            heavy[0] != heavy[1] && heavy[0] != heavy[2] && heavy[1] != heavy[2],
+            "the three heaviest modules should land on different workers: {heavy:?}"
+        );
+
+        // Every module is placed exactly once, with original indices preserved.
+        let mut indices: Vec<usize> = groups
+            .iter()
+            .flat_map(|g| g.iter().map(|(i, _)| *i))
+            .collect();
+        indices.sort_unstable();
+        assert_eq!(indices, (0..n).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_plan_threads_unspecified() {
+        // A lone file on a big machine gets the capped default budget.
+        let p = plan_threads(None, 1, 128);
+        assert_eq!((p.outer_slots, p.threads_per_file), (1, DEFAULT_THREADS));
+
+        // A single-core machine gets one thread.
+        let p = plan_threads(None, 1, 1);
+        assert_eq!((p.outer_slots, p.threads_per_file), (1, 1));
+
+        // Degenerate zeros must not divide by zero and must stay >= 1.
+        let p = plan_threads(None, 0, 0);
+        assert_eq!((p.outer_slots, p.threads_per_file), (1, 1));
+    }
+
+    /// An explicit `-t` bounds the whole run: every file's reader, background
+    /// decoder and workers together.
+    #[test]
+    fn test_plan_threads_explicit_budget() {
+        for total in 1..=64usize {
+            for n_files in 1..=8usize {
+                let p = plan_threads(Some(total), n_files, 64);
+                for decoder in [0, 1] {
+                    // A one-thread file decodes on its reader, never beside it.
+                    let decoder = if p.threads_per_file == 1 { 0 } else { decoder };
+                    let per_file = 1 + decoder + processors_for(p.threads_per_file, decoder);
+                    let used = p.outer_slots * per_file;
+                    assert!(
+                        used <= total,
+                        "-t {total} over {n_files} files used {used} threads"
+                    );
+                }
+            }
+        }
+
+        // More files than threads: scale out across files, one thread each.
+        let p = plan_threads(Some(4), 10, 8);
+        assert_eq!((p.outer_slots, p.threads_per_file), (4, 1));
+
+        // Budget divides evenly across two files.
+        let p = plan_threads(Some(8), 2, 16);
+        assert_eq!((p.outer_slots, p.threads_per_file), (2, 4));
+
+        // Asking for more than the machine has is still honoured -- it was an
+        // explicit request, not an inference.
+        let p = plan_threads(Some(32), 1, 4);
+        assert_eq!(p.threads_per_file, 32);
+    }
+
+    #[test]
+    fn test_processors_for() {
+        // The decoder takes a slot when it runs in the background...
+        assert_eq!(processors_for(4, 1), 2);
+        assert_eq!(processors_for(2, 1), 0);
+        // ...and not when there is none.
+        assert_eq!(processors_for(4, 0), 3);
+        assert_eq!(processors_for(1, 0), 0);
+        // Extra decoders are outside the budget.
+        assert_eq!(processors_for(4, 8), 2);
+        // A big budget saturates at the per-file maximum.
+        assert_eq!(processors_for(64, 1), MAX_PROCESSORS_PER_FILE);
+    }
+
+    /// Groups whose reports would overwrite each other share a lock; the rest
+    /// get none.
+    #[test]
+    fn test_report_locks_pair_colliding_groups() {
+        let config = FastQCConfig {
+            output_dir: Some(PathBuf::from("qc")),
+            ..FastQCConfig::default()
+        };
+        let groups = build_file_groups(
+            &config,
+            &[
+                PathBuf::from("run1/S1.fastq.gz"),
+                PathBuf::from("run1/S2.fastq.gz"),
+                PathBuf::from("run2/S1.fastq.gz"),
+            ],
+        );
+        let locks = report_locks(&config, &groups);
+        assert!(locks[1].is_none());
+        let (a, b) = (locks[0].as_ref().unwrap(), locks[2].as_ref().unwrap());
+        assert!(Arc::ptr_eq(a, b));
+
+        // Without -o each report goes beside its input, so nothing collides.
+        let config = FastQCConfig::default();
+        let groups = build_file_groups(
+            &config,
+            &[
+                PathBuf::from("run1/S1.fastq.gz"),
+                PathBuf::from("run2/S1.fastq.gz"),
+            ],
+        );
+        assert!(report_locks(&config, &groups).iter().all(Option::is_none));
+    }
+
+    /// The parallel analysis pipeline must produce output that is byte-identical
+    /// to the single-threaded path for every module, across a range of processor
+    /// counts (which change how modules are distributed across worker threads).
+    #[test]
+    fn test_parallel_matches_sequential() {
+        let config = FastQCConfig::default();
+        let limits = config.load_limits().expect("load limits");
+        let seqs = make_test_sequences(4000, 100);
+
+        // Reference: single-threaded path.
+        let mut mods_seq = modules::create_modules(&config, &limits);
+        for m in mods_seq.iter_mut() {
+            m.set_filename("mock.fastq");
+        }
+        let reporter = progress::ProgressReporter::hidden();
+        let mut seq_file = MockSeqFile {
+            seqs: seqs.clone(),
+            pos: 0,
+        };
+        let sequential_reads =
+            process_sequences_sequential(&config, &mut seq_file, &mut mods_seq, reporter.file(0))
+                .expect("sequential run");
+        assert_eq!(sequential_reads, seqs.len() as u64);
+        for m in mods_seq.iter_mut() {
+            m.finalize();
+        }
+        let reference: Vec<(String, Vec<u8>, ModuleStatus)> = mods_seq
+            .iter()
+            .map(|m| {
+                let mut buf = Vec::new();
+                m.write_text_report(&mut buf).expect("text report");
+                (m.name().to_string(), buf, m.status())
+            })
+            .collect();
+
+        for num_processors in 1..=MAX_PROCESSORS_PER_FILE {
+            let mut mods_par = modules::create_modules(&config, &limits);
+            for m in mods_par.iter_mut() {
+                m.set_filename("mock.fastq");
+            }
+            let mut seq_file = MockSeqFile {
+                seqs: seqs.clone(),
+                pos: 0,
+            };
+            let (mut mods_par, parallel_reads) = process_sequences_parallel(
+                &config,
+                &mut seq_file,
+                mods_par,
+                num_processors,
+                reporter.file(0),
+            )
+            .expect("parallel run");
+            assert_eq!(parallel_reads, sequential_reads);
+            for m in mods_par.iter_mut() {
+                m.finalize();
+            }
+
+            assert_eq!(mods_par.len(), reference.len());
+            for (module, (name, ref_text, ref_status)) in mods_par.iter().zip(&reference) {
+                // Module order must be preserved after the cost-balanced split.
+                assert_eq!(module.name(), name, "module order changed");
+                let mut buf = Vec::new();
+                module.write_text_report(&mut buf).expect("text report");
+                assert_eq!(
+                    &buf, ref_text,
+                    "module `{}` text report differs with {} processor(s)",
+                    name, num_processors
+                );
+                assert_eq!(
+                    module.status(),
+                    *ref_status,
+                    "module `{}` status differs with {} processor(s)",
+                    name,
+                    num_processors
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_strip_extensions() {
