@@ -349,7 +349,7 @@ fn test_zip_archive_structure() {
     let archive = zip::ZipArchive::new(file).expect("Failed to read zip");
 
     let names: Vec<String> = (0..archive.len())
-        .map(|i| archive.name_for_index(i).unwrap().to_string())
+        .map(|i| archive.name_for_index(i).unwrap().unwrap().to_string())
         .collect();
 
     assert!(

@@ -39,7 +39,7 @@ bzip2-rs = "0.1"
 noodles = { version = "0.88", features = ["bam", "sam", "bgzf"] }
 # No default features: they pull in xz2 -> lzma-sys, which needs a C toolchain.
 # `time` stamps entries with the current time instead of 1980-01-01.
-zip = { version = "2", default-features = false, features = ["deflate", "time"] }
+zip = { version = "9", default-features = false, features = ["deflate", "time"] }
 rayon = "1"
 base64 = "0.22"
 chrono = "0.4"
