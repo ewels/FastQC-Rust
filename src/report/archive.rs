@@ -173,7 +173,14 @@ pub fn extract_zip(zip_path: &Path) -> io::Result<()> {
 
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(zip_err)?;
-        let out_path = parent.join(entry.name());
+        // enclosed_name() rejects absolute paths and parent-directory escapes;
+        // name() is documented as unsafe to join during extraction.
+        let Some(name) = entry.enclosed_name() else {
+            return Err(io::Error::other(format!(
+                "zip entry {i} has a path that escapes the output directory"
+            )));
+        };
+        let out_path = parent.join(name);
 
         if entry.is_dir() {
             // Create directory if it doesn't exist, skip if it does
