@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1.1
+
+> [!NOTE]
+> Tracking: FastQC [v0.13.0](https://github.com/s-andrews/FastQC/releases/tag/v0.13.0)
+
+### Dependencies
+
+- Bump `zip` to v9 to clear RUSTSEC-2026-0367, -0368 and -0369. FastQC-Rust never called the affected functions, but the advisories were flagged for any crate depending on `fastqc-rust`. Report output is unchanged. ([#14](https://github.com/ewels/FastQC-Rust/pull/14))
+- Zip extraction now uses `enclosed_name()`, which rejects absolute paths and `..` entries.
+
 ## v1.1.0
 
 > [!NOTE]
