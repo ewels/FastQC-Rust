@@ -10,6 +10,7 @@ use std::sync::LazyLock;
 use chrono::Local;
 
 use crate::modules::{ModuleStatus, QCModule};
+use crate::report::charts::xml_escape;
 use crate::report::html::{format_java_date, write_chart_svg, write_default_html_table};
 use crate::report::templates::ReportTemplate;
 use crate::VERSION;
@@ -115,12 +116,16 @@ impl ReportTemplate for ModernTemplate {
             module_content.push_str(&wrapped);
         }
 
+        // The filename is user input. Escaping `{` too stops a name like
+        // `{{CSS_CONTENT}}` being expanded by the replacements after it.
+        let filename = xml_escape(filename).replace('{', "&#123;");
+
         // Assemble the full HTML
         let html = REPORT_TEMPLATE
             .replace("{{TITLE}}", &format!("{} FastQC Report", filename))
             .replace("{{CSS_CONTENT}}", CSS)
             .replace("{{DATE}}", &date_str)
-            .replace("{{FILENAME}}", filename)
+            .replace("{{FILENAME}}", &filename)
             .replace("{{VERSION}}", VERSION)
             .replace(
                 "{{FASTQC_ICON_SVG_MOBILE}}",
@@ -316,6 +321,17 @@ mod tests {
         let result = make_svg_ids_unique(svg, "mobile");
         assert!(result.contains("id=\"grad1_mobile\""));
         assert!(result.contains("url(#grad1_mobile)"));
+    }
+
+    #[test]
+    fn test_filename_is_escaped() {
+        let mut out = Vec::new();
+        ModernTemplate
+            .write_html_report(&[], "a<img onerror=x>{{CSS_CONTENT}}.fq", &mut out)
+            .unwrap();
+        let html = String::from_utf8(out).unwrap();
+        assert!(!html.contains("<img onerror"));
+        assert!(html.contains("a&lt;img onerror=x&gt;&#123;&#123;CSS_CONTENT}}.fq"));
     }
 
     #[test]
