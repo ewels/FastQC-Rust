@@ -17,73 +17,24 @@
 //! ```
 //!
 //! The bars, the table and the closing summary are a redrawn region pinned to
-//! the bottom of the terminal. The name and version, and any warning or error,
-//! are ordinary log lines that scroll up above it.
+//! the bottom of the terminal; the banner, warnings and errors are ordinary log
+//! lines that scroll up above it.
 //!
-//! The display adapts to the size of the run:
+//! * 1-10 files get a bar each; more collapse to one bar counting files.
+//! * The live table of Basic Statistics measures is drawn whenever every column
+//!   fits. Its final values are the report's, rendered from the same counters
+//!   ([`crate::modules::basic_stats::BasicStatsCounters::rows`]).
 //!
-//! * **1-10 files** get a progress bar each, in the order given on the command
-//!   line, showing that file's own progress.
-//! * **More than 10 files** collapse to a single bar counting completed files,
-//!   because a screenful of bars is worse than no bars at all.
-//! * **A live statistics table** is drawn underneath whenever the terminal is
-//!   wide enough for every column to be readable — so a wide terminal gets it
-//!   for more files, and a narrow one does without. Its columns are the files
-//!   and its rows the Basic Statistics measures from the top of the HTML
-//!   report. Cells start as `-` and fill in as the analysis runs; the final
-//!   values are exactly those in the report, because both are rendered from the
-//!   same counters (see
-//!   [`crate::modules::basic_stats::BasicStatsCounters::rows`]).
+//! Animation (`FASTQC_PROGRESS=auto|always|never`) and colour
+//! ([`console::colors_enabled_stderr`], plus `NO_COLOR`) are independent and
+//! auto-detected; `--quiet` beats both. `auto` animates only an interactive,
+//! non-`dumb` stderr and otherwise prints one plain line per file at start and
+//! finish. `always` draws anyway, sized from `COLUMNS`/`LINES`.
 //!
-//! # Animation and colour
-//!
-//! These are two independent switches, each auto-detected and each overridable
-//! through the environment — there are no command-line flags for them.
-//! `--quiet` beats both and says nothing but warnings and errors.
-//!
-//! **Animation** (`FASTQC_PROGRESS=auto|always|never`) — the default `auto`
-//! draws the display only for an interactive stderr. When stderr is a pipe, a
-//! log file or a workflow engine's capture, or when `TERM` says the terminal
-//! cannot handle a redrawn region (`dumb`, or unset on Unix), a redrawn region
-//! would be noise or outright corruption, so the reporter degrades to one plain
-//! line per file at start and finish. `always` draws it regardless — for
-//! recording a demo, or feeding a consumer that re-renders the stream — by
-//! handing indicatif the terminal directly instead of its self-hiding stderr
-//! draw target, sizing itself from `COLUMNS`/`LINES` since there is no terminal
-//! to measure. `never` always takes the plain path.
-//!
-//! **Colour** follows [`console::colors_enabled_stderr`], which implements the
-//! usual conventions: the [clicolors spec](https://bixense.com/clicolors/)
-//! `CLICOLOR=0` disables colour and `CLICOLOR_FORCE=1` forces it on even for a
-//! pipe, and `TERM=dumb` disables it. A non-empty `NO_COLOR` disables it over
-//! all of those, which console does not do on its own.
-//! indicatif's template styling reads the same function, so one signal covers
-//! this module's styling and the bars alike.
-//!
-//! Because the two are independent: colour off still draws the bars, just
-//! without escape codes; and the plain fallback still colours its lines when
-//! colour is forced on, which is what a CI log viewer wants — it renders escape
-//! sequences happily while not being a terminal.
-//!
-//! # Log lines
-//!
-//! Anything printed while the display is up has to go through [`log_line`], or
-//! [`ProgressReporter::error`]. Writing to stderr directly would land in the
-//! middle of the display and be erased by the next frame. A warning raised from
-//! an inner analysis loop pairs [`log_line`] with an [`OncePerRun`] latch, so
-//! the run says it once instead of once per base.
-//!
-//! Those lines are written *above* the redrawn region and scroll up as ordinary
-//! terminal output, which is what rich, tqdm, indicatif, cargo and Nextflow all
-//! do. The log is the permanent record and has to be able to grow without
-//! bound, and the terminal's scrollback is the only place unbounded output can
-//! go. The version banner is printed by [`ProgressPlan::new`] before the run
-//! does anything else, so everything the run has to say appears beneath it in
-//! the order it happened.
-//!
-//! The exception is the closing `Complete. Analysed N files in mm:ss`, which is
-//! the last line of the redrawn region so that it always lands below the bars
-//! and the table. `--quiet` suppresses it along with everything else.
+//! While the display is up, everything printed must go through [`log_line`] or
+//! [`ProgressReporter::error`]; a direct write to stderr lands inside the region
+//! and is erased by the next frame. A warning raised from an inner loop pairs
+//! [`log_line`] with a [`OncePerRun`] latch.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
@@ -164,14 +115,7 @@ const MAX_NAME_WIDTH: usize = 30;
 /// smoothly rather than in 1% steps.
 const SCALE: u64 = 1000;
 
-/// Where log lines go while a display is on screen.
-///
-/// Lines are written above the redrawn region and scroll up as ordinary
-/// terminal output, which is the convention for this kind of display (rich,
-/// tqdm, indicatif, cargo, Nextflow all do the same). The log is the permanent
-/// record and has to be able to grow without bound; the terminal's scrollback
-/// is the only place unbounded output can go, and it is below the display that
-/// there is no room.
+/// Where log lines go while a display is on screen: above the redrawn region.
 struct LogSink {
     multi: MultiProgress,
     /// `\r\n` when the display has been forced onto something that is not a
@@ -1019,29 +963,13 @@ impl TermLike for ForcedTerm {
 struct Table {
     line: ProgressBar,
     columns: Vec<Column>,
-    /// The file names, kept so the geometry can be rebuilt at a new width.
+    /// The file names, for laying the table out at the current width.
     names: Vec<String>,
-    state: Mutex<TableState>,
 }
 
-struct TableState {
-    /// Terminal width [`Geometry`] was built for. A run whose window is resized
-    /// rebuilds at the new width rather than drawing a table cut to the old
-    /// one; `{wide_bar}` above it already reflows on its own.
-    width: usize,
-    /// `None` when the terminal is too narrow for the table to be worth
-    /// drawing, which is also how it disappears and comes back as the window is
-    /// resized across the threshold.
-    geometry: Option<Geometry>,
-    /// The last frame rendered, so an unchanged one can be dropped rather than
-    /// pushed through indicatif and out to the terminal again.
-    last: String,
-}
-
-/// Everything about the table that depends on how wide it may be, rendered once
-/// per width rather than once per frame: the three borders, the styled vertical
-/// rule, the heading and measure label cells, and each file's heading in each
-/// of its three states.
+/// Everything about the table that depends on how wide it may be: the three
+/// borders, the styled vertical rule, the heading and measure label cells, and
+/// each file's heading in each of its three states.
 struct Geometry {
     value_width: usize,
     top: String,
@@ -1051,9 +979,7 @@ struct Geometry {
     heading_label: String,
     /// One per measure, in report order — so this also fixes the row count.
     row_labels: Vec<String>,
-    /// Per column, the heading pre-rendered in each state indexed by
-    /// [`FileState`]: the colour is the only thing that varies, and re-styling
-    /// it per frame would be pure waste.
+    /// Per column, the heading in each state, indexed by [`FileState`].
     headings: Vec<[String; 3]>,
 }
 
@@ -1145,16 +1071,10 @@ impl Table {
             })
             .collect::<Vec<_>>();
 
-        let width = measured_term_width();
         let table = Table {
             line: static_line(multi),
             columns,
             names: names.to_vec(),
-            state: Mutex::new(TableState {
-                width,
-                geometry: Geometry::new(names, width),
-                last: String::new(),
-            }),
         };
         table.refresh();
         table
@@ -1166,30 +1086,12 @@ impl Table {
         self.line.finish();
     }
 
-    /// Re-render the table from the latest published counters.
-    ///
-    /// Only the value cells are built here; everything that depends on the
-    /// width alone lives in [`Geometry`] and is rebuilt only when the terminal
-    /// is resized. The result is compared against the last frame and dropped if
-    /// identical, which is the common case — columns only change every few
-    /// thousand reads, and nothing changes at all while the reports are being
-    /// written.
+    /// Re-render the table from the latest published counters, laid out for
+    /// the terminal's current width so it follows a resized window.
     fn refresh(&self) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-
-        let width = measured_term_width();
-        if width != state.width {
-            state.width = width;
-            state.geometry = Geometry::new(&self.names, width);
-        }
-
-        let Some(geometry) = &state.geometry else {
-            // Too narrow for a readable table. Rendering nothing rather than
-            // something cut off, and indicatif drops the line entirely.
-            if !state.last.is_empty() {
-                state.last = String::new();
-                self.line.set_message("");
-            }
+        let Some(geometry) = Geometry::new(&self.names, measured_term_width()) else {
+            // Too narrow for a readable table. indicatif drops an empty line.
+            self.line.set_message("");
             return;
         };
 
@@ -1233,13 +1135,8 @@ impl Table {
         }
         out.push(geometry.bottom.clone());
 
-        let rendered = out.join("\n");
-        if state.last == rendered {
-            return;
-        }
         // One update, one redraw.
-        self.line.set_message(rendered.clone());
-        state.last = rendered;
+        self.line.set_message(out.join("\n"));
     }
 }
 
