@@ -15,12 +15,25 @@
 /// - Rust prints `inf`; Java prints "Infinity"
 /// - Rust prints `-inf`; Java prints "-Infinity"
 pub fn java_format_double(v: f64) -> String {
+    java_format(v, v)
+}
+
+/// Format an f32 value to match Java's `Float.toString(float)`: the same
+/// layout as [`java_format_double`], with the float's own shortest digits
+/// (`54.000004`, not the widened double's `54.00000381469727`).
+pub fn java_format_float(v: f32) -> String {
+    java_format(v, v as f64)
+}
+
+/// `v` supplies the digits; `x` is the same value widened to f64 for the
+/// range checks (exact for f32).
+fn java_format<T: std::fmt::Display + std::fmt::LowerExp>(v: T, x: f64) -> String {
     // Handle special cases
-    if v.is_nan() {
+    if x.is_nan() {
         return "NaN".to_string();
     }
-    if v.is_infinite() {
-        return if v.is_sign_positive() {
+    if x.is_infinite() {
+        return if x.is_sign_positive() {
             // JAVA COMPAT: Java uses "Infinity" not "inf"
             "Infinity".to_string()
         } else {
@@ -29,11 +42,11 @@ pub fn java_format_double(v: f64) -> String {
     }
 
     // JAVA COMPAT: Java.s Double.toString(-0.0) returns "-0.0"
-    if v == 0.0 && v.is_sign_negative() {
+    if x == 0.0 && x.is_sign_negative() {
         return "-0.0".to_string();
     }
 
-    let abs = v.abs();
+    let abs = x.abs();
 
     // JAVA COMPAT: Java uses scientific notation for |v| >= 1e7 or (|v| < 1e-3 and |v| > 0).
     // For values in FastQC output, this is rarely needed, but we handle it for correctness.
@@ -59,7 +72,7 @@ pub fn java_format_double(v: f64) -> String {
 /// zeros (e.g., "1.5E-4" not "1.5e-04"). The mantissa uses the shortest
 /// representation that uniquely identifies the double, but always includes at
 /// least one digit after the decimal point (e.g., "1.0E7" not "1E7").
-fn format_scientific(v: f64) -> String {
+fn format_scientific<T: std::fmt::LowerExp>(v: T) -> String {
     // Use Rust's {:e} format then fixup to match Java conventions.
     let s = format!("{:e}", v);
 
@@ -162,6 +175,15 @@ mod tests {
         assert_eq!(java_format_double(75.0), "75.0");
         assert_eq!(java_format_double(12.345), "12.345");
         assert_eq!(java_format_double(99.99), "99.99");
+    }
+
+    #[test]
+    fn test_float_values() {
+        // Java's Float.toString(), as seen in the Kmer Content table.
+        assert_eq!(java_format_float(0.0), "0.0");
+        assert_eq!(java_format_float(54.0), "54.0");
+        assert_eq!(java_format_float(54.000004), "54.000004");
+        assert_eq!(java_format_float(2.6973794e-8), "2.6973794E-8");
     }
 
     #[test]

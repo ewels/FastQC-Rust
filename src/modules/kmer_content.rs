@@ -10,22 +10,27 @@ use crate::report::charts::line_graph::{render_line_graph, LineGraphData};
 use crate::report::charts::scaled_chart_width;
 use crate::sequence::Sequence;
 use crate::utils::base_group::BaseGroup;
+use crate::utils::format::java_format_float;
+use crate::utils::java_hashmap::hashtable_order;
 
 /// A tracked Kmer with its total count and per-position counts.
 struct Kmer {
     sequence: String,
     count: u64,
     positions: Vec<u64>,
+    /// Insertion order, for replaying Java's `Hashtable` iteration order.
+    order: usize,
 }
 
 impl Kmer {
-    fn new(sequence: String, position: usize, seq_length: usize) -> Self {
+    fn new(sequence: String, position: usize, seq_length: usize, order: usize) -> Self {
         let mut positions = vec![0u64; seq_length];
         positions[position] = 1;
         Kmer {
             sequence,
             count: 1,
             positions,
+            order,
         }
     }
 
@@ -133,7 +138,18 @@ impl KmerContent {
 
         let mut uneven_kmers: Vec<(String, u64, f32, Vec<f32>, f32)> = Vec::new();
 
-        for kmer in self.kmers.values() {
+        // JAVA COMPAT: Java walks a Hashtable and stable-sorts the result, so
+        // k-mers tied on obs/exp keep Hashtable order. A HashMap's order is
+        // random per process, which made the table differ between runs.
+        let mut inserted: Vec<&Kmer> = self.kmers.values().collect();
+        inserted.sort_unstable_by_key(|kmer| kmer.order);
+        let keys: Vec<&str> = inserted.iter().map(|kmer| kmer.sequence.as_str()).collect();
+        // shortcut: Java sizes the table from a static that `-k` only sets after
+        // the first KmerContent is built, so the first file always gets 4^7.
+        // Later files of a `-k` run other than 7 may order ties differently from
+        // Java; model the static if that ever matters.
+        for index in hashtable_order(&keys, 4usize.pow(7)) {
+            let kmer = inserted[index];
             let kmer_len = kmer.sequence.len();
 
             // Total count of all kmers of this length across all positions
@@ -218,7 +234,8 @@ impl KmerContent {
             entry.4 = entry.3.iter().cloned().fold(0.0f32, f32::max);
         }
         // Sort by highest obs/exp ratio
-        uneven_kmers.sort_by(|a, b| b.4.partial_cmp(&a.4).unwrap_or(std::cmp::Ordering::Equal));
+        // Stable and NaN-first, like Java's Arrays.sort with Float.compare.
+        uneven_kmers.sort_by(|a, b| b.4.total_cmp(&a.4));
 
         // Only report top 20
         uneven_kmers.truncate(20);
@@ -387,9 +404,10 @@ impl QCModule for KmerContent {
                     existing.increment_count(i);
                 } else {
                     let seq_kmer_length = (seq.len() - kmer_size) + 1;
+                    let order = self.kmers.len();
                     self.kmers.insert(
                         kmer.to_string(),
-                        Kmer::new(kmer.to_string(), i, seq_kmer_length),
+                        Kmer::new(kmer.to_string(), i, seq_kmer_length, order),
                     );
                 }
             }
@@ -469,10 +487,52 @@ impl QCModule for KmerContent {
             writeln!(
                 writer,
                 "{}\t{}\t{}\t{}\t{}",
-                kmer.sequence, kmer.count, kmer.p_value, kmer.max_obs_exp, kmer.max_position_group
+                kmer.sequence,
+                kmer.count,
+                java_format_float(kmer.p_value),
+                java_format_float(kmer.max_obs_exp),
+                kmer.max_position_group
             )?;
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 3000 reads (60 sampled) with `GATTACAGG` planted at position 10 in a third.
+    fn report() -> String {
+        let mut module = KmerContent::new(&Limits::new(), 7, false, false);
+        let mut state = 7u64;
+        for i in 0..3000 {
+            let mut bases: Vec<u8> = (0..60)
+                .map(|_| {
+                    state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+                    b"ACGT"[(state >> 62) as usize]
+                })
+                .collect();
+            if i % 3 == 0 {
+                bases[10..19].copy_from_slice(b"GATTACAGG");
+            }
+            module.process_sequence(&Sequence::new(format!("@r{i}"), bases, vec![b'I'; 60]));
+        }
+        module.finalize();
+        let mut out = Vec::new();
+        module.write_text_report(&mut out).unwrap();
+        String::from_utf8(out).unwrap()
+    }
+
+    #[test]
+    fn test_report_is_reproducible_and_java_formatted() {
+        // Each HashMap gets its own random seed, so two runs used to disagree.
+        let first = report();
+        assert_eq!(first, report());
+        let row = first.lines().nth(1).expect("an enriched k-mer");
+        // Float columns print as Java's Float.toString: "54.0", never "54".
+        let fields: Vec<&str> = row.split('\t').collect();
+        assert!(fields[2].contains('.') && fields[3].contains('.'), "{row}");
     }
 }

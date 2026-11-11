@@ -33,16 +33,55 @@ pub fn string_hash(s: &str) -> i32 {
         .fold(0i32, |h, b| h.wrapping_mul(31).wrapping_add(b as i32))
 }
 
+/// Iteration order of a `java.util.Hashtable` built with `initial_capacity`
+/// and the default 0.75 load factor, after inserting `keys` in order (no
+/// duplicates). Returns indices into `keys`.
+///
+/// Unlike `HashMap`, `Hashtable` takes the raw hash modulo its capacity,
+/// prepends to a bucket's chain, grows to `2n + 1` buckets, and iterates
+/// buckets from the last to the first.
+pub fn hashtable_order(keys: &[&str], initial_capacity: usize) -> Vec<usize> {
+    let threshold = |capacity: usize| (capacity as f32 * 0.75) as usize;
+    let index =
+        |key: usize, capacity: usize| (string_hash(keys[key]) & 0x7FFF_FFFF) as usize % capacity;
+
+    // Each chain is stored tail first, so its head (newest entry) is last.
+    let mut capacity = initial_capacity.max(1);
+    let mut table: Vec<Vec<usize>> = vec![Vec::new(); capacity];
+    for key in 0..keys.len() {
+        if key >= threshold(capacity) {
+            let new_capacity = capacity * 2 + 1;
+            let mut grown = vec![Vec::new(); new_capacity];
+            for chain in table.iter().rev() {
+                for &entry in chain.iter().rev() {
+                    grown[index(entry, new_capacity)].push(entry);
+                }
+            }
+            table = grown;
+            capacity = new_capacity;
+        }
+        table[index(key, capacity)].push(key);
+    }
+
+    table
+        .iter()
+        .rev()
+        .flat_map(|chain| chain.iter().rev().copied())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_table_capacity() {
-        assert_eq!(table_capacity(0), 16);
-        assert_eq!(table_capacity(12), 16);
-        assert_eq!(table_capacity(13), 32);
-        assert_eq!(table_capacity(100_000), 262_144);
+    fn test_hashtable_order() {
+        // Expected values printed by Java 17's Hashtable.values() after
+        // putting the keys in order.
+        let keys = ["AA", "AC", "CA", "GG"];
+        assert_eq!(hashtable_order(&keys, 11), vec![2, 3, 1, 0]);
+        // Capacity 4 grows to 9 before the 4th key (threshold 3).
+        assert_eq!(hashtable_order(&keys, 4), vec![3, 1, 0, 2]);
     }
 
     #[test]
