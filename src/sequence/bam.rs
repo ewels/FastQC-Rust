@@ -165,10 +165,6 @@ impl BAMFile {
 
                             let is_reverse = flags.is_reverse_complemented();
 
-                            // Check vendor quality failure flag (0x200)
-                            // for CASAVA-style filtering.
-                            let is_qc_fail = flags.is_qc_fail();
-
                             // Estimate record size for progress tracking.
                             // Java: `recordSize = (record.getReadLength()*2)+150`
                             // then divides by 4 for BAM format.
@@ -186,7 +182,6 @@ impl BAMFile {
                                 quality: quality_bytes,
                                 cigar_ops,
                                 is_reverse,
-                                is_qc_fail,
                             })
                         }
                         Err(e) => return Err(e),
@@ -229,7 +224,6 @@ impl BAMFile {
                                 .collect();
 
                             let is_reverse = flags.is_reverse_complemented();
-                            let is_qc_fail = flags.is_qc_fail();
 
                             if self.record_size == 0 && seq_len > 0 {
                                 let mut rs = (seq_len as u64 * 2) + 150;
@@ -245,7 +239,6 @@ impl BAMFile {
                                 quality: quality_bytes,
                                 cigar_ops,
                                 is_reverse,
-                                is_qc_fail,
                             })
                         }
                         Err(e) => return Err(e),
@@ -301,17 +294,9 @@ impl BAMFile {
                         quality.reverse();
                     }
 
-                    let mut seq = Sequence::new(data.name, sequence, quality);
-
-                    // Java's BAMFile.java does not explicitly handle CASAVA
-                    // filtering via the read name (that is a FastQ convention). However,
-                    // the SAM flag 0x200 (QC fail / vendor quality check failure) serves
-                    // a similar purpose. We set is_filtered when the QC fail flag is set.
-                    if data.is_qc_fail {
-                        seq.is_filtered = true;
-                    }
-
-                    self.next_sequence = Some(seq);
+                    // Java's BAMFile never marks reads as filtered, so QC-fail
+                    // reads (flag 0x200) are analysed like any other.
+                    self.next_sequence = Some(Sequence::new(data.name, sequence, quality));
                     return Ok(());
                 }
             }
@@ -327,7 +312,6 @@ struct RecordData {
     quality: Vec<u8>,
     cigar_ops: Vec<(CigarKind, usize)>,
     is_reverse: bool,
-    is_qc_fail: bool,
 }
 
 impl SequenceFile for BAMFile {
@@ -476,5 +460,20 @@ mod tests {
         };
         let result = open_sequence_file(&config, Path::new("test.dat"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_qc_fail_reads_are_not_filtered() {
+        // Flag 516 = unmapped (4) + QC fail (0x200). Java analyses these reads.
+        let path = std::env::temp_dir().join(format!("fastqc_qcfail_{}.sam", std::process::id()));
+        std::fs::write(
+            &path,
+            "@HD\tVN:1.6\nr1\t516\t*\t0\t0\t*\t*\t0\t0\tACGT\tIIII\n",
+        )
+        .unwrap();
+        let mut file = BAMFile::open(&path, false, false).unwrap();
+        let seq = file.next().unwrap().unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert!(!seq.is_filtered);
     }
 }
