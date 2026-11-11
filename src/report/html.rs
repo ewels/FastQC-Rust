@@ -61,19 +61,20 @@ pub fn write_chart(
     Ok(())
 }
 
-/// Write a chart as inline SVG for a module that has one.
+/// Write a module's HTML with its chart as inline SVG.
 ///
 /// Unlike `write_chart` which converts SVG→PNG→base64, this embeds the SVG
 /// directly in the HTML for crisper rendering on modern displays.
-/// The SVG is minified to reduce file size.
+/// The SVG is minified to reduce file size. A module with no chart to draw
+/// writes its own HTML: a table, or a note such as "Can't analyse adapters".
 pub fn write_chart_svg(
     module: &(impl crate::modules::QCModule + ?Sized),
     w: &mut dyn Write,
 ) -> io::Result<()> {
-    if let Some(svg) = module.generate_chart_svg() {
-        write!(w, "<p>{}</p>", minify_svg(&svg))?;
+    match module.generate_chart_svg() {
+        Some(svg) => write!(w, "<p>{}</p>", minify_svg(&svg)),
+        None => module.write_html_report(w, false),
     }
-    Ok(())
 }
 
 /// Minify an SVG string for inline HTML embedding.

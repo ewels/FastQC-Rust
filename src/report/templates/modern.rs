@@ -10,7 +10,7 @@ use std::sync::LazyLock;
 use chrono::Local;
 
 use crate::modules::{ModuleStatus, QCModule};
-use crate::report::html::{format_java_date, write_chart_svg, write_default_html_table};
+use crate::report::html::{format_java_date, write_chart_svg};
 use crate::report::templates::ReportTemplate;
 use crate::VERSION;
 
@@ -86,15 +86,7 @@ impl ReportTemplate for ModernTemplate {
 
             // Render module content — use inline SVG for charts instead of PNG
             let mut module_buf = Vec::new();
-            if module.chart_alt_text().is_some() {
-                write_chart_svg(module.as_ref(), &mut module_buf)?;
-            } else {
-                let mut text_buf = Vec::new();
-                module.write_text_report(&mut text_buf)?;
-                let text =
-                    String::from_utf8(text_buf).map_err(|e| io::Error::other(e.to_string()))?;
-                write_default_html_table(&text, &mut module_buf)?;
-            }
+            write_chart_svg(module.as_ref(), &mut module_buf)?;
             let module_html =
                 String::from_utf8(module_buf).map_err(|e| io::Error::other(e.to_string()))?;
 
@@ -309,6 +301,36 @@ fn strip_help_html(html: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_module_without_chart_writes_its_own_html() {
+        use crate::config::FastQCConfig;
+        use crate::modules::adapter_content::AdapterContent;
+        use crate::sequence::Sequence;
+
+        let config = FastQCConfig::default();
+        let mut adapters = AdapterContent::new(
+            &config.load_limits().unwrap(),
+            &config.load_adapters().unwrap(),
+            false,
+            false,
+        );
+        adapters.process_sequence(&Sequence::new(
+            "r".into(),
+            b"ACGTA".to_vec(),
+            b"IIIII".to_vec(),
+        ));
+        adapters.finalize();
+        let modules: Vec<Box<dyn QCModule>> = vec![Box::new(adapters)];
+
+        let mut html = Vec::new();
+        ModernTemplate
+            .write_html_report(&modules, "short.fastq", &mut html)
+            .unwrap();
+        assert!(String::from_utf8(html)
+            .unwrap()
+            .contains("Can't analyse adapters as read length is too short"));
+    }
 
     #[test]
     fn test_make_svg_ids_unique() {
