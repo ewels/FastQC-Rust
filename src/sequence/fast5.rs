@@ -152,6 +152,13 @@ impl Fast5File {
         }
 
         let id = lines[0].to_string();
+        // Same rule as the FASTQ reader: modules slice reads by byte.
+        if !lines[1].is_ascii() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Sequence contained a non-ASCII character",
+            ));
+        }
         let seq_bytes = lines[1].as_bytes().to_vec();
         let qual_bytes = lines[3].as_bytes().to_vec();
 
