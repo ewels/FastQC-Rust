@@ -260,10 +260,11 @@ pub fn run(config: &FastQCConfig, files: &[PathBuf]) -> Result<(), i32> {
     }
 }
 
-/// Build file groups based on the current mode (casava, or individual files).
+/// Build file groups based on the current mode (casava, nano, or individual files).
 ///
 /// Matches the grouping logic in OfflineRunner.java lines 103-117.
 /// - If `--casava`: group by CASAVA basename
+/// - If `--nano`: group by Nanopore basename
 /// - Otherwise: each file is its own group
 fn build_file_groups(config: &FastQCConfig, files: &[PathBuf]) -> Vec<FileGroup> {
     if config.casava {
@@ -271,6 +272,12 @@ fn build_file_groups(config: &FastQCConfig, files: &[PathBuf]) -> Vec<FileGroup>
         // extracted basename. Files that don't match the pattern become singletons.
         let casava_groups = casava::get_casava_groups(files);
         casava_groups
+            .into_iter()
+            .map(|(name, paths)| FileGroup { name, files: paths })
+            .collect()
+    } else if config.nano {
+        // NanoporeBasename.getNanoporeGroups(), OfflineRunner.java line 110.
+        casava::get_nanopore_groups(files)
             .into_iter()
             .map(|(name, paths)| FileGroup { name, files: paths })
             .collect()
@@ -1112,6 +1119,27 @@ mod tests {
             .find(|g| g.name == "Other_S2_L001_R1.fastq.gz")
             .unwrap();
         assert_eq!(other_group.files.len(), 1);
+    }
+
+    #[test]
+    fn test_build_file_groups_nano() {
+        let config = FastQCConfig {
+            nano: true,
+            ..FastQCConfig::default()
+        };
+        let files = vec![
+            PathBuf::from("run/Comp_Sample_12_ch1_file0_strand.fast5"),
+            PathBuf::from("run/Comp_Sample_12_ch2_file1_strand.fast5"),
+            PathBuf::from("run/Comp_Sample_12_muxscan_file2.fast5"),
+            PathBuf::from("run/single.fast5"),
+        ];
+        let groups = build_file_groups(&config, &files);
+        let summary: Vec<(&str, usize)> = groups
+            .iter()
+            .map(|g| (g.name.as_str(), g.files.len()))
+            .collect();
+        // muxscan control files are dropped; unmatched names stay singletons.
+        assert_eq!(summary, vec![("Comp_Sample_12", 2), ("single.fast5", 1)]);
     }
 
     #[test]
