@@ -467,10 +467,6 @@ fn process_group(
 
     let _turn = report_lock.map(|lock| lock.lock().unwrap_or_else(|e| e.into_inner()));
 
-    // Write standalone HTML file
-    // The Java code writes the HTML via PrintWriter after creating the zip
-    std::fs::write(&html_path, &html_content)?;
-
     // Create zip archive, reusing the already-generated HTML content
     report::archive::create_zip_archive(
         &modules,
@@ -480,6 +476,10 @@ fn process_group(
         &html_content,
         config.template,
     )?;
+
+    // Write standalone HTML file
+    // The Java code writes the HTML via PrintWriter after creating the zip
+    report::archive::write_atomic(&html_path, html_content.as_bytes())?;
 
     // Handle --extract flag
     // If do_unzip is true, extract the zip file to the output directory.

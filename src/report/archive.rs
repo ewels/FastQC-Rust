@@ -17,7 +17,7 @@
 //   {basename}_fastqc/fastqc.fo     (XSL-FO document for PDF rendering)
 
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Cursor, Write};
 use std::path::Path;
 
 use zip::write::SimpleFileOptions;
@@ -63,8 +63,8 @@ pub fn create_zip_archive(
     html_content: &str,
     template: TemplateName,
 ) -> io::Result<()> {
-    let file = fs::File::create(zip_path)?;
-    let mut zip = ZipWriter::new(file);
+    // Built in memory so a failure (e.g. chart rendering) never touches the file on disk.
+    let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     let folder = format!("{}_fastqc", base_name);
@@ -156,9 +156,20 @@ pub fn create_zip_archive(
         .map_err(zip_err)?;
     zip.write_all(fo_content.as_bytes())?;
 
-    zip.finish().map_err(zip_err)?;
+    let bytes = zip.finish().map_err(zip_err)?.into_inner();
+    write_atomic(zip_path, &bytes)
+}
 
-    Ok(())
+/// Write through `<path>.tmp` and rename, so a failed or interrupted write
+/// leaves the previous report in place instead of a truncated one.
+pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    fs::write(&tmp, data)
+        .and_then(|()| fs::rename(&tmp, path))
+        .inspect_err(|_| {
+            let _ = fs::remove_file(&tmp);
+        })
 }
 
 /// Extract a zip archive to its parent directory.
@@ -314,4 +325,25 @@ fn write_fo_table(fo: &mut String, text: &str) {
 /// Convert a zip library error into an io::Error.
 fn zip_err(e: impl std::fmt::Display) -> io::Error {
     io::Error::other(e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_failed_write_keeps_previous_report() {
+        let dir = std::env::temp_dir().join(format!("fastqc_atomic_{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("r_fastqc.zip");
+        write_atomic(&path, b"old").unwrap();
+        assert!(!dir.join("r_fastqc.zip.tmp").exists());
+
+        // A directory in the way of the temp file makes the write fail.
+        fs::create_dir(dir.join("r_fastqc.zip.tmp")).unwrap();
+        assert!(write_atomic(&path, b"new").is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"old");
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
 }
