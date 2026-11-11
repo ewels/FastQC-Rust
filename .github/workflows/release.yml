@@ -95,10 +95,13 @@ jobs:
           - name: linux-x86_64
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            # Static glibc, so the binary also runs on older clusters (RHEL 8, CentOS 7).
+            rustflags: -C target-feature=+crt-static
 
           - name: linux-aarch64
             os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+            rustflags: -C target-feature=+crt-static
 
           - name: macos-x86_64
             os: macos-latest
@@ -128,6 +131,7 @@ jobs:
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
+          RUSTFLAGS: ${{ matrix.rustflags }}
         run: cargo build --release --target "$TARGET"
 
       - name: Package
