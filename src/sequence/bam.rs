@@ -148,12 +148,13 @@ impl BAMFile {
                             // BAM quality scores are raw Phred values (0-93).
                             // Java's HTSJDK `getBaseQualityString()` converts them to ASCII
                             // by adding 33 (Sanger/Phred+33 encoding). We do the same.
-                            let quality_bytes: Vec<u8> = rec
-                                .quality_scores()
-                                .as_ref()
-                                .iter()
-                                .map(|&q| q + 33) // Convert Phred+0 to ASCII Phred+33
-                                .collect();
+                            // Missing qualities are stored as 0xFF, for which
+                            // HTSJDK returns "*"; Java analyses that string.
+                            let raw_quality = rec.quality_scores();
+                            let quality_bytes: Vec<u8> = match raw_quality.as_ref() {
+                                [0xFF, ..] => b"*".to_vec(),
+                                q => q.iter().map(|&q| q + 33).collect(), // Phred+0 to ASCII Phred+33
+                            };
 
                             // Collect CIGAR ops for soft-clip handling
                             let cigar_ops: Vec<(CigarKind, usize)> = rec
@@ -218,7 +219,11 @@ impl BAMFile {
                             // SAM quality scores from HTSJDK's getBaseQualityString()
                             // are already in Phred+33 ASCII encoding. The noodles SAM reader
                             // also stores them as raw ASCII bytes, so we use them directly.
-                            let quality_bytes: Vec<u8> = rec.quality_scores().as_ref().to_vec();
+                            // noodles reads `QUAL=*` as empty; HTSJDK returns "*".
+                            let quality_bytes: Vec<u8> = match rec.quality_scores().as_ref() {
+                                [] => b"*".to_vec(),
+                                q => q.to_vec(),
+                            };
 
                             // Collect CIGAR ops
                             let cigar_ops: Vec<(CigarKind, usize)> = rec
@@ -285,7 +290,8 @@ impl BAMFile {
                                 // drops the first `value` characters.
                                 if len <= sequence.len() {
                                     sequence = sequence[len..].to_vec();
-                                    quality = quality[len..].to_vec();
+                                    // Missing qualities ("*") are shorter than the sequence.
+                                    quality.drain(..len.min(quality.len()));
                                 }
                             }
                         }
@@ -476,5 +482,23 @@ mod tests {
         };
         let result = open_sequence_file(&config, Path::new("test.dat"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_missing_quality_with_soft_clip() {
+        // `QUAL=*` plus a 5' soft clip used to slice past the empty quality.
+        let path = std::env::temp_dir().join(format!("fastqc_noqual_{}.sam", std::process::id()));
+        std::fs::write(
+            &path,
+            "@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:1000\n\
+             r1\t0\tchr1\t10\t60\t5S5M\t*\t0\t0\tACGTACGTAC\t*\n",
+        )
+        .unwrap();
+        let mut file = BAMFile::open(&path, false, true).unwrap();
+        let seq = file.next().unwrap().unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(seq.sequence, b"CGTAC");
+        // Java throws here ("*".substring(5)); the clip just uses up the "*".
+        assert!(seq.quality.is_empty());
     }
 }
