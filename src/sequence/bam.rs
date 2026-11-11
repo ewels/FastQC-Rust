@@ -49,13 +49,6 @@ pub struct BAMFile {
     /// Matches Java's `nextSequence` field.
     next_sequence: Option<Sequence>,
 
-    /// Whether this is a BAM (true) or SAM (false) file, used for progress estimation.
-    is_bam: bool,
-
-    /// Rough record size for progress estimation.
-    /// Java computes this as `(readLength * 2) + 150`, divided by 4 for BAM.
-    record_size: u64,
-
     // Reusable record buffers to avoid allocations per record.
     bam_record: bam::Record,
     sam_record: sam::Record,
@@ -101,8 +94,6 @@ impl BAMFile {
             only_mapped,
             position_handle,
             next_sequence: None,
-            is_bam,
-            record_size: 0,
             bam_record: bam::Record::default(),
             sam_record: sam::Record::default(),
         };
@@ -121,137 +112,35 @@ impl BAMFile {
     /// - Reverse complementing reads on the negative strand
     fn read_next(&mut self) -> io::Result<()> {
         loop {
-            // Read the next record from the appropriate reader type
+            // Only the quality encoding differs between the two formats; the
+            // rest goes through noodles' shared alignment `Record` trait.
             let record_data = match &mut self.reader {
-                InnerReader::Bam(reader) => {
-                    match reader.read_record(&mut self.bam_record) {
-                        Ok(0) => None, // EOF
-                        Ok(_) => {
-                            let rec = &self.bam_record;
-                            let flags = rec.flags();
-
-                            // Skip unmapped reads if only_mapped is set.
-                            // Java: `if (onlyMapped && record.getReadUnmappedFlag()) continue;`
-                            if self.only_mapped && flags.is_unmapped() {
-                                continue;
-                            }
-
-                            // Extract fields from BAM record
-                            let name = rec
-                                .name()
-                                .map(|n| String::from_utf8_lossy(n.as_ref()).into_owned())
-                                .unwrap_or_else(|| "*".to_string());
-
-                            let sequence_bases: Vec<u8> = rec.sequence().iter().collect();
-                            let seq_len = sequence_bases.len();
-
-                            // BAM quality scores are raw Phred values (0-93).
-                            // Java's HTSJDK `getBaseQualityString()` converts them to ASCII
-                            // by adding 33 (Sanger/Phred+33 encoding). We do the same.
-                            let quality_bytes: Vec<u8> = rec
-                                .quality_scores()
-                                .as_ref()
-                                .iter()
-                                .map(|&q| q + 33) // Convert Phred+0 to ASCII Phred+33
-                                .collect();
-
-                            // Collect CIGAR ops for soft-clip handling
-                            let cigar_ops: Vec<(CigarKind, usize)> = rec
-                                .cigar()
-                                .iter()
-                                .filter_map(|r| r.ok())
-                                .map(|op| (op.kind(), op.len()))
-                                .collect();
-
-                            let is_reverse = flags.is_reverse_complemented();
-
-                            // Check vendor quality failure flag (0x200)
-                            // for CASAVA-style filtering.
-                            let is_qc_fail = flags.is_qc_fail();
-
-                            // Estimate record size for progress tracking.
-                            // Java: `recordSize = (record.getReadLength()*2)+150`
-                            // then divides by 4 for BAM format.
-                            if self.record_size == 0 && seq_len > 0 {
-                                let mut rs = (seq_len as u64 * 2) + 150;
-                                if self.is_bam {
-                                    rs /= 4; // BAM records are ~4x smaller than SAM
-                                }
-                                self.record_size = rs;
-                            }
-
-                            Some(RecordData {
-                                name,
-                                sequence: sequence_bases,
-                                quality: quality_bytes,
-                                cigar_ops,
-                                is_reverse,
-                                is_qc_fail,
-                            })
-                        }
-                        Err(e) => return Err(e),
+                InnerReader::Bam(reader) => match reader.read_record(&mut self.bam_record)? {
+                    0 => None,
+                    _ => {
+                        // BAM quality scores are raw Phred values (0-93).
+                        // Java's HTSJDK `getBaseQualityString()` converts them to
+                        // ASCII by adding 33 (Sanger/Phred+33). We do the same.
+                        let scores = self.bam_record.quality_scores();
+                        let quality = scores.as_ref().iter().map(|&q| q + 33).collect();
+                        Some(record_data(&self.bam_record, quality)?)
                     }
-                }
-                InnerReader::Sam(reader) => {
-                    match reader.read_record(&mut self.sam_record) {
-                        Ok(0) => None, // EOF
-                        Ok(_) => {
-                            let rec = &self.sam_record;
-                            let flags = rec
-                                .flags()
-                                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-                            // Skip unmapped reads if only_mapped is set.
-                            if self.only_mapped && flags.is_unmapped() {
-                                continue;
-                            }
-
-                            let name = rec
-                                .name()
-                                .map(|n| String::from_utf8_lossy(n.as_ref()).into_owned())
-                                .unwrap_or_else(|| "*".to_string());
-
-                            // SAM sequence is stored as ASCII text
-                            let sequence_bases: Vec<u8> = rec.sequence().iter().collect();
-                            let seq_len = sequence_bases.len();
-
-                            // SAM quality scores from HTSJDK's getBaseQualityString()
-                            // are already in Phred+33 ASCII encoding. The noodles SAM reader
-                            // also stores them as raw ASCII bytes, so we use them directly.
-                            let quality_bytes: Vec<u8> = rec.quality_scores().as_ref().to_vec();
-
-                            // Collect CIGAR ops
-                            let cigar_ops: Vec<(CigarKind, usize)> = rec
-                                .cigar()
-                                .iter()
-                                .filter_map(|r| r.ok())
-                                .map(|op| (op.kind(), op.len()))
-                                .collect();
-
-                            let is_reverse = flags.is_reverse_complemented();
-                            let is_qc_fail = flags.is_qc_fail();
-
-                            if self.record_size == 0 && seq_len > 0 {
-                                let mut rs = (seq_len as u64 * 2) + 150;
-                                if self.is_bam {
-                                    rs /= 4;
-                                }
-                                self.record_size = rs;
-                            }
-
-                            Some(RecordData {
-                                name,
-                                sequence: sequence_bases,
-                                quality: quality_bytes,
-                                cigar_ops,
-                                is_reverse,
-                                is_qc_fail,
-                            })
-                        }
-                        Err(e) => return Err(e),
+                },
+                InnerReader::Sam(reader) => match reader.read_record(&mut self.sam_record)? {
+                    0 => None,
+                    _ => {
+                        // SAM quality is already Phred+33 ASCII, as HTSJDK returns it.
+                        let quality = self.sam_record.quality_scores().as_ref().to_vec();
+                        Some(record_data(&self.sam_record, quality)?)
                     }
-                }
+                },
             };
+
+            // Skip unmapped reads if only_mapped is set.
+            // Java: `if (onlyMapped && record.getReadUnmappedFlag()) continue;`
+            if self.only_mapped && record_data.as_ref().is_some_and(|d| d.is_unmapped) {
+                continue;
+            }
 
             match record_data {
                 None => {
@@ -326,8 +215,33 @@ struct RecordData {
     sequence: Vec<u8>,
     quality: Vec<u8>,
     cigar_ops: Vec<(CigarKind, usize)>,
+    is_unmapped: bool,
     is_reverse: bool,
     is_qc_fail: bool,
+}
+
+/// The fields FastQC needs from a BAM or SAM record, with `quality` already
+/// converted to Phred+33 ASCII by the caller.
+fn record_data(rec: &impl sam::alignment::Record, quality: Vec<u8>) -> io::Result<RecordData> {
+    let flags = rec.flags()?;
+    Ok(RecordData {
+        name: rec
+            .name()
+            .map(|n| String::from_utf8_lossy(n.as_ref()).into_owned())
+            .unwrap_or_else(|| "*".to_string()),
+        sequence: rec.sequence().iter().collect(),
+        quality,
+        cigar_ops: rec
+            .cigar()
+            .iter()
+            .filter_map(|r| r.ok())
+            .map(|op| (op.kind(), op.len()))
+            .collect(),
+        is_unmapped: flags.is_unmapped(),
+        is_reverse: flags.is_reverse_complemented(),
+        // Vendor quality failure flag (0x200), for CASAVA-style filtering.
+        is_qc_fail: flags.is_qc_fail(),
+    })
 }
 
 impl SequenceFile for BAMFile {
