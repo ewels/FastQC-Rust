@@ -71,6 +71,30 @@ pub fn get_casava_basename(original_name: &str) -> Result<String, NameFormatErro
 /// When a file does not match, Java prints a warning to stderr and adds
 /// it as a singleton group keyed by the raw filename.
 pub fn get_casava_groups(files: &[PathBuf]) -> Vec<(String, Vec<PathBuf>)> {
+    group_files(files, get_casava_basename)
+}
+
+/// Group Fast5 files by their Nanopore basename, skipping `muxscan` control
+/// files.
+///
+/// Direct translation of `NanoporeBasename.getNanoporeGroups()`, which
+/// groups exactly like [`get_casava_groups`] (down to its warning text).
+pub fn get_nanopore_groups(files: &[PathBuf]) -> Vec<(String, Vec<PathBuf>)> {
+    let files: Vec<PathBuf> = files
+        .iter()
+        .filter(|f| {
+            !f.file_name()
+                .is_some_and(|n| n.to_string_lossy().contains("muxscan"))
+        })
+        .cloned()
+        .collect();
+    group_files(&files, get_nanopore_basename)
+}
+
+fn group_files(
+    files: &[PathBuf],
+    basename: fn(&str) -> Result<String, NameFormatError>,
+) -> Vec<(String, Vec<PathBuf>)> {
     // Java uses a Hashtable (unordered) for grouping. We use
     // an IndexMap-style approach with a Vec to preserve insertion order, but
     // the Java code does not guarantee any ordering either. Using a HashMap
@@ -84,7 +108,7 @@ pub fn get_casava_groups(files: &[PathBuf]) -> Vec<(String, Vec<PathBuf>)> {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
 
-        match get_casava_basename(&file_name) {
+        match basename(&file_name) {
             Ok(base_name) => {
                 if !groups.contains_key(&base_name) {
                     order.push(base_name.clone());
