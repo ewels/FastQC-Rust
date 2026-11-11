@@ -1,6 +1,7 @@
 // Per Sequence GC Content module
 // Corresponds to Modules/PerSequenceGCContent.java
 
+use std::collections::HashMap;
 use std::io;
 
 use crate::config::{Limits, LimitsExt};
@@ -11,75 +12,56 @@ use crate::sequence::Sequence;
 use crate::utils::base_counts::count_acgt;
 use crate::utils::format::java_format_double;
 
-/// Mirrors GCModel/GCModelValue.java - a single percentage bin and its increment weight.
-struct GCModelValue {
-    percentage: usize,
-    increment: f64,
-}
-
-/// Mirrors GCModel/GCModel.java - maps a GC base count to weighted percentage bins.
-/// For a given read length, each possible GC count (0..=length) maps to one or more percentage
-/// bins with fractional increments so that counts at bin boundaries are shared.
+/// Mirrors GCModel/GCModel.java: maps a GC base count to weighted percentage
+/// bins, so that counts at bin boundaries are shared.
+///
+/// Java stores the bins and weights of every GC count (one small array per
+/// base of the read). Only the claim count of each bin is kept here, 101
+/// numbers per length, and the read's own bins are derived when needed, so
+/// every length stays cached even on megabase reads.
 struct GCModel {
-    models: Vec<Vec<GCModelValue>>,
+    read_length: usize,
+    /// How many GC counts claim each percentage bin.
+    claiming_counts: [usize; 101],
 }
 
 impl GCModel {
     fn new(read_length: usize) -> Self {
-        // Two-pass algorithm from GCModel.java
-        // First pass: count how many GC-count positions claim each percentage bin
-        let mut claiming_counts = vec![0usize; 101];
-
+        let mut claiming_counts = [0usize; 101];
         for pos in 0..=read_length {
-            let low_count = if pos == 0 { 0.0 } else { pos as f64 - 0.5 };
-            let high_count = (pos as f64 + 0.5).min(read_length as f64);
-            // clamp is also applied for lowCount < 0 (only matters for pos==0)
-            let low_count = low_count.max(0.0);
-
-            let low_percentage = ((low_count * 100.0) / read_length as f64).round() as usize;
-            let high_percentage = ((high_count * 100.0) / read_length as f64).round() as usize;
-
-            for cc in &mut claiming_counts[low_percentage..=high_percentage] {
+            for cc in &mut claiming_counts[Self::bins(read_length, pos)] {
                 *cc += 1;
             }
         }
-
-        // Second pass: build the model with weighted increments
-        let mut models = Vec::with_capacity(read_length + 1);
-
-        for pos in 0..=read_length {
-            let low_count = if pos == 0 { 0.0 } else { pos as f64 - 0.5 };
-            let high_count = (pos as f64 + 0.5).min(read_length as f64);
-            let low_count = low_count.max(0.0);
-
-            let low_percentage = ((low_count * 100.0) / read_length as f64).round() as usize;
-            let high_percentage = ((high_count * 100.0) / read_length as f64).round() as usize;
-
-            let mut values = Vec::with_capacity((high_percentage - low_percentage) + 1);
-            // need both index p (for percentage field) and claiming_counts[p]
-            for (p, &cc) in (low_percentage..=high_percentage)
-                .zip(&claiming_counts[low_percentage..=high_percentage])
-            {
-                values.push(GCModelValue {
-                    percentage: p,
-                    increment: 1.0 / cc as f64,
-                });
-            }
-            models.push(values);
+        GCModel {
+            read_length,
+            claiming_counts,
         }
-
-        GCModel { models }
     }
 
-    fn get_model_values(&self, gc_count: usize) -> &[GCModelValue] {
-        &self.models[gc_count]
+    /// The percentage bins a GC count of `pos` falls in, as in GCModel.java.
+    fn bins(read_length: usize, pos: usize) -> std::ops::RangeInclusive<usize> {
+        let low_count = if pos == 0 { 0.0 } else { pos as f64 - 0.5 };
+        let high_count = (pos as f64 + 0.5).min(read_length as f64);
+        // clamp is also applied for lowCount < 0 (only matters for pos==0)
+        let low_count = low_count.max(0.0);
+
+        let low_percentage = ((low_count * 100.0) / read_length as f64).round() as usize;
+        let high_percentage = ((high_count * 100.0) / read_length as f64).round() as usize;
+        low_percentage..=high_percentage
+    }
+
+    /// `(percentage, increment)` for each bin a read with `gc_count` G/C adds to.
+    fn values(&self, gc_count: usize) -> impl Iterator<Item = (usize, f64)> + '_ {
+        Self::bins(self.read_length, gc_count).map(|p| (p, 1.0 / self.claiming_counts[p] as f64))
     }
 }
 
 pub struct PerSequenceGCContent {
     gc_distribution: [f64; 101],
-    // Cache GCModels by read length to avoid recomputing
-    cached_models: Vec<Option<GCModel>>,
+    /// One model per (truncated) read length seen: at most ~110 below 1 kb,
+    /// plus one per kb of the longest read.
+    models: HashMap<usize, GCModel>,
     limits: Limits,
     // Lazily computed results
     deviation_percent: Option<f64>,
@@ -91,8 +73,7 @@ impl PerSequenceGCContent {
     pub fn new(limits: &Limits) -> Self {
         PerSequenceGCContent {
             gc_distribution: [0.0; 101],
-            // Initial cache size 200, grows as needed
-            cached_models: Vec::new(),
+            models: HashMap::new(),
             limits: limits.clone(),
             deviation_percent: None,
             theoretical_distribution: None,
@@ -265,21 +246,12 @@ impl QCModule for PerSequenceGCContent {
         let [_, c, g, _] = count_acgt(&seq[..truncated_len]);
         let gc_count = (c + g) as usize;
 
-        // Ensure cache is large enough
-        if truncated_len >= self.cached_models.len() {
-            self.cached_models.resize_with(truncated_len + 1, || None);
-        }
-
-        // Create model if not cached
-        if self.cached_models[truncated_len].is_none() {
-            self.cached_models[truncated_len] = Some(GCModel::new(truncated_len));
-        }
-
-        let model = self.cached_models[truncated_len].as_ref().unwrap();
-        let values = model.get_model_values(gc_count);
-
-        for v in values {
-            self.gc_distribution[v.percentage] += v.increment;
+        let model = self
+            .models
+            .entry(truncated_len)
+            .or_insert_with(|| GCModel::new(truncated_len));
+        for (percentage, increment) in model.values(gc_count) {
+            self.gc_distribution[percentage] += increment;
         }
     }
 
@@ -341,5 +313,60 @@ impl QCModule for PerSequenceGCContent {
     }
     fn generate_chart_svg(&self) -> Option<String> {
         Some(self.build_chart_svg())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// GCModel.java's table, built the way Java builds it: the bins and
+    /// increment of every GC count.
+    fn java_model(read_length: usize) -> Vec<Vec<(usize, f64)>> {
+        let mut claiming = vec![0usize; 101];
+        for pos in 0..=read_length {
+            for cc in &mut claiming[GCModel::bins(read_length, pos)] {
+                *cc += 1;
+            }
+        }
+        (0..=read_length)
+            .map(|pos| {
+                GCModel::bins(read_length, pos)
+                    .map(|p| (p, 1.0 / claiming[p] as f64))
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_model_matches_java_table() {
+        for len in [1, 2, 7, 50, 99, 100, 150, 1000, 3000, 25000] {
+            let model = GCModel::new(len);
+            for (gc, expected) in java_model(len).iter().enumerate() {
+                assert_eq!(
+                    &model.values(gc).collect::<Vec<_>>(),
+                    expected,
+                    "len {len} gc {gc}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_reads_of_many_lengths_add_up() {
+        let lengths = [2500, 3600, 2500, 150, 3600, 75];
+        let mut module = PerSequenceGCContent::new(&Limits::new());
+        let mut expected = [0.0f64; 101];
+        for (i, &len) in lengths.iter().enumerate() {
+            let bases: Vec<u8> = (0..len).map(|j| b"ACGTG"[(i + j) % 5]).collect();
+            let truncated = PerSequenceGCContent::truncate_length(len);
+            let [_, c, g, _] = count_acgt(&bases[..truncated]);
+            for &(p, inc) in &java_model(truncated)[(c + g) as usize] {
+                expected[p] += inc;
+            }
+            module.process_sequence(&Sequence::new(format!("@r{i}"), bases, vec![b'I'; len]));
+        }
+        assert_eq!(module.gc_distribution, expected);
+        assert_eq!(module.models.len(), 4);
     }
 }
