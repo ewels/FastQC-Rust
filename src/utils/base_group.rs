@@ -3,6 +3,8 @@
 /// Replicates the logic from `Graphs/BaseGroup.java`. Early positions are shown
 /// individually while later positions are grouped into bins so that general
 /// trends remain visible without overwhelming the output.
+use crate::progress::{log_line, OncePerRun};
+
 /// A range of read positions (0-based, inclusive on both ends).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BaseGroup {
@@ -29,7 +31,19 @@ impl BaseGroup {
     ///
     /// Replicates `BaseGroup.makeBaseGroups(int)`. The Java code
     /// works in 1-based coordinates internally and we convert to 0-based here.
+    ///
+    /// `--nogroup` is ignored above [`MAX_UNGROUPED_LENGTH`].
     pub fn make_base_groups(max_length: usize, nogroup: bool, expgroup: bool) -> Vec<BaseGroup> {
+        if nogroup && max_length > MAX_UNGROUPED_LENGTH {
+            static SAID: OncePerRun = OncePerRun::new();
+            if SAID.should_say() {
+                log_line(&format!(
+                    "Reads are longer than {} bp, so --nogroup is ignored and positions are grouped",
+                    MAX_UNGROUPED_LENGTH
+                ));
+            }
+        }
+        let nogroup = nogroup && max_length <= MAX_UNGROUPED_LENGTH;
         if nogroup {
             make_ungrouped_groups(max_length)
         } else if expgroup {
@@ -39,6 +53,12 @@ impl BaseGroup {
         }
     }
 }
+
+/// Longest read length `--nogroup` applies to. Beyond it the per-position charts
+/// take tens of seconds to rasterise, and from about 70 kb they exceed usvg's
+/// hard-coded 1,000,000-node limit, which made the whole file fail. Java has no
+/// such limit.
+pub const MAX_UNGROUPED_LENGTH: usize = 1000;
 
 /// Replicates `makeUngroupedGroups`. Java uses 1-based coordinates;
 /// we produce 0-based groups. Each position gets its own group.
@@ -180,6 +200,15 @@ fn make_linear_base_groups(max_length: usize) -> Vec<BaseGroup> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_nogroup_ignored_for_long_reads() {
+        assert_eq!(BaseGroup::make_base_groups(1000, true, false).len(), 1000);
+        assert_eq!(
+            BaseGroup::make_base_groups(1001, true, false),
+            BaseGroup::make_base_groups(1001, false, false)
+        );
+    }
 
     #[test]
     fn test_label_single() {
