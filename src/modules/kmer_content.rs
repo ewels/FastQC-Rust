@@ -441,8 +441,9 @@ impl QCModule for KmerContent {
     }
 
     fn ignore_in_report(&self) -> bool {
-        // Default is ignore=1 (ignored by default)
-        self.limits.threshold("kmer\tignore", 1.0) > 0.0
+        // A missing line means 0, as in Java's ModuleConfig and in
+        // create_modules. The bundled limits.txt sets `kmer ignore 1`.
+        self.limits.is_ignored("kmer")
     }
 
     // Image filename matches Java's "kmer_profiles.png" in Images/
@@ -474,5 +475,21 @@ impl QCModule for KmerContent {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shown_when_limits_have_no_kmer_line() {
+        let shown = |limits: &[(&str, f64)]| {
+            let limits: Limits = limits.iter().map(|&(k, v)| (k.to_string(), v)).collect();
+            !KmerContent::new(&limits, 7, false, false).ignore_in_report()
+        };
+        assert!(shown(&[]));
+        assert!(shown(&[("kmer\tignore", 0.0)]));
+        assert!(!shown(&[("kmer\tignore", 1.0)]));
     }
 }
