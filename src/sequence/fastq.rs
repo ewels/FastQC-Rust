@@ -609,6 +609,17 @@ impl FastQFile {
             self.lowest_char = self.lowest_char.min(lowest);
         }
 
+        // Modules slice reads as text by byte offset, so a multi-byte
+        // character would split and panic there.
+        if !seq_bytes.is_ascii() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Sequence contained a non-ASCII character at line {}",
+                    self.line_number - 2
+                ),
+            ));
+        }
         let seq_str = std::str::from_utf8(&seq_bytes).map_err(|_| invalid_utf8())?;
 
         // -- Colorspace detection (first record only) --
@@ -970,6 +981,16 @@ mod tests {
 
         // 'I' is ASCII 73
         assert_eq!(reader.lowest_char, b'I');
+    }
+
+    #[test]
+    fn test_rejects_non_ascii_sequence() {
+        let path = std::env::temp_dir().join(format!("fastqc_utf8_{}.fastq", std::process::id()));
+        std::fs::write(&path, "@r1\nACGTé\n+\nIIIIII\n").unwrap();
+        let result = FastQFile::open(&FastQCConfig::default(), &path);
+        std::fs::remove_file(&path).unwrap();
+        let error = result.err().expect("non-ASCII sequence should be rejected");
+        assert!(error.to_string().contains("non-ASCII character at line 2"));
     }
 
     #[test]
