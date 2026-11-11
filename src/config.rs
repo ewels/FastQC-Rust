@@ -48,7 +48,6 @@ pub struct FastQCConfig {
     pub phred64: bool,
     /// Embed PNG rather than SVG charts in the HTML report.
     pub png_output: bool,
-    pub temp_dir: Option<PathBuf>,
     pub template: TemplateName,
     /// Background gzip decoders per `.gz` file; `0` decodes on the reading
     /// thread. The runner lowers the default `1` to `0` for a file given only
@@ -79,7 +78,6 @@ impl Default for FastQCConfig {
             dup_length: 0,
             phred64: false,
             png_output: false,
-            temp_dir: None,
             template: TemplateName::Classic,
             decompress_threads: 1,
         }

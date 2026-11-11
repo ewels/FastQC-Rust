@@ -93,9 +93,8 @@ struct Cli {
     #[arg(short, long)]
     quiet: bool,
 
-    /// Selects a directory to be used for temporary files written when
-    /// generating report images. Defaults to system temp dir.
-    #[arg(short, long, value_name = "DIR")]
+    /// No-op: no temporary files are written. Kept so existing commands still work.
+    #[arg(short, long, value_name = "DIR", hide = true)]
     dir: Option<PathBuf>,
 
     /// Ignore reads shorter than this length (bp).
@@ -233,7 +232,6 @@ fn main() {
         dup_length: cli.dup_length,
         phred64: cli.phred64,
         png_output: cli.png,
-        temp_dir: cli.dir,
         template: cli.template,
         decompress_threads: cli.decompress_threads,
     };

@@ -76,9 +76,6 @@ pub trait SequenceFile: Send {
     /// The display name of this file (typically the filename).
     fn name(&self) -> &str;
 
-    /// Whether this file contains colorspace data (SOLiD).
-    fn is_colorspace(&self) -> bool;
-
     /// The quality encoding of this file, if the format specifies it.
     ///
     /// FASTQ carries no encoding information, so the default is `None` and
