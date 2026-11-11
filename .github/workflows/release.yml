@@ -41,12 +41,18 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
         run: |
           if [ "$EVENT_NAME" != "workflow_dispatch" ]; then
             echo "is_release=false" >> "$GITHUB_OUTPUT"
             echo "version=" >> "$GITHUB_OUTPUT"
             echo "Not a release run"
             exit 0
+          fi
+
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::Releases run from main only, not $REF"
+            exit 1
           fi
 
           # `grep '^version = '` (with the trailing space) so we don't also
@@ -273,7 +279,9 @@ jobs:
   # ------------------------------------------------------------------
   docker-merge:
     name: Docker merge
-    needs: [check-release, docker-build]
+    # Image tags (including `latest`) are pushed only once the binaries and
+    # the equivalence report have passed.
+    needs: [check-release, build-binaries, equivalence-report, docker-build]
     runs-on: ubuntu-latest
     permissions:
       packages: write
