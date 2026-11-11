@@ -1100,3 +1100,112 @@ fn test_zero_threads_is_rejected() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("must be at least 1"), "stderr: {stderr}");
 }
+
+/// Every read of a `SequenceFile`, as `(name, sequence, quality)`.
+fn read_all(file: &mut dyn SequenceFile) -> Vec<(String, String, String)> {
+    let mut reads = Vec::new();
+    while let Some(read) = file.next() {
+        let read = read.expect("read failed");
+        reads.push((
+            read.id,
+            String::from_utf8(read.sequence).unwrap(),
+            String::from_utf8(read.quality).unwrap(),
+        ));
+    }
+    reads
+}
+
+/// `reads.bam` is `samtools view -b --no-PG reads.sam`: a forward read, a
+/// reverse-strand read with a 3' soft clip, a forward read with a 5' soft
+/// clip, and an unmapped read. Binary BAM and SAM must agree.
+#[test]
+fn test_bam_and_sam_reads() {
+    use fastqc_rust::sequence::bam::BAMFile;
+    let owned = |r: &[(&str, &str, &str)]| -> Vec<(String, String, String)> {
+        r.iter()
+            .map(|(n, s, q)| (n.to_string(), s.to_string(), q.to_string()))
+            .collect()
+    };
+
+    for (path, is_bam) in [
+        ("tests/data/reads.bam", true),
+        ("tests/data/reads.sam", false),
+    ] {
+        // Reverse-strand reads are reverse-complemented, qualities reversed.
+        let mut all = BAMFile::open(Path::new(path), is_bam, false).unwrap();
+        assert_eq!(
+            read_all(&mut all),
+            owned(&[
+                ("fwd", "ACGTACGTAA", "IIIIIIIIII"),
+                ("rev", "CCGGGGTTTT", "JIHGFEDCBA"),
+                ("clip", "TTACGTACGT", "0123456789"),
+                ("unmapped", "GGGGG", "IIIII"),
+            ]),
+            "{path}"
+        );
+
+        // --mapped: unmapped reads go, and soft clips are cut before the
+        // reverse complement.
+        let mut mapped = BAMFile::open(Path::new(path), is_bam, true).unwrap();
+        assert_eq!(
+            read_all(&mut mapped),
+            owned(&[
+                ("fwd", "ACGTACGTAA", "IIIIIIIIII"),
+                ("rev", "GGGGTTTT", "HGFEDCBA"),
+                ("clip", "ACGTACGT", "23456789"),
+            ]),
+            "{path} --mapped"
+        );
+    }
+}
+
+/// A `.gz` cut off mid-stream fails the file instead of reporting the reads
+/// that happened to decompress.
+#[test]
+fn test_truncated_gzip_fails() {
+    let tmp_dir =
+        std::env::temp_dir().join(format!("fastqc_test_truncated_{}", std::process::id()));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    let full = std::fs::read("tests/data/realistic.fastq.gz").unwrap();
+    let cut = tmp_dir.join("cut.fastq.gz");
+    std::fs::write(&cut, &full[..full.len() / 2]).unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
+        .arg("-o")
+        .arg(&tmp_dir)
+        .arg(&cut)
+        .output()
+        .expect("Failed to run fastqc");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Failed to process cut.fastq.gz"),
+        "stderr: {stderr}"
+    );
+    assert!(!tmp_dir.join("cut_fastqc.zip").exists());
+
+    std::fs::remove_dir_all(&tmp_dir).unwrap();
+}
+
+/// `--extract --delete` leaves the extracted folder and removes the zip.
+#[test]
+fn test_extract_and_delete() {
+    let tmp_dir = std::env::temp_dir().join(format!("fastqc_test_delete_{}", std::process::id()));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_fastqc"))
+        .args(["--quiet", "--extract", "--delete", "-o"])
+        .arg(&tmp_dir)
+        .arg(MINIMAL)
+        .output()
+        .expect("Failed to run fastqc");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(tmp_dir.join("minimal_fastqc/fastqc_data.txt").is_file());
+    assert!(!tmp_dir.join("minimal_fastqc.zip").exists());
+
+    std::fs::remove_dir_all(&tmp_dir).unwrap();
+}
