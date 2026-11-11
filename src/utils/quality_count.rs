@@ -3,17 +3,30 @@
 /// Replicates the logic from `Utilities/QualityCount.java`.
 /// Accumulates quality score counts for a single read position.
 ///
-/// JAVA COMPAT: Uses a fixed 150-slot array indexed by ASCII value, matching
-/// the Java `long[] actualCounts = new long[150]` exactly.
+/// JAVA COMPAT: Behaves as Java's `long[] actualCounts = new long[150]` indexed
+/// by ASCII value. Java's array is 1.2 KB per read position, which reached
+/// hundreds of MB on long reads. Here the printable range `!` to `~` (every
+/// Phred+33 and Phred+64 quality) sits in a 752-byte inline array, and the full
+/// array is only allocated for a position that sees a character outside it,
+/// which only a corrupt file has.
 pub struct QualityCount {
-    actual_counts: [u64; 150],
+    /// Counts for ASCII `COMMON_LOW..COMMON_LOW + COMMON_SLOTS`.
+    common: [u64; COMMON_SLOTS],
+    /// Counts for every other character, indexed by ASCII.
+    others: Option<Box<[u64; SLOTS]>>,
     total_counts: u64,
 }
+
+/// Number of slots in Java's array; characters above it are clamped.
+const SLOTS: usize = 150;
+const COMMON_LOW: usize = 33;
+const COMMON_SLOTS: usize = 94;
 
 impl QualityCount {
     pub fn new() -> Self {
         QualityCount {
-            actual_counts: [0u64; 150],
+            common: [0; COMMON_SLOTS],
+            others: None,
             total_counts: 0,
         }
     }
@@ -23,11 +36,11 @@ impl QualityCount {
     /// Matches `addValue(char c)` which indexes by `(int)c`.
     #[inline]
     pub fn add_value(&mut self, quality_char: u8) {
-        let idx = quality_char as usize;
-        if idx >= self.actual_counts.len() {
+        let mut idx = quality_char as usize;
+        if idx >= SLOTS {
             // Java throws ArrayIndexOutOfBoundsException here; clamp to the last
             // slot so a corrupt quality char doesn't abort the run.
-            let max = self.actual_counts.len() - 1;
+            let max = SLOTS - 1;
             static WARNED: crate::progress::OncePerRun = crate::progress::OncePerRun::new();
             WARNED.log(|| {
                 format!(
@@ -35,12 +48,21 @@ impl QualityCount {
                     quality_char as char, quality_char, max
                 )
             });
-            self.actual_counts[max] += 1;
-            self.total_counts += 1;
-            return;
+            idx = max;
         }
-        self.actual_counts[idx] += 1;
+        match self.common.get_mut(idx.wrapping_sub(COMMON_LOW)) {
+            Some(slot) => *slot += 1,
+            None => self.others.get_or_insert_with(|| Box::new([0; SLOTS]))[idx] += 1,
+        }
         self.total_counts += 1;
+    }
+
+    /// The count for ASCII `c`, as Java's `actualCounts[c]`.
+    fn count(&self, c: usize) -> u64 {
+        match c.checked_sub(COMMON_LOW).and_then(|i| self.common.get(i)) {
+            Some(&n) => n,
+            None => self.others.as_ref().map_or(0, |o| o[c]),
+        }
     }
 
     pub fn get_total_count(&self) -> u64 {
@@ -49,8 +71,8 @@ impl QualityCount {
 
     /// Lowest ASCII character with a non-zero count.
     pub fn get_min_char(&self) -> Option<u8> {
-        for i in 0..self.actual_counts.len() {
-            if self.actual_counts[i] > 0 {
+        for i in 0..SLOTS {
+            if self.count(i) > 0 {
                 return Some(i as u8);
             }
         }
@@ -59,8 +81,8 @@ impl QualityCount {
 
     /// Highest ASCII character with a non-zero count.
     pub fn get_max_char(&self) -> Option<u8> {
-        for i in (0..self.actual_counts.len()).rev() {
-            if self.actual_counts[i] > 0 {
+        for i in (0..SLOTS).rev() {
+            if self.count(i) > 0 {
                 return Some(i as u8);
             }
         }
@@ -77,9 +99,9 @@ impl QualityCount {
         let mut count: u64 = 0;
         let off = offset as usize;
 
-        for i in off..self.actual_counts.len() {
-            total += self.actual_counts[i] * (i - off) as u64;
-            count += self.actual_counts[i];
+        for i in off..SLOTS {
+            total += self.count(i) * (i - off) as u64;
+            count += self.count(i);
         }
 
         // JAVA COMPAT: Java returns ((double)total)/count which is NaN when count == 0.
@@ -102,8 +124,8 @@ impl QualityCount {
         let off = offset as usize;
         let mut count: u64 = 0;
 
-        for i in off..self.actual_counts.len() {
-            count += self.actual_counts[i];
+        for i in off..SLOTS {
+            count += self.count(i);
             if count >= threshold {
                 // JAVA COMPAT: Java returns `(char)(i - offset)` cast to double.
                 // The char-to-double cast in Java just gives the numeric value.
@@ -168,6 +190,64 @@ impl Default for QualityCount {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Java's full 150-slot array, to check the compact storage against.
+    #[test]
+    fn test_matches_full_java_array() {
+        let streams: [&[u8]; 5] = [
+            b"IIII",
+            b"5?I#5",              // widens downward after the first value
+            b"#III+!~",            // '!' below and '~' above the first range
+            &[200, 73, 2, 149, 0], // clamped, near-zero and edge values
+            b"",
+        ];
+        for stream in streams {
+            let mut qc = QualityCount::new();
+            let mut java = [0u64; 150];
+            for &c in stream {
+                qc.add_value(c);
+                java[(c as usize).min(149)] += 1;
+            }
+            for (c, &n) in java.iter().enumerate() {
+                assert_eq!(qc.count(c), n, "{stream:?} char {c}");
+            }
+            assert_eq!(qc.get_total_count(), stream.len() as u64);
+            assert_eq!(
+                qc.get_min_char(),
+                java.iter().position(|&n| n > 0).map(|i| i as u8)
+            );
+            assert_eq!(
+                qc.get_max_char(),
+                java.iter().rposition(|&n| n > 0).map(|i| i as u8)
+            );
+            for offset in [33, 64] {
+                for pct in [0, 10, 25, 50, 75, 90, 100] {
+                    let threshold = stream.len() as u64 * pct as u64 / 100;
+                    let mut seen = 0;
+                    let java_pct = (offset as usize..150)
+                        .find(|&i| {
+                            seen += java[i];
+                            seen >= threshold
+                        })
+                        .map_or(-1.0, |i| (i - offset as usize) as f64);
+                    assert_eq!(
+                        qc.get_percentile(offset, pct),
+                        java_pct,
+                        "{stream:?} {pct}%"
+                    );
+                }
+                let (mean, java_mean) = (qc.get_mean(offset), {
+                    let (mut t, mut n) = (0u64, 0u64);
+                    for (i, &k) in java.iter().enumerate().skip(offset as usize) {
+                        t += k * (i - offset as usize) as u64;
+                        n += k;
+                    }
+                    t as f64 / n as f64
+                });
+                assert!(mean == java_mean || (mean.is_nan() && java_mean.is_nan()));
+            }
+        }
+    }
 
     #[test]
     fn test_empty_counts() {
