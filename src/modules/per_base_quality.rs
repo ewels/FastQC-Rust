@@ -1,6 +1,7 @@
 // Per Base Sequence Quality module
 // Corresponds to Modules/PerBaseQualityScores.java
 
+use std::cell::OnceCell;
 use std::io;
 
 use crate::config::{Limits, LimitsExt};
@@ -20,6 +21,8 @@ pub struct PerBaseQualityScores {
     // Set by QCModule::set_phred_encoding; see the trait docs.
     known_encoding: Option<phred::PhredEncoding>,
     limits: Limits,
+    /// [`Self::calculate`], done once: every caller runs after the last read.
+    calculated: OnceCell<CalculatedData>,
 }
 
 impl PerBaseQualityScores {
@@ -30,7 +33,12 @@ impl PerBaseQualityScores {
             expgroup,
             known_encoding: None,
             limits: limits.clone(),
+            calculated: OnceCell::new(),
         }
+    }
+
+    fn calculated(&self) -> &CalculatedData {
+        self.calculated.get_or_init(|| self.calculate())
     }
 
     fn calculate(&self) -> CalculatedData {
@@ -126,7 +134,7 @@ impl PerBaseQualityScores {
 impl PerBaseQualityScores {
     /// Generate the SVG chart for this module.
     fn build_chart_svg(&self) -> String {
-        let data = self.calculate();
+        let data = self.calculated();
         let (min_char, max_char) = quality_count::calculate_offsets(&self.quality_counts);
         // If no quality data, default to Sanger.
         let encoding = phred::resolve(self.known_encoding, min_char as u16)
@@ -151,16 +159,16 @@ impl PerBaseQualityScores {
 
         render_quality_boxplot(&QualityBoxPlotData {
             width: scaled_chart_width(data.x_labels.len()),
-            means: data.means,
-            medians: data.medians,
-            lower_quartile: data.lower_quartile,
-            upper_quartile: data.upper_quartile,
-            lowest: data.lowest,
-            highest: data.highest,
+            means: data.means.clone(),
+            medians: data.medians.clone(),
+            lower_quartile: data.lower_quartile.clone(),
+            upper_quartile: data.upper_quartile.clone(),
+            lowest: data.lowest.clone(),
+            highest: data.highest.clone(),
             min_y,
             max_y,
             y_interval,
-            x_labels: data.x_labels,
+            x_labels: data.x_labels.clone(),
             title,
         })
     }
@@ -198,11 +206,12 @@ impl QCModule for PerBaseQualityScores {
     }
 
     fn reset(&mut self) {
+        self.calculated.take();
         self.quality_counts.clear();
     }
 
     fn raises_error(&self) -> bool {
-        let data = self.calculate();
+        let data = self.calculated();
         let lq_error = self.limits.threshold("quality_base_lower\terror", 5.0);
         let median_error = self.limits.threshold("quality_base_median\terror", 20.0);
 
@@ -219,7 +228,7 @@ impl QCModule for PerBaseQualityScores {
     }
 
     fn raises_warning(&self) -> bool {
-        let data = self.calculate();
+        let data = self.calculated();
         let lq_warn = self.limits.threshold("quality_base_lower\twarn", 10.0);
         let median_warn = self.limits.threshold("quality_base_median\twarn", 25.0);
 
@@ -244,7 +253,7 @@ impl QCModule for PerBaseQualityScores {
     }
 
     fn write_text_report(&self, writer: &mut dyn io::Write) -> io::Result<()> {
-        let data = self.calculate();
+        let data = self.calculated();
 
         // Header matches Java's makeReport output exactly
         writeln!(

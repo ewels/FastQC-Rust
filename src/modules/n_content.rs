@@ -1,6 +1,7 @@
 // Per Base N Content module
 // Corresponds to Modules/NContent.java
 
+use std::cell::OnceCell;
 use std::io;
 
 use crate::config::{Limits, LimitsExt};
@@ -18,6 +19,8 @@ pub struct NContent {
     nogroup: bool,
     expgroup: bool,
     limits: Limits,
+    /// [`Self::calculate`], done once: every caller runs after the last read.
+    calculated: OnceCell<NContentData>,
 }
 
 impl NContent {
@@ -28,7 +31,12 @@ impl NContent {
             nogroup,
             expgroup,
             limits: limits.clone(),
+            calculated: OnceCell::new(),
         }
+    }
+
+    fn calculated(&self) -> &NContentData {
+        self.calculated.get_or_init(|| self.calculate())
     }
 
     fn calculate(&self) -> NContentData {
@@ -64,17 +72,17 @@ impl NContent {
 
 impl NContent {
     fn build_chart_svg(&self) -> String {
-        let data = self.calculate();
+        let data = self.calculated();
 
         // minY=0, maxY=100 for percentage, matching Java's constructor
         render_line_graph(&LineGraphData {
             width: scaled_chart_width(data.x_categories.len()),
-            data: vec![data.percentages],
+            data: vec![data.percentages.clone()],
             min_y: 0.0,
             max_y: 100.0,
             x_label: "Position in read (bp)".to_string(),
             series_names: vec!["%N".to_string()],
-            x_categories: data.x_categories,
+            x_categories: data.x_categories.clone(),
             title: "N content across all bases".to_string(),
         })
     }
@@ -113,19 +121,20 @@ impl QCModule for NContent {
     }
 
     fn reset(&mut self) {
+        self.calculated.take();
         self.n_counts.clear();
         self.not_n_counts.clear();
     }
 
     fn raises_error(&self) -> bool {
         let threshold = self.limits.threshold("n_content\terror", 20.0);
-        let data = self.calculate();
+        let data = self.calculated();
         data.percentages.iter().any(|&p| p > threshold)
     }
 
     fn raises_warning(&self) -> bool {
         let threshold = self.limits.threshold("n_content\twarn", 5.0);
-        let data = self.calculate();
+        let data = self.calculated();
         data.percentages.iter().any(|&p| p > threshold)
     }
 
@@ -138,7 +147,7 @@ impl QCModule for NContent {
     }
 
     fn write_text_report(&self, writer: &mut dyn io::Write) -> io::Result<()> {
-        let data = self.calculate();
+        let data = self.calculated();
 
         // Header matches Java's makeReport
         writeln!(writer, "#Base\tN-Count")?;
@@ -170,4 +179,21 @@ impl QCModule for NContent {
 struct NContentData {
     x_categories: Vec<String>,
     percentages: Vec<f64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_reset_drops_the_computed_results() {
+        let read = |s: &[u8]| Sequence::new("r".into(), s.to_vec(), vec![b'I'; s.len()]);
+        let mut module = NContent::new(&Limits::new(), false, false);
+        module.process_sequence(&read(b"NNNN"));
+        assert!(module.raises_error());
+
+        module.reset();
+        module.process_sequence(&read(b"ACGT"));
+        assert!(!module.raises_error());
+    }
 }
