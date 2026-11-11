@@ -4,24 +4,29 @@
 /// Accumulates quality score counts for a single read position.
 ///
 /// JAVA COMPAT: Behaves as Java's `long[] actualCounts = new long[150]` indexed
-/// by ASCII value, but only stores the range of characters actually seen. Java's
-/// array is 1.2 KB per read position, which reached hundreds of MB on long reads,
-/// while real qualities span about 40 characters.
+/// by ASCII value. Java's array is 1.2 KB per read position, which reached
+/// hundreds of MB on long reads. Here the printable range `!` to `~` (every
+/// Phred+33 and Phred+64 quality) sits in a 752-byte inline array, and the full
+/// array is only allocated for a position that sees a character outside it,
+/// which only a corrupt file has.
 pub struct QualityCount {
-    /// Counts for ASCII `low..low + counts.len()`; every other slot is 0.
-    low: u8,
-    counts: Vec<u64>,
+    /// Counts for ASCII `COMMON_LOW..COMMON_LOW + COMMON_SLOTS`.
+    common: [u64; COMMON_SLOTS],
+    /// Counts for every other character, indexed by ASCII.
+    others: Option<Box<[u64; SLOTS]>>,
     total_counts: u64,
 }
 
 /// Number of slots in Java's array; characters above it are clamped.
 const SLOTS: usize = 150;
+const COMMON_LOW: usize = 33;
+const COMMON_SLOTS: usize = 94;
 
 impl QualityCount {
     pub fn new() -> Self {
         QualityCount {
-            low: 0,
-            counts: Vec::new(),
+            common: [0; COMMON_SLOTS],
+            others: None,
             total_counts: 0,
         }
     }
@@ -45,35 +50,19 @@ impl QualityCount {
             });
             idx = max;
         }
-        match self.counts.get_mut(idx.wrapping_sub(self.low as usize)) {
+        match self.common.get_mut(idx.wrapping_sub(COMMON_LOW)) {
             Some(slot) => *slot += 1,
-            None => self.widen_to(idx),
+            None => self.others.get_or_insert_with(|| Box::new([0; SLOTS]))[idx] += 1,
         }
         self.total_counts += 1;
     }
 
-    /// Grow the stored range to include `idx`, counting it once.
-    #[cold]
-    fn widen_to(&mut self, idx: usize) {
-        let low = self.low as usize;
-        if self.counts.is_empty() {
-            self.low = idx as u8;
-            self.counts.push(0);
-        } else if idx < low {
-            self.counts.splice(0..0, std::iter::repeat_n(0, low - idx));
-            self.low = idx as u8;
-        } else {
-            self.counts.resize(idx - low + 1, 0);
-        }
-        self.counts[idx - self.low as usize] += 1;
-    }
-
     /// The count for ASCII `c`, as Java's `actualCounts[c]`.
     fn count(&self, c: usize) -> u64 {
-        c.checked_sub(self.low as usize)
-            .and_then(|i| self.counts.get(i))
-            .copied()
-            .unwrap_or(0)
+        match c.checked_sub(COMMON_LOW).and_then(|i| self.common.get(i)) {
+            Some(&n) => n,
+            None => self.others.as_ref().map_or(0, |o| o[c]),
+        }
     }
 
     pub fn get_total_count(&self) -> u64 {
