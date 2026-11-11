@@ -34,12 +34,16 @@ pub fn get_casava_basename(original_name: &str) -> Result<String, NameFormatErro
     // The Java code checks two cases: `.fastq.gz` and `.fastq`.
     // For `.fastq.gz`: expects `_` at position len-13, then 3 digits at len-12..len-9.
     // For `.fastq`:    expects `_` at position len-10, then 3 digits at len-9..len-6.
+    // The `_` is compared as a byte: slicing first would panic inside a
+    // multi-byte character, and once it is `_` every later slice is on a
+    // char boundary.
+    let bytes = original_name.as_bytes();
 
     if original_name.ends_with(".fastq.gz") {
         let len = original_name.len();
         // Check for '_' 13 chars before the end (i.e. before "NNN.fastq.gz")
         if len >= 13
-            && &original_name[len - 13..len - 12] == "_"
+            && bytes[len - 13] == b'_'
             && original_name[len - 12..len - 9].parse::<u32>().is_ok()
         {
             // basename = everything before the underscore + ".fastq.gz"
@@ -50,7 +54,7 @@ pub fn get_casava_basename(original_name: &str) -> Result<String, NameFormatErro
         let len = original_name.len();
         // Check for '_' 10 chars before the end (i.e. before "NNN.fastq")
         if len >= 10
-            && &original_name[len - 10..len - 9] == "_"
+            && bytes[len - 10] == b'_'
             && original_name[len - 9..len - 6].parse::<u32>().is_ok()
         {
             // basename = everything before the underscore + ".fastq"
@@ -192,6 +196,17 @@ mod tests {
     fn test_casava_basename_not_digits() {
         // The 3 chars before .fastq must be parseable as integer
         assert!(get_casava_basename("sample_abc.fastq.gz").is_err());
+    }
+
+    #[test]
+    fn test_casava_basename_non_ascii() {
+        // Byte offsets used to land inside these characters and panic.
+        assert!(get_casava_basename("样本1.fastq.gz").is_err());
+        assert!(get_casava_basename("x_é01.fastq").is_err());
+        assert_eq!(
+            get_casava_basename("样本_001.fastq.gz").unwrap(),
+            "样本.fastq.gz"
+        );
     }
 
     #[test]
