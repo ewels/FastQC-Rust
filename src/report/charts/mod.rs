@@ -421,6 +421,39 @@ const FONT_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/LiberationSans
 const FONT_BOLD: &[u8] = include_bytes!("../../../assets/fonts/LiberationSans-Bold.ttf");
 
 pub fn svg_to_png(svg: &str) -> Result<Vec<u8>, String> {
+    use std::hash::{Hash, Hasher};
+
+    thread_local! {
+        /// PNGs of the report being written. With `--png` the HTML and the zip
+        /// each need every chart, and rasterising is most of a report's cost.
+        /// A report is written on one thread and has at most 11 charts.
+        static RECENT: std::cell::RefCell<std::collections::VecDeque<(u64, Vec<u8>)>> =
+            const { std::cell::RefCell::new(std::collections::VecDeque::new()) };
+    }
+    const KEEP: usize = 16;
+
+    let mut hasher = std::hash::DefaultHasher::new();
+    svg.hash(&mut hasher);
+    // shortcut: keyed by a 64-bit hash, not the SVG itself (which can be 100+ MB);
+    // a collision would reuse another chart's PNG, at odds of about 2^-64.
+    let key = hasher.finish();
+
+    if let Some(png) =
+        RECENT.with_borrow(|r| r.iter().find(|(k, _)| *k == key).map(|(_, p)| p.clone()))
+    {
+        return Ok(png);
+    }
+    let png = rasterise(svg)?;
+    RECENT.with_borrow_mut(|r| {
+        if r.len() == KEEP {
+            r.pop_front();
+        }
+        r.push_back((key, png.clone()));
+    });
+    Ok(png)
+}
+
+fn rasterise(svg: &str) -> Result<Vec<u8>, String> {
     use resvg::usvg;
     use tiny_skia::Pixmap;
 
@@ -498,6 +531,17 @@ mod tests {
     fn test_chart_color_rgb_string() {
         let c = ChartColor::new(255, 128, 0);
         assert_eq!(c.to_rgb_string(), "rgb(255,128,0)");
+    }
+
+    #[test]
+    fn test_png_cache_returns_the_right_chart() {
+        let svg = |w: f64| format!("{}{}", svg_header(w, 600.0), svg_footer());
+        let (a, b) = (svg(800.0), svg(900.0));
+        let png_a = svg_to_png(&a).unwrap();
+        let png_b = svg_to_png(&b).unwrap();
+        assert_ne!(png_a, png_b);
+        assert_eq!(svg_to_png(&a).unwrap(), png_a);
+        assert_eq!(svg_to_png(&a).unwrap(), rasterise(&a).unwrap());
     }
 
     #[test]
