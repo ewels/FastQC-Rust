@@ -1,6 +1,7 @@
 // Per Sequence Quality Scores module
 // Corresponds to Modules/PerSequenceQualityScores.java
 
+use std::cell::OnceCell;
 use std::io;
 
 use crate::config::{Limits, LimitsExt};
@@ -26,6 +27,8 @@ pub struct PerSequenceQualityScores {
     // Set by QCModule::set_phred_encoding; see the trait docs.
     known_encoding: Option<phred::PhredEncoding>,
     limits: Limits,
+    /// [`Self::calculate`], done once: every caller runs after the last read.
+    calculated: OnceCell<Option<DistributionData>>,
 }
 
 impl PerSequenceQualityScores {
@@ -36,7 +39,12 @@ impl PerSequenceQualityScores {
             lowest_char: phred::NO_QUALITY_SEEN,
             known_encoding: None,
             limits: limits.clone(),
+            calculated: OnceCell::new(),
         }
+    }
+
+    fn calculated(&self) -> &Option<DistributionData> {
+        self.calculated.get_or_init(|| self.calculate())
     }
 
     fn calculate(&self) -> Option<DistributionData> {
@@ -96,7 +104,7 @@ impl PerSequenceQualityScores {
 
 impl PerSequenceQualityScores {
     fn build_chart_svg(&self) -> Option<String> {
-        let data = self.calculate()?;
+        let data = self.calculated().as_ref()?;
 
         let max_count = data
             .quality_distribution
@@ -111,7 +119,7 @@ impl PerSequenceQualityScores {
 
         Some(render_line_graph(&LineGraphData {
             width: CHART_WIDTH,
-            data: vec![data.quality_distribution],
+            data: vec![data.quality_distribution.clone()],
             min_y: 0.0,
             max_y,
             // These labels match the Java constructor call
@@ -181,6 +189,7 @@ impl QCModule for PerSequenceQualityScores {
     }
 
     fn reset(&mut self) {
+        self.calculated.take();
         self.average_score_counts = [0u64; MAX_QUALITY_SCORE];
         self.has_data = false;
         self.lowest_char = phred::NO_QUALITY_SEEN;
@@ -189,13 +198,15 @@ impl QCModule for PerSequenceQualityScores {
     fn raises_error(&self) -> bool {
         let error_threshold = self.limits.threshold("quality_sequence\terror", 20.0);
         // Error if most frequent quality score <= threshold
-        self.calculate()
+        self.calculated()
+            .as_ref()
             .is_some_and(|data| (data.most_frequent_score as f64) <= error_threshold)
     }
 
     fn raises_warning(&self) -> bool {
         let warn_threshold = self.limits.threshold("quality_sequence\twarn", 27.0);
-        self.calculate()
+        self.calculated()
+            .as_ref()
             .is_some_and(|data| (data.most_frequent_score as f64) <= warn_threshold)
     }
 
@@ -208,7 +219,7 @@ impl QCModule for PerSequenceQualityScores {
     }
 
     fn write_text_report(&self, writer: &mut dyn io::Write) -> io::Result<()> {
-        let data = match self.calculate() {
+        let data = match self.calculated() {
             Some(d) => d,
             None => return Ok(()),
         };

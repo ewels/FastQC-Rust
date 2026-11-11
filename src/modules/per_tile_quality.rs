@@ -1,6 +1,7 @@
 // Per Tile Sequence Quality module
 // Corresponds to Modules/PerTileQualityScores.java
 
+use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::io;
 
@@ -26,6 +27,8 @@ pub struct PerTileQualityScores {
     // Set by QCModule::set_phred_encoding; see the trait docs.
     known_encoding: Option<phred::PhredEncoding>,
     limits: Limits,
+    /// [`Self::calculate`], done once: every caller runs after the last read.
+    calculated: OnceCell<Option<TileCalculatedData>>,
 }
 
 impl PerTileQualityScores {
@@ -40,7 +43,12 @@ impl PerTileQualityScores {
             expgroup,
             known_encoding: None,
             limits: limits.clone(),
+            calculated: OnceCell::new(),
         }
+    }
+
+    fn calculated(&self) -> &Option<TileCalculatedData> {
+        self.calculated.get_or_init(|| self.calculate())
     }
 
     fn calculate(&self) -> Option<TileCalculatedData> {
@@ -139,15 +147,15 @@ impl PerTileQualityScores {
 
 impl PerTileQualityScores {
     fn build_chart_svg(&self) -> Option<String> {
-        let data = self.calculate()?;
+        let data = self.calculated().as_ref()?;
 
         // Color scale max is the error threshold from config
         let color_scale_max = self.limits.threshold("tile\terror", 5.0);
 
         Some(render_tile_graph(&TileGraphData {
-            x_labels: data.x_labels,
-            tiles: data.tiles,
-            tile_base_means: data.means,
+            x_labels: data.x_labels.clone(),
+            tiles: data.tiles.clone(),
+            tile_base_means: data.means.clone(),
             color_scale_max,
         }))
     }
@@ -255,6 +263,7 @@ impl QCModule for PerTileQualityScores {
     }
 
     fn reset(&mut self) {
+        self.calculated.take();
         self.total_count = 0;
         self.per_tile_quality_counts.clear();
         self.current_length = 0;
@@ -264,13 +273,15 @@ impl QCModule for PerTileQualityScores {
 
     fn raises_error(&self) -> bool {
         let threshold = self.limits.threshold("tile\terror", 5.0);
-        self.calculate()
+        self.calculated()
+            .as_ref()
             .is_some_and(|data| data.max_deviation > threshold)
     }
 
     fn raises_warning(&self) -> bool {
         let threshold = self.limits.threshold("tile\twarn", 2.0);
-        self.calculate()
+        self.calculated()
+            .as_ref()
             .is_some_and(|data| data.max_deviation > threshold)
     }
 
@@ -284,7 +295,7 @@ impl QCModule for PerTileQualityScores {
     }
 
     fn write_text_report(&self, writer: &mut dyn io::Write) -> io::Result<()> {
-        let data = match self.calculate() {
+        let data = match self.calculated() {
             Some(d) => d,
             None => return Ok(()),
         };

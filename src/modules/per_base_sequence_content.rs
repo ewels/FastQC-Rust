@@ -1,6 +1,7 @@
 // Per Base Sequence Content module
 // Corresponds to Modules/PerBaseSequenceContent.java
 
+use std::cell::OnceCell;
 use std::io;
 
 use crate::config::{Limits, LimitsExt};
@@ -20,6 +21,8 @@ pub struct PerBaseSequenceContent {
     nogroup: bool,
     expgroup: bool,
     limits: Limits,
+    /// [`Self::calculate`], done once: every caller runs after the last read.
+    calculated: OnceCell<ContentData>,
 }
 
 impl PerBaseSequenceContent {
@@ -29,7 +32,12 @@ impl PerBaseSequenceContent {
             nogroup,
             expgroup,
             limits: limits.clone(),
+            calculated: OnceCell::new(),
         }
+    }
+
+    fn calculated(&self) -> &ContentData {
+        self.calculated.get_or_init(|| self.calculate())
     }
 
     fn calculate(&self) -> ContentData {
@@ -81,17 +89,17 @@ impl PerBaseSequenceContent {
 
 impl PerBaseSequenceContent {
     fn build_chart_svg(&self) -> String {
-        let data = self.calculate();
+        let data = self.calculated();
 
         // Series order in LineGraph is [%T, %C, %A, %G], matching Java's
         // `new LineGraph(percentages, 0d, 100d, ..., new String[] {"%T","%C","%A","%G"}, ...)`
         render_line_graph(&LineGraphData {
             width: scaled_chart_width(data.x_categories.len()),
             data: vec![
-                data.t_percent,
-                data.c_percent,
-                data.a_percent,
-                data.g_percent,
+                data.t_percent.clone(),
+                data.c_percent.clone(),
+                data.a_percent.clone(),
+                data.g_percent.clone(),
             ],
             min_y: 0.0,
             max_y: 100.0,
@@ -102,7 +110,7 @@ impl PerBaseSequenceContent {
                 "%A".to_string(),
                 "%G".to_string(),
             ],
-            x_categories: data.x_categories,
+            x_categories: data.x_categories.clone(),
             title: "Sequence content across all bases".to_string(),
         })
     }
@@ -141,12 +149,13 @@ impl QCModule for PerBaseSequenceContent {
     }
 
     fn reset(&mut self) {
+        self.calculated.take();
         self.counts.clear();
     }
 
     fn raises_error(&self) -> bool {
         let error_threshold = self.limits.threshold("sequence\terror", 20.0);
-        let data = self.calculate();
+        let data = self.calculated();
 
         // Check GC diff (C vs G) and AT diff (T vs A) per group
         for i in 0..data.g_percent.len() {
@@ -162,7 +171,7 @@ impl QCModule for PerBaseSequenceContent {
 
     fn raises_warning(&self) -> bool {
         let warn_threshold = self.limits.threshold("sequence\twarn", 10.0);
-        let data = self.calculate();
+        let data = self.calculated();
 
         for i in 0..data.g_percent.len() {
             let gc_diff = (data.c_percent[i] - data.g_percent[i]).abs();
@@ -184,7 +193,7 @@ impl QCModule for PerBaseSequenceContent {
     }
 
     fn write_text_report(&self, writer: &mut dyn io::Write) -> io::Result<()> {
-        let data = self.calculate();
+        let data = self.calculated();
 
         // Column order is G, A, T, C matching Java's makeReport
         writeln!(writer, "#Base\tG\tA\tT\tC")?;
