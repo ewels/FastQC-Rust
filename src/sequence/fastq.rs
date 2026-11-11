@@ -789,14 +789,17 @@ fn convert_colorspace_to_bases(s: &str) -> io::Result<String> {
             bp[i - 2]
         };
 
-        // If refBase is not a valid DNA letter, Java throws
-        // IllegalArgumentException. We replicate with a panic for now, but
-        // callers should ensure valid input.
-        debug_assert!(
-            matches!(ref_base, b'G' | b'A' | b'T' | b'C'),
-            "Colorspace sequence data should always start with a real DNA letter, got '{}'",
-            ref_base as char,
-        );
+        // Java throws IllegalArgumentException, failing just this file.
+        if !matches!(ref_base, b'G' | b'A' | b'T' | b'C') {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Colorspace sequence data should always start with a real DNA letter. \
+                     Line '{}' started with {} at position {}",
+                    s, ref_base as char, i
+                ),
+            ));
+        }
 
         // The colorspace-to-base lookup table. Each color digit
         // encodes a transition from the reference base:
@@ -917,6 +920,13 @@ mod tests {
     #[test]
     fn test_convert_colorspace_rejects_bases() {
         let err = convert_colorspace_to_bases("TACGT").unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    }
+
+    /// `N` passes the colorspace check but is no base to decode from.
+    #[test]
+    fn test_convert_colorspace_rejects_n_start() {
+        let err = convert_colorspace_to_bases("N0123").unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);
     }
 
