@@ -24,6 +24,9 @@ struct GCModel {
     models: Vec<Vec<GCModelValue>>,
 }
 
+/// Longest read length whose GC model stays cached for the whole run.
+const MAX_CACHED_LENGTH: usize = 1000;
+
 impl GCModel {
     fn new(read_length: usize) -> Self {
         // Two-pass algorithm from GCModel.java
@@ -80,6 +83,8 @@ pub struct PerSequenceGCContent {
     gc_distribution: [f64; 101],
     // Cache GCModels by read length to avoid recomputing
     cached_models: Vec<Option<GCModel>>,
+    /// The most recent model above [`MAX_CACHED_LENGTH`], with its length.
+    long_model: Option<(usize, GCModel)>,
     limits: Limits,
     // Lazily computed results
     deviation_percent: Option<f64>,
@@ -93,6 +98,7 @@ impl PerSequenceGCContent {
             gc_distribution: [0.0; 101],
             // Initial cache size 200, grows as needed
             cached_models: Vec::new(),
+            long_model: None,
             limits: limits.clone(),
             deviation_percent: None,
             theoretical_distribution: None,
@@ -265,17 +271,21 @@ impl QCModule for PerSequenceGCContent {
         let [_, c, g, _] = count_acgt(&seq[..truncated_len]);
         let gc_count = (c + g) as usize;
 
-        // Ensure cache is large enough
-        if truncated_len >= self.cached_models.len() {
-            self.cached_models.resize_with(truncated_len + 1, || None);
-        }
-
-        // Create model if not cached
-        if self.cached_models[truncated_len].is_none() {
-            self.cached_models[truncated_len] = Some(GCModel::new(truncated_len));
-        }
-
-        let model = self.cached_models[truncated_len].as_ref().unwrap();
+        // A model holds a few dozen bytes per base, and long reads come in
+        // up to one length per kb, so caching them all ran to gigabytes on
+        // nanopore data. Above the limit only the latest model is kept;
+        // building one costs about as much as counting the read's GC.
+        let model = if truncated_len <= MAX_CACHED_LENGTH {
+            if truncated_len >= self.cached_models.len() {
+                self.cached_models.resize_with(truncated_len + 1, || None);
+            }
+            self.cached_models[truncated_len].get_or_insert_with(|| GCModel::new(truncated_len))
+        } else {
+            if self.long_model.as_ref().map(|(len, _)| *len) != Some(truncated_len) {
+                self.long_model = Some((truncated_len, GCModel::new(truncated_len)));
+            }
+            &self.long_model.as_ref().expect("set above").1
+        };
         let values = model.get_model_values(gc_count);
 
         for v in values {
@@ -341,5 +351,30 @@ impl QCModule for PerSequenceGCContent {
     }
     fn generate_chart_svg(&self) -> Option<String> {
         Some(self.build_chart_svg())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_long_reads_match_fresh_models() {
+        // Alternate long lengths so the single long-model slot is rebuilt,
+        // and mix in a short read that uses the cache.
+        let lengths = [2500, 3600, 2500, 150, 3600];
+        let mut module = PerSequenceGCContent::new(&Limits::new());
+        let mut expected = [0.0f64; 101];
+        for (i, &len) in lengths.iter().enumerate() {
+            let bases: Vec<u8> = (0..len).map(|j| b"ACGTG"[(i + j) % 5]).collect();
+            let truncated = PerSequenceGCContent::truncate_length(len);
+            let [_, c, g, _] = count_acgt(&bases[..truncated]);
+            for v in GCModel::new(truncated).get_model_values((c + g) as usize) {
+                expected[v.percentage] += v.increment;
+            }
+            module.process_sequence(&Sequence::new(format!("@r{i}"), bases, vec![b'I'; len]));
+        }
+        assert_eq!(module.gc_distribution, expected);
+        assert!(module.cached_models.len() <= MAX_CACHED_LENGTH + 1);
     }
 }
