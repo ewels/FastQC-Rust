@@ -801,9 +801,6 @@ mod tests {
         fn name(&self) -> &str {
             "mock.fastq"
         }
-        fn is_colorspace(&self) -> bool {
-            false
-        }
         fn percent_complete(&self) -> f64 {
             if self.seqs.is_empty() {
                 100.0

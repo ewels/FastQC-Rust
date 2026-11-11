@@ -74,13 +74,6 @@ impl SequenceFile for SequenceFileGroup {
         &self.name
     }
 
-    fn is_colorspace(&self) -> bool {
-        // Colorspace is a property of the file format, not the group.
-        self.current
-            .as_ref()
-            .is_some_and(|file| file.is_colorspace())
-    }
-
     fn percent_complete(&self) -> f64 {
         if self.total == 0 {
             return 100.0;
@@ -134,10 +127,6 @@ mod tests {
 
         fn name(&self) -> &str {
             &self.name
-        }
-
-        fn is_colorspace(&self) -> bool {
-            false
         }
 
         fn percent_complete(&self) -> f64 {

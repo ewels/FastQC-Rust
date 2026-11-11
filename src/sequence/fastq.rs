@@ -389,9 +389,6 @@ pub struct FastQFile {
     /// CASAVA filter mode flags.
     casava_mode: bool,
     nofilter: bool,
-
-    /// The lowest raw quality character seen so far (for Phred encoding detection).
-    pub lowest_char: u8,
 }
 
 impl FastQFile {
@@ -487,7 +484,6 @@ impl FastQFile {
             colorspace_checked: false,
             casava_mode,
             nofilter,
-            lowest_char: 255,
         };
 
         // Prime the look-ahead buffer by reading the first record.
@@ -604,11 +600,6 @@ impl FastQFile {
         }
         check_utf8(&quality_bytes)?;
 
-        // Track lowest quality character for Phred encoding detection.
-        if let Some(lowest) = quality_bytes.iter().copied().min() {
-            self.lowest_char = self.lowest_char.min(lowest);
-        }
-
         let seq_str = std::str::from_utf8(&seq_bytes).map_err(|_| invalid_utf8())?;
 
         // -- Colorspace detection (first record only) --
@@ -654,12 +645,7 @@ impl SequenceFile for FastQFile {
         // `readNext()` to prime the next one. We do the same.
         let current = self.next_sequence.take()?;
         if let Err(e) = self.read_next() {
-            // Store nothing for next time; the error is returned on the *next* call
-            // would be confusing. Instead, return the error now and let the current
-            // sequence be lost (matching Java which throws from next()).
-            // Actually, Java's next() calls readNext() but returns the previous value.
-            // If readNext() throws, the exception propagates out of next().
-            // We replicate: return the error, dropping `current`.
+            // Java's readNext() throws out of next(), so `current` is dropped.
             return Some(Err(e));
         }
         Some(Ok(current))
@@ -667,10 +653,6 @@ impl SequenceFile for FastQFile {
 
     fn name(&self) -> &str {
         &self.name
-    }
-
-    fn is_colorspace(&self) -> bool {
-        self.is_colorspace
     }
 
     fn background_threads(&self) -> usize {
@@ -934,7 +916,6 @@ mod tests {
         assert_eq!(seq.sequence, b"AAAAAAAAAAAAAAAA");
         assert_eq!(seq.quality, b"IIIIIIIIIIIIIIII");
         assert!(!seq.is_filtered);
-        assert!(!reader.is_colorspace());
 
         // No more records
         assert!(reader.next().is_none());
@@ -957,19 +938,6 @@ mod tests {
             assert_eq!(seq.id, format!("@READ{:04}", count));
         }
         assert_eq!(count, 5);
-    }
-
-    #[test]
-    fn test_lowest_char_tracking() {
-        let config = FastQCConfig::default();
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/minimal.fastq");
-        let mut reader = FastQFile::open(&config, path).unwrap();
-
-        // Consume all records
-        while reader.next().is_some() {}
-
-        // 'I' is ASCII 73
-        assert_eq!(reader.lowest_char, b'I');
     }
 
     #[test]

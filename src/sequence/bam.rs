@@ -49,13 +49,6 @@ pub struct BAMFile {
     /// Matches Java's `nextSequence` field.
     next_sequence: Option<Sequence>,
 
-    /// Whether this is a BAM (true) or SAM (false) file, used for progress estimation.
-    is_bam: bool,
-
-    /// Rough record size for progress estimation.
-    /// Java computes this as `(readLength * 2) + 150`, divided by 4 for BAM.
-    record_size: u64,
-
     // Reusable record buffers to avoid allocations per record.
     bam_record: bam::Record,
     sam_record: sam::Record,
@@ -101,8 +94,6 @@ impl BAMFile {
             only_mapped,
             position_handle,
             next_sequence: None,
-            is_bam,
-            record_size: 0,
             bam_record: bam::Record::default(),
             sam_record: sam::Record::default(),
         };
@@ -143,7 +134,6 @@ impl BAMFile {
                                 .unwrap_or_else(|| "*".to_string());
 
                             let sequence_bases: Vec<u8> = rec.sequence().iter().collect();
-                            let seq_len = sequence_bases.len();
 
                             // BAM quality scores are raw Phred values (0-93).
                             // Java's HTSJDK `getBaseQualityString()` converts them to ASCII
@@ -168,17 +158,6 @@ impl BAMFile {
                             // Check vendor quality failure flag (0x200)
                             // for CASAVA-style filtering.
                             let is_qc_fail = flags.is_qc_fail();
-
-                            // Estimate record size for progress tracking.
-                            // Java: `recordSize = (record.getReadLength()*2)+150`
-                            // then divides by 4 for BAM format.
-                            if self.record_size == 0 && seq_len > 0 {
-                                let mut rs = (seq_len as u64 * 2) + 150;
-                                if self.is_bam {
-                                    rs /= 4; // BAM records are ~4x smaller than SAM
-                                }
-                                self.record_size = rs;
-                            }
 
                             Some(RecordData {
                                 name,
@@ -213,7 +192,6 @@ impl BAMFile {
 
                             // SAM sequence is stored as ASCII text
                             let sequence_bases: Vec<u8> = rec.sequence().iter().collect();
-                            let seq_len = sequence_bases.len();
 
                             // SAM quality scores from HTSJDK's getBaseQualityString()
                             // are already in Phred+33 ASCII encoding. The noodles SAM reader
@@ -230,14 +208,6 @@ impl BAMFile {
 
                             let is_reverse = flags.is_reverse_complemented();
                             let is_qc_fail = flags.is_qc_fail();
-
-                            if self.record_size == 0 && seq_len > 0 {
-                                let mut rs = (seq_len as u64 * 2) + 150;
-                                if self.is_bam {
-                                    rs /= 4;
-                                }
-                                self.record_size = rs;
-                            }
 
                             Some(RecordData {
                                 name,
@@ -343,12 +313,6 @@ impl SequenceFile for BAMFile {
 
     fn name(&self) -> &str {
         &self.name
-    }
-
-    /// BAM/SAM files are never colorspace.
-    /// Java's `BAMFile.isColorspace()` always returns false.
-    fn is_colorspace(&self) -> bool {
-        false
     }
 
     /// BAM/SAM quality is Phred+33 by construction, so the encoding is known:

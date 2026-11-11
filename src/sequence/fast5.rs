@@ -2,7 +2,7 @@
 // Corresponds to Sequence/Fast5File.java
 
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use hdf5_pure::File as Hdf5File;
 
@@ -26,8 +26,6 @@ pub struct Fast5File {
     current_index: usize,
     /// Display name of the file.
     name: String,
-    #[allow(dead_code)]
-    file_path: PathBuf,
 }
 
 impl Fast5File {
@@ -101,7 +99,6 @@ impl Fast5File {
             sequences,
             current_index: 0,
             name,
-            file_path: path.to_path_buf(),
         })
     }
 
@@ -176,10 +173,6 @@ impl SequenceFile for Fast5File {
 
     fn name(&self) -> &str {
         &self.name
-    }
-
-    fn is_colorspace(&self) -> bool {
-        false
     }
 
     fn percent_complete(&self) -> f64 {
