@@ -922,6 +922,15 @@ fn measured_term_width() -> usize {
         .unwrap_or(DEFAULT_TERM_WIDTH as u16) as usize
 }
 
+/// How many rows the display may draw, right now. Same sources as the width.
+fn measured_term_height() -> usize {
+    Term::stderr()
+        .size_checked()
+        .map(|(rows, _)| rows)
+        .or_else(|| env_dimension("LINES"))
+        .unwrap_or(DEFAULT_TERM_HEIGHT) as usize
+}
+
 impl ForcedTerm {
     fn new() -> Self {
         // Buffered, like the `Term` behind indicatif's own stderr draw target.
@@ -1025,12 +1034,12 @@ struct Table {
 }
 
 struct TableState {
-    /// Terminal width [`Geometry`] was built for. A run whose window is resized
-    /// rebuilds at the new width rather than drawing a table cut to the old
-    /// one; `{wide_bar}` above it already reflows on its own.
-    width: usize,
-    /// `None` when the terminal is too narrow for the table to be worth
-    /// drawing, which is also how it disappears and comes back as the window is
+    /// Terminal `(width, height)` [`Geometry`] was built for. A run whose window
+    /// is resized rebuilds at the new size rather than drawing a table cut to
+    /// the old one; `{wide_bar}` above it already reflows on its own.
+    size: (usize, usize),
+    /// `None` when the terminal is too narrow or too short for the table to be
+    /// worth drawing, which is also how it disappears and comes back as the window is
     /// resized across the threshold.
     geometry: Option<Geometry>,
     /// The last frame rendered, so an unchanged one can be dropped rather than
@@ -1074,9 +1083,12 @@ enum FileState {
 }
 
 impl Geometry {
-    /// Lay a table of `names` out for a terminal of `term_width`, or `None`
-    /// when it is too narrow to be worth drawing — [`layout`] decides both.
-    fn new(names: &[String], term_width: usize) -> Option<Self> {
+    /// Lay a table of `names` out for a terminal of `(width, height)`, or
+    /// `None` when it is too narrow or too short to be worth drawing.
+    fn new(names: &[String], (term_width, term_height): (usize, usize)) -> Option<Self> {
+        if !fits_height(names.len(), term_height) {
+            return None;
+        }
         let (label_width, value_width) = layout(names.len(), term_width)?;
 
         let rule = |left: char, mid: char, right: char| {
@@ -1145,14 +1157,14 @@ impl Table {
             })
             .collect::<Vec<_>>();
 
-        let width = measured_term_width();
+        let size = (measured_term_width(), measured_term_height());
         let table = Table {
             line: static_line(multi),
             columns,
             names: names.to_vec(),
             state: Mutex::new(TableState {
-                width,
-                geometry: Geometry::new(names, width),
+                size,
+                geometry: Geometry::new(names, size),
                 last: String::new(),
             }),
         };
@@ -1177,10 +1189,10 @@ impl Table {
     fn refresh(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
 
-        let width = measured_term_width();
-        if width != state.width {
-            state.width = width;
-            state.geometry = Geometry::new(&self.names, width);
+        let size = (measured_term_width(), measured_term_height());
+        if size != state.size {
+            state.size = size;
+            state.geometry = Geometry::new(&self.names, size);
         }
 
         let Some(geometry) = &state.geometry else {
@@ -1272,6 +1284,17 @@ fn layout(columns: usize, term_width: usize) -> Option<(usize, usize)> {
 
     let value_width = (available / columns).min(MAX_VALUE_WIDTH);
     (value_width >= MIN_VALUE_WIDTH).then_some((label_width, value_width))
+}
+
+/// Whether the table fits in `term_height` rows next to the rest of the display:
+/// the log padding line, the bars, the summary and the trailer. indicatif cuts
+/// a region taller than the terminal from the bottom, which took the closing
+/// summary with it.
+fn fits_height(files: usize, term_height: usize) -> bool {
+    let bars = if files > MAX_FILE_BARS { 1 } else { files };
+    // Spacer, top, heading, divider, one row per measure, bottom.
+    let table = BasicStatsCounters::MEASURES.len() + 5;
+    1 + bars + table + 2 <= term_height
 }
 
 /// Fit a cell to exactly `width` columns, padding it out or truncating it with
@@ -1583,6 +1606,16 @@ mod tests {
         }
     }
 
+    /// A table that would push the closing summary off a short terminal is not
+    /// drawn: three files need 1 + 3 + 13 + 2 rows.
+    #[test]
+    fn test_table_needs_room_for_the_summary() {
+        assert!(!fits_height(3, 18));
+        assert!(fits_height(3, 19));
+        // Past MAX_FILE_BARS the files share one bar.
+        assert!(fits_height(MAX_FILE_BARS + 5, 17));
+    }
+
     /// The decision is made on width, not on how many files there are: a wider
     /// terminal earns more columns, a narrow one loses the table entirely.
     #[test]
@@ -1676,11 +1709,11 @@ mod tests {
             "sample_2.fastq.gz".to_string(),
         ];
 
-        let narrow = Geometry::new(&names, 50);
+        let narrow = Geometry::new(&names, (50, 100));
         assert!(narrow.is_none(), "two columns cannot be readable at 50");
 
-        let wide = Geometry::new(&names, 200).expect("two columns fit at 200");
-        let wider = Geometry::new(&names, 400).expect("two columns fit at 400");
+        let wide = Geometry::new(&names, (200, 100)).expect("two columns fit at 200");
+        let wider = Geometry::new(&names, (400, 100)).expect("two columns fit at 400");
         assert_eq!(wide.headings.len(), names.len());
 
         // Every rendered row is exactly as wide as the border above it, and no
