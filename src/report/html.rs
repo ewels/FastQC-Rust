@@ -45,11 +45,15 @@ pub fn write_chart(
     use crate::report::charts::{svg_to_data_uri, svg_to_png};
 
     if let Some(svg) = module.generate_chart_svg() {
-        let data_uri = if png {
-            let png_bytes = svg_to_png(&svg).map_err(io::Error::other)?;
-            png_to_data_uri(&png_bytes)
+        let png_bytes = if png {
+            svg_to_png(&svg).map_err(io::Error::other)?
         } else {
-            svg_to_data_uri(&java_svg(&svg))
+            None
+        };
+        // A chart too wide for a PNG stays an SVG even with --png.
+        let data_uri = match png_bytes {
+            Some(png_bytes) => png_to_data_uri(&png_bytes),
+            None => svg_to_data_uri(&java_svg(&svg)),
         };
         write!(
             w,

@@ -415,14 +415,20 @@ pub fn svg_to_data_uri(svg: &str) -> String {
 /// In Java, writeDefaultImage() renders the Swing JPanel to a
 /// BufferedImage at the specified dimensions, then encodes via ImageIO.write("PNG").
 /// We replicate this by parsing the SVG with resvg and rasterizing via tiny-skia.
+///
+/// Returns `None` for a chart wider than [`MAX_PNG_WIDTH`].
 // Bundled fonts — no system font dependency.
 // Liberation Sans is metric-compatible with Arial (SIL Open Font License).
 const FONT_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/LiberationSans-Regular.ttf");
 const FONT_BOLD: &[u8] = include_bytes!("../../../assets/fonts/LiberationSans-Bold.ttf");
 
-pub fn svg_to_png(svg: &str) -> Result<Vec<u8>, String> {
+pub fn svg_to_png(svg: &str) -> Result<Option<Vec<u8>>, String> {
     use resvg::usvg;
     use tiny_skia::Pixmap;
+
+    if svg_width(svg).is_some_and(|w| w > MAX_PNG_WIDTH) {
+        return Ok(None);
+    }
 
     // Load bundled fonts — no system font dependency
     let mut fontdb = usvg::fontdb::Database::new();
@@ -468,7 +474,19 @@ pub fn svg_to_png(svg: &str) -> Result<Vec<u8>, String> {
             .map_err(|e| format!("PNG write error: {}", e))?;
     }
 
-    Ok(png_buf)
+    Ok(Some(png_buf))
+}
+
+/// Widest chart rasterised to PNG: 1,000 positions at 15 px each. Only
+/// `--nogroup` on long reads gets wider. Those charts take tens of seconds to
+/// rasterise, and from about 70 kb they exceed usvg's hard-coded 1,000,000-node
+/// limit, which made the whole file fail.
+pub const MAX_PNG_WIDTH: u32 = 15_000;
+
+/// Width of an SVG that starts with [`svg_header`].
+fn svg_width(svg: &str) -> Option<u32> {
+    let rest = &svg[svg.find("<svg width=\"")? + 12..];
+    rest[..rest.find('"')?].parse().ok()
 }
 
 #[cfg(test)]
@@ -498,6 +516,16 @@ mod tests {
     fn test_chart_color_rgb_string() {
         let c = ChartColor::new(255, 128, 0);
         assert_eq!(c.to_rgb_string(), "rgb(255,128,0)");
+    }
+
+    #[test]
+    fn test_too_wide_chart_has_no_png() {
+        let svg = |w: f64| format!("{}{}", svg_header(w, 600.0), svg_footer());
+        assert!(svg_to_png(&svg(800.0)).unwrap().is_some());
+        assert!(svg_to_png(&svg(MAX_PNG_WIDTH as f64)).unwrap().is_some());
+        assert!(svg_to_png(&svg(MAX_PNG_WIDTH as f64 + 15.0))
+            .unwrap()
+            .is_none());
     }
 
     #[test]

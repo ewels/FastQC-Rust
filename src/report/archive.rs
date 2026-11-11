@@ -25,7 +25,8 @@ use zip::ZipWriter;
 
 use crate::config::TemplateName;
 use crate::modules::QCModule;
-use crate::report::charts::{svg_to_png, xml_escape};
+use crate::progress::{log_line, OncePerRun};
+use crate::report::charts::{svg_to_png, xml_escape, MAX_PNG_WIDTH};
 use crate::report::text;
 
 // Embed icon files at compile time, same PNGs as in Templates/Icons/
@@ -131,10 +132,22 @@ pub fn create_zip_archive(
             // Write PNG file
             // Java renders the Swing JPanel at 800x600 to a BufferedImage,
             // then writes via ImageIO.write(b, "PNG", zip).
-            let png_bytes = svg_to_png(&svg).map_err(io::Error::other)?;
-            zip.start_file(format!("{}/Images/{}.png", folder, image_name), options)
-                .map_err(zip_err)?;
-            zip.write_all(&png_bytes)?;
+            match svg_to_png(&svg).map_err(io::Error::other)? {
+                Some(png_bytes) => {
+                    zip.start_file(format!("{}/Images/{}.png", folder, image_name), options)
+                        .map_err(zip_err)?;
+                    zip.write_all(&png_bytes)?;
+                }
+                None => {
+                    static SAID: OncePerRun = OncePerRun::new();
+                    if SAID.should_say() {
+                        log_line(&format!(
+                            "Some charts are wider than {} px; the zip has only their SVG, not a PNG",
+                            MAX_PNG_WIDTH
+                        ));
+                    }
+                }
+            }
         }
     }
 
