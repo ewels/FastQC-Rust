@@ -334,11 +334,12 @@ impl QCModule for OverRepresentedSeqs {
         let mut data = self.shared_data.lock().unwrap_or_else(|e| e.into_inner());
         data.count += 1;
 
-        // Truncate sequence to dup_length or 50bp if longer than 50
+        // Truncate to --dup_length if set, else to 50bp. Java applies the 50bp
+        // default only when dup_length is 0 (OverRepresentedSeqs.java:161-166).
         // Safety: sequence bytes are ASCII (uppercased in Sequence::new), so slicing is valid UTF-8
         let seq_bytes = &sequence.sequence;
-        let truncate_len = if self.dup_length != 0 && seq_bytes.len() > self.dup_length {
-            self.dup_length
+        let truncate_len = if self.dup_length != 0 {
+            self.dup_length.min(seq_bytes.len())
         } else if seq_bytes.len() > 50 {
             // Default truncation to 50bp for sequences longer than 50
             50
@@ -486,5 +487,16 @@ mod tests {
             .map(|k| k.seq.as_str())
             .collect();
         assert_eq!(order, java_order);
+    }
+
+    #[test]
+    fn test_dup_length_longer_than_read_keeps_whole_read() {
+        // Java only cuts to 50bp when --dup_length is 0.
+        let shared = Arc::new(Mutex::new(OverRepresentedData::new()));
+        let mut module = OverRepresentedSeqs::new(&Limits::new(), 100, &[], Arc::clone(&shared));
+        let read = vec![b'A'; 75];
+        module.process_sequence(&Sequence::new("@r".to_string(), read, vec![b'I'; 75]));
+        let data = shared.lock().unwrap();
+        assert_eq!(data.sequences.keys().next().map(String::len), Some(75));
     }
 }
